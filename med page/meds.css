@@ -54,6 +54,20 @@ body {
   cursor: pointer;
 }
 
+.github-icon {
+  display: block;
+  margin: 0 auto;
+  width: 36px;  /* adjust size as needed */
+  height: auto; /* ensures proportional scaling */
+}
+
+.nav-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+
 /* Existing styles */
 
 body {
