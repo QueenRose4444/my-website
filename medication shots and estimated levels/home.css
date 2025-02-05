@@ -1,0 +1,141 @@
+/* Reset some default styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    font-family: sans-serif;
+    background-color: #121212;
+    color: #eee;
+    line-height: 1.6;
+  }
+  
+  /* Top Navigation Bar */
+  .top-bar {
+    background-color: #1a1a1a;
+    padding: 12.5px 20px;
+  }
+  
+  .top-bar nav ul {
+    list-style: none;
+    display: flex;
+    justify-content: flex-start;
+  }
+  
+  .top-bar nav ul li {
+    margin-right: 20px;
+  }
+  
+  .top-bar nav ul li a {
+    text-decoration: none;
+    color: #eee;
+    font-weight: bold;
+  }
+  
+  .top-bar nav ul li a:hover {
+    color: #4bc0c0;
+  }
+  
+  /* Main Content */
+  .home-content {
+    padding: 20px;
+  }
+  
+  /* Channels Section */
+  .channels {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+  
+  .channels h2 {
+    margin-bottom: 20px;
+    font-size: 1.8rem;
+  }
+  
+  .channel-links {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+  }
+  
+  .channel-links {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    align-items: center; /* Ensures images are aligned */
+  }
+  
+  .channel {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .channel img {
+    width: auto;
+    height: 80px;  /* Ensures both icons have the same height */
+    margin-bottom: 5px;
+    transition: transform 0.2s;
+  }
+  
+  .channel img:hover {
+    transform: scale(1.05);
+  }
+  
+  .channel p {
+    font-size: 1.1rem;
+    color: #fff;
+    text-decoration: none;
+  }
+  
+  /* Games Section */
+  .games {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+  
+  .games h2 {
+    margin-bottom: 20px;
+    font-size: 1.8rem;
+  }
+  
+  .game-links {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    flex-wrap: wrap;
+  }
+  
+  .game {
+    text-align: center;
+  }
+  
+  .game img {
+    width: 250px;   /* larger game images */
+    height: auto;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    transition: transform 0.2s;
+  }
+  
+  .game img:hover {
+    transform: scale(1.05);
+  }
+  
+  .game p {
+    font-size: 1.1rem;
+    color: #fff;    /* brighter text under game images */
+  }
+  
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 10px;
+    background-color: #1a1a1a;
+    margin-top: 20px;
+    font-size: 0.9rem;
+  }
+  
