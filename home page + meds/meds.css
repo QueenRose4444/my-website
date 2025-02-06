@@ -57,7 +57,7 @@ body {
 .github-icon {
   display: block;
   margin: 0 auto;
-  width: 36px;  /* adjust size as needed */
+  width: 32px;  /* adjust size as needed */
   height: auto; /* ensures proportional scaling */
 }
 
