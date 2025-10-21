@@ -1,0 +1,574 @@
+/* Reset some default styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: sans-serif;
+  background-color: #121212;
+  color: #eee;
+  line-height: 1.6;
+}
+
+/* Top Navigation Bar */
+.top-bar {
+  background-color: #1a1a1a;
+  padding: 8.5px 20px;
+  position: sticky; /* Make nav bar sticky */
+  top: 0;
+  z-index: 1000; /* Ensure it's above other content */
+
+}
+
+.nav-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.nav-links {
+  list-style: none;
+  display: flex;
+  gap: 20px;
+}
+
+.nav-links li a {
+  text-decoration: none;
+  color: #eee;
+  font-weight: bold;
+}
+
+.nav-links li a:hover,
+.nav-links li a.active-link {
+  color: #4bc0c0;
+}
+
+.user-account {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.nav-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.user-account button {
+  padding: 8px 12px; /* Adjusted padding */
+  background-color: #333;
+  color: white;
+  border: 1px solid #555;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em; /* Slightly smaller font */
+}
+.user-account button:hover {
+  background-color: #444;
+}
+
+
+.github-icon {
+  display: block;
+  margin: 0 auto;
+  width: 32px;  /* adjust size as needed */
+  height: auto; /* ensures proportional scaling */
+}
+
+.container {
+  max-width: 1200px;
+  margin: 20px auto; /* Add margin from top bar */
+  padding: 0 15px;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); /* Adjusted minmax */
+  gap: 15px;
+  margin-bottom: 20px;
+  align-items: end; /* Align items to the bottom for better button alignment */
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.input-group label {
+  margin-bottom: 5px;
+  color: #ccc;
+  font-size: 0.9em;
+}
+
+select, input[type="text"], input[type="number"] {
+  padding: 10px; /* Increased padding */
+  background-color: #2a2a2a; /* Darker input background */
+  color: white;
+  border: 1px solid #555;
+  border-radius: 4px;
+  font-size: 1em;
+}
+input::placeholder {
+    color: #888;
+}
+
+
+button {
+  padding: 10px 18px; /* Consistent padding */
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+button:hover {
+    background-color: #0056b3;
+}
+/* Specific button styling */
+#saveShot, #saveWeightEntry {
+    background-color: #28a745; /* Green for save */
+}
+#saveShot:hover, #saveWeightEntry:hover {
+    background-color: #1e7e34;
+}
+#shotHistory, #weightHistoryButton {
+    background-color: #17a2b8; /* Teal for history */
+}
+#shotHistory:hover, #weightHistoryButton:hover {
+    background-color: #117a8b;
+}
+
+
+.graph-controls {
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+.graph-view-selector {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.pen-stats-inline {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-size: 0.9em;
+    color: #ccc;
+}
+.pen-stats-inline {
+    font-weight: bold;
+    color: #4bc0c0;
+}
+.pen-stats-inline span span {
+    font-weight: bold;
+    color: #eee;
+}
+
+
+.graph-container {
+  width: 100%;
+  height: 450px; /* Adjusted height */
+  margin-top: 20px;
+  background-color: #1e1e1e; /* Slightly lighter than body for contrast */
+  border-radius: 8px;
+  padding: 20px; /* Increased padding */
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2); /* Added subtle shadow */
+}
+
+#medicationChart, #weightChart { /* Apply to both charts */
+  width: 100%!important;
+  height: 100%!important;
+}
+
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.85); /* Darker overlay */
+  z-index: 1050; /* Ensure modals are above sticky nav */
+}
+
+.modal-content {
+  background-color: #222; /* Darker modal content */
+  margin: 5% auto;
+  padding: 25px; /* Increased padding */
+  width: 90%;
+  max-width: 700px; /* Slightly wider for history tables */
+  border-radius: 8px;
+  border: 1px solid #444;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+  position: relative; /* For close button positioning */
+  max-height: 85vh; /* Limit the height to 85% of the viewport height */
+  overflow-y: auto;   /* Add a vertical scrollbar only when content overflows */
+}
+.modal-content h2 {
+    color: #4bc0c0;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.close-modal, .close-auth-modal, .close-sync-modal {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    color: #aaa;
+    font-size: 2em; /* Larger close icon */
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+}
+.close-modal:hover, .close-auth-modal:hover, .close-sync-modal:hover {
+    color: #fff;
+}
+
+.modal-content .close-modal-button,
+.modal-content .close-auth-modal-button,
+.modal-content .close-sync-modal-button {
+    background-color: #6c757d; /* Grey for close/cancel buttons */
+    margin-top: 15px;
+}
+.modal-content .close-modal-button:hover,
+.modal-content .close-auth-modal-button:hover,
+.modal-content .close-sync-modal-button:hover {
+    background-color: #545b62;
+}
+
+
+.box-container {
+  display: grid; /* Using grid for more control */
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* Responsive columns */
+  gap: 15px;
+  background-color: #1e1e1e;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.box-left, .box-center, .box-right {
+  padding: 15px;
+  text-align: center;
+  background-color: #2a2a2a;
+  border-radius: 6px;
+}
+
+.box-container p {
+    margin-bottom: 8px; /* Space between lines */
+    font-size: 0.95em;
+    color: #ddd;
+}
+.box-container p:first-child { /* The title of the stat, e.g., "Most Recent Shot:" */
+    font-weight: bold;
+    color: #4bc0c0; /* Teal color for stat titles */
+    margin-bottom: 10px;
+    font-size: 1em;
+}
+.box-container span { /* The actual stat value */
+    font-weight: normal;
+    color: #eee;
+}
+
+.btn-danger {
+  background-color: #dc3545 !important;
+}
+.btn-danger:hover {
+  background-color: #c82333 !important;
+}
+
+#shotHistoryTable, #weightHistoryTable, #sickMedHistoryTable { /* Apply to all history tables */
+  width: 100%;
+  margin-top: 15px;
+  border-collapse: collapse; /* Cleaner table lines */
+}
+
+#shotHistoryTable th, #weightHistoryTable th, #sickMedHistoryTable th {
+  background-color: #333;
+  padding: 12px 15px; /* Adjusted padding */
+  text-align: left;
+  color: #4bc0c0; /* Teal for table headers */
+  border-bottom: 2px solid #4bc0c0;
+}
+
+#shotHistoryTable td, #weightHistoryTable td, #sickMedHistoryTable td {
+  padding: 10px 15px; /* Adjusted padding */
+  border-bottom: 1px solid #333;
+  font-size: 0.9em;
+}
+#shotHistoryTable tbody tr:hover,
+#weightHistoryTable tbody tr:hover,
+#sickMedHistoryTable tbody tr:hover {
+    background-color: #2c2c2c; /* Hover effect for table rows */
+}
+#shotHistoryTable .editShotButton,
+#weightHistoryTable .editWeightButton,
+#sickMedHistoryTable .editSickDoseButton { /* Style for all edit buttons in tables */
+    padding: 6px 10px;
+    font-size: 0.85em;
+    background-color: #ffc107; /* Yellow for edit */
+    color: #121212;
+}
+#shotHistoryTable .editShotButton:hover,
+#weightHistoryTable .editWeightButton:hover,
+#sickMedHistoryTable .editSickDoseButton:hover {
+    background-color: #e0a800;
+}
+
+
+/* Settings Modal Specifics */
+#settingsModal .modal-content .input-group {
+  margin: 15px 0;
+}
+#settingsModal .modal-content .settings-section h3 {
+    color: #4bc0c0;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #333;
+}
+#settingsModal .modal-content .input-group input[type="checkbox"] {
+    width: auto; /* Checkbox should not be full width */
+    margin-right: 10px;
+    vertical-align: middle;
+}
+#settingsModal .modal-content .input-group label[for="showBmiToggle"] {
+    display: inline; /* Align label next to checkbox */
+    vertical-align: middle;
+    margin-bottom: 0; /* Remove bottom margin for checkbox label */
+}
+
+
+#settingsButton, #localSyncButton { /* Main settings/sync buttons */
+  margin-left: 10px; /* Spacing from other user account buttons */
+  background-color: #6c757d;
+}
+#settingsButton:hover, #localSyncButton:hover {
+  background-color: #545b62;
+}
+
+/* Sync Button Styles */
+.btn-sync {
+  background-color: #28a745 !important;
+}
+.btn-sync:hover {
+  background-color: #1e7e34 !important;
+}
+
+#syncStatus {
+  margin-top: 15px;
+  padding: 10px;
+  border-radius: 4px;
+  text-align: center;
+}
+
+#syncStatus.sync-status-success { /* Renamed classes for clarity */
+  background-color: rgba(40, 167, 69, 0.2);
+  border: 1px solid #28a745;
+  color: #28a745;
+}
+
+#syncStatus.sync-status-error {
+  background-color: rgba(220, 53, 69, 0.2);
+  border: 1px solid #dc3545;
+  color: #dc3545;
+}
+#syncStatus.sync-status-info {
+  background-color: rgba(23, 162, 184, 0.2);
+  border: 1px solid #17a2b8;
+  color: #17a2b8;
+}
+
+
+/* Styles for view mode toggle buttons */
+.view-mode-controls {
+  text-align: center;
+  margin-bottom: 25px; /* Increased margin */
+  padding: 10px;
+  background-color: #1a1a1a;
+  border-radius: 8px;
+}
+.view-mode-controls button {
+  padding: 10px 20px; /* Increased padding */
+  margin: 0 8px; /* Increased margin */
+  background-color: #333;
+  color: #eee;
+  border: 1px solid #555;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.95em;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.view-mode-controls button:hover {
+  background-color: #444;
+}
+.view-mode-controls button.active {
+  background-color: #4bc0c0;
+  color: #121212;
+  border-color: #4bc0c0;
+  font-weight: bold;
+}
+
+/* Section-specific h2 styling */
+.med-tracker-section, .weight-tracker-section {
+    background-color: #1a1a1a; /* Give sections a slight background */
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 25px; /* Space between sections if both visible */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+.med-tracker-section h2, .weight-tracker-section h2 {
+  text-align: center;
+  color: #4bc0c0;
+  margin-bottom: 20px; /* Increased margin */
+  font-size: 1.6em; /* Slightly larger */
+  padding-bottom: 10px;
+  border-bottom: 1px solid #333;
+}
+
+/* Class to hide sections for display mode */
+.hidden-section {
+  display: none !important;
+}
+
+/* Auth Modals */
+.auth-modal-content input[type="text"],
+.auth-modal-content input[type="password"],
+.auth-modal-content input[type="number"] {
+    background-color: #2a2a2a; /* Consistent input styling */
+}
+.auth-modal-content .error-message {
+    color: #ff6b6b; /* More vibrant error red */
+    font-weight: bold;
+}
+#changePasswordSuccess {
+    color: #48dbfb !important; /* More vibrant success blue/teal */
+    font-weight: bold;
+}
+
+/* Sick Tracker History List */
+.med-card .history-list {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0;
+    font-size: 0.85em;
+    color: #aaa;
+    max-height: 65px; /* Show about 3 lines */
+    overflow-y: auto;
+    border-top: 1px solid #333;
+    padding-top: 10px;
+}
+
+.med-card .history-list-item {
+    padding: 2px 5px;
+}
+
+/* Sick Tracker Button States */
+.log-button-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.log-button {
+    flex-grow: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s, opacity 0.2s;
+}
+
+.log-button.available {
+    background-color: #28a745; /* Green */
+    color: white;
+}
+.log-button.available:hover {
+    background-color: #218838;
+}
+
+.log-button.unavailable {
+    background-color: #444;
+    color: #888;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.log-button.warning {
+    background-color: #ffc107; /* Yellow/Orange for warning */
+    color: #121212; /* Dark text for contrast */
+}
+.log-button.warning:hover {
+    background-color: #e0a800;
+}
+
+  /* Footer */
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 0px;
+    background-color: #121212;
+    font-size: 0.9rem;
+    color: #888;
+    position: relative; /* Needed for positioning the hidden link inside */
+    grid-area: footer;
+  }
+
+  footer a {
+      color: #4bc0c0;
+      text-decoration: none;
+  }
+
+  footer a:hover {
+      text-decoration: underline;
+  }
+
+  /* Easy-to-adjust hidden link - just change the --size variable */
+  .truly-hidden-link {
+    --size: 24px; /* ADJUST THIS VALUE to make the link bigger/smaller */
+    position: absolute;
+    bottom: 16px;
+    right: 2px;
+    width: var(--size);
+    height: var(--size);
+    text-decoration: none;
+    color: transparent;
+    z-index: 1001;
+    cursor: pointer;
+  }
+
+  .truly-hidden-link:hover {
+    background-color: #1d1d1d;
+    border-radius: 50%;
+  }
+
+  /* Alternative: Blend into existing text */
+  .blend-link {
+    color: #888; /* Same as footer text */
+    text-decoration: none;
+    position: relative;
+  }
+
+  .blend-link:hover {
+    color: #4bc0c0; /* Same as other links on hover */
+  }
+
+  /* Make a letter slightly different on hover for subtle hint */
+  .blend-link .hint-letter {
+    transition: color 0.3s ease;
+  }
+
+  .blend-link:hover .hint-letter {
+    color: #4bc0c0;
+    text-shadow: 0 0 2px rgba(75, 192, 192, 0.3);
+  }

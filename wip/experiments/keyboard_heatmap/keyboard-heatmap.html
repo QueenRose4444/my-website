@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Corrected the file path for the favicons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Keyboard Heatmap Tracker - Enhanced</title>
+    <link rel="stylesheet" href="keyboard-heatmap.css">
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <header class="top-bar">
+        <nav>
+            <ul>
+                <li><a href="../../home/">Home</a></li>
+                <li><a href="../../meds/">Meds</a></li>
+                <li><a href="">WIP-PAGE</a></li>
+                <li><a href="../">Experiments</a></li>
+                <li><a href="#" class="active-link">keyboard heatmap</a></li>
+            </ul>
+        </nav> 
+    </header>
+
+    <div class="header">
+        <div class="header-left">
+            <div class="stats-display">
+                <div>Total Keys: <span id="totalCount">0</span></div>
+                <div>Active Keys: <span id="activeCount">0</span></div>
+            </div>
+        </div>
+        <button class="spam-toggle" id="spamToggle">🚫 SPAM MODE OFF</button>
+        <button class="settings-btn" id="settingsBtn">⚙️ Layouts</button>
+    </div>
+
+    <div class="main-content">
+        <div class="keyboard-container">
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #3a3a3a;"></div>
+                    <span>0% (Unused)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(90deg, #00ff00, #40ff40);"></div>
+                    <span>Low (0-2%)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(90deg, #80ff00, #ffff00);"></div>
+                    <span>Medium (2-5%)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(90deg, #ff8000, #ff4000);"></div>
+                    <span>High (5-10%)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(90deg, #ff0000, #cc0000);"></div>
+                    <span>Max (10%+)</span>
+                </div>
+            </div>
+            <!-- The keyboard will be rendered here by JavaScript -->
+            <div class="keyboard keyboard-100" id="keyboard"></div>
+        </div>
+
+        <div class="stats-container">
+            <div class="stats-header">
+                <h2>📊 Keystroke Analytics</h2>
+                <div class="sort-controls">
+                    <span>Sort by:</span>
+                    <button class="sort-btn active" data-sort="count">🔥 Most Pressed</button>
+                    <button class="sort-btn" data-sort="count-asc">❄️ Least Pressed</button>
+                    <button class="sort-btn" data-sort="percent">📈 Percentage</button>
+                    <button class="sort-btn" data-sort="alphabetical">🔤 A-Z</button>
+                    <button class="sort-btn" data-sort="recent">⏰ Recent</button>
+                </div>
+            </div>
+            <table class="stats-table">
+                <thead>
+                    <tr>
+                        <th>🔑 Key</th>
+                        <th>👆 Presses</th>
+                        <th>📊 Percentage</th>
+                        <th>📈 Usage Bar</th>
+                        <th>⏱️ Last Used</th>
+                    </tr>
+                </thead>
+                <tbody id="statsTableBody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <h2>⌨️ Keyboard Layout Selection</h2>
+            
+            <div class="info-panel">
+                <strong>🎯 Current Features:</strong>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                    <li>Real-time key tracking with visual heatmap</li>
+                    <li>Multiple layout support (ANSI, TKL, etc.)</li>
+                    <li>Perfectly aligned keyboard sections</li>
+                    <li>Visual gaps between key groups</li>
+                    <li>Independent left/right modifier tracking</li>
+                    <li>Spam mode blocks most shortcuts (not Windows key)*</li>
+                </ul>
+            </div>
+            
+            <div class="layout-grid" id="layoutGrid">
+                <!-- Layouts will be populated here -->
+            </div>
+            
+            <div class="warning-text">
+                * Windows key cannot be fully blocked due to browser security limitations
+            </div>
+            
+            <button class="close-modal" id="closeModal">✅ Apply & Close</button>
+        </div>
+    </div>
+
+    <div class="notification" id="notification">
+        <div id="notificationText"></div>
+    </div>
+
+    <script src="keyboard-heatmap.js"></script>
+
+    <footer>
+        <p> <a href="https://github.com/QueenRose4444/my-website" target="_blank"></a></p>
+    </footer>
+
+</body>
+</html>
