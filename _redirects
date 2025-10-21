@@ -17,8 +17,10 @@
 # Individual experiment tools
 /experiments/BBCode_editor /experiments/BBCode_editor/bbcode_editor.html 200
 /experiments/BBCode_editor/ /experiments/BBCode_editor/bbcode_editor.html 200
-/experiments/cs_rin_text_editor /experiments/cs_rin_text_editor/index.html 200
-/experiments/cs_rin_text_editor/ /experiments/cs_rin_text_editor/index.html 200
+
+# cs_rin_text_editor uses index.html, so Cloudflare will serve it automatically
+# No redirect needed for /experiments/cs_rin_text_editor/ - it will serve index.html naturally
+
 /experiments/keyboard_heatmap /experiments/keyboard_heatmap/keyboard-heatmap.html 200
 /experiments/keyboard_heatmap/ /experiments/keyboard_heatmap/keyboard-heatmap.html 200
 /experiments/promt_editor /experiments/promt_editor/promt_editor.html 200
