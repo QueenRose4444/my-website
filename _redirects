@@ -1,41 +1,38 @@
-# Redirect root to home
-/                           /home/home.html                 200
-/home                       /home/home.html                 200
-/home/                      /home/home.html                 200
+# Root redirects
+/ /home/home.html 200
+/home /home/home.html 200
+/home/ /home/home.html 200
+/home/home /home/home.html 200
 
-# Meds app
-/meds                       /meds/meds.html                 200
-/meds/                      /meds/meds.html                 200
+# Meds
+/meds /meds/meds.html 200
+/meds/ /meds/meds.html 200
+/meds/meds /meds/meds.html 200
 
 # Experiments
-/experiments                /experiments/experiments.html   200
-/experiments/               /experiments/experiments.html   200
+/experiments /experiments/experiments.html 200
+/experiments/ /experiments/experiments.html 200
+/experiments/experiments /experiments/experiments.html 200
 
-# BBCode Editor
-/experiments/BBCode_editor          /experiments/BBCode_editor/bbcode_editor.html    200
-/experiments/BBCode_editor/         /experiments/BBCode_editor/bbcode_editor.html    200
+# Individual experiment tools
+/experiments/BBCode_editor /experiments/BBCode_editor/bbcode_editor.html 200
+/experiments/BBCode_editor/ /experiments/BBCode_editor/bbcode_editor.html 200
+/experiments/cs_rin_text_editor /experiments/cs_rin_text_editor/index.html 200
+/experiments/cs_rin_text_editor/ /experiments/cs_rin_text_editor/index.html 200
+/experiments/keyboard_heatmap /experiments/keyboard_heatmap/keyboard-heatmap.html 200
+/experiments/keyboard_heatmap/ /experiments/keyboard_heatmap/keyboard-heatmap.html 200
+/experiments/promt_editor /experiments/promt_editor/promt_editor.html 200
+/experiments/promt_editor/ /experiments/promt_editor/promt_editor.html 200
 
-# CS.RIN Text Editor
-/experiments/cs_rin_text_editor     /experiments/cs_rin_text_editor/index.html       200
-/experiments/cs_rin_text_editor/    /experiments/cs_rin_text_editor/index.html       200
-
-# Keyboard Heatmap
-/experiments/keyboard_heatmap       /experiments/keyboard_heatmap/keyboard-heatmap.html   200
-/experiments/keyboard_heatmap/      /experiments/keyboard_heatmap/keyboard-heatmap.html   200
-
-# Prompt Editor
-/experiments/promt_editor           /experiments/promt_editor/promt_editor.html      200
-/experiments/promt_editor/          /experiments/promt_editor/promt_editor.html      200
-
-# WIP Section
-/wip                        /wip/home/home.html             200
-/wip/                       /wip/home/home.html             200
-/wip/home                   /wip/home/home.html             200
-/wip/home/                  /wip/home/home.html             200
-/wip/meds                   /wip/meds/meds.html             200
-/wip/meds/                  /wip/meds/meds.html             200
-/wip/experiments            /wip/experiments/experiments.html   200
-/wip/experiments/           /wip/experiments/experiments.html   200
-
-# Fallback: serve files with .html extension without showing it in URL
-/*.html                     /:splat.html                    200
+# WIP section
+/wip /wip/home/home.html 200
+/wip/ /wip/home/home.html 200
+/wip/home /wip/home/home.html 200
+/wip/home/ /wip/home/home.html 200
+/wip/home/home /wip/home/home.html 200
+/wip/meds /wip/meds/meds.html 200
+/wip/meds/ /wip/meds/meds.html 200
+/wip/meds/meds /wip/meds/meds.html 200
+/wip/experiments /wip/experiments/experiments.html 200
+/wip/experiments/ /wip/experiments/experiments.html 200
+/wip/experiments/experiments /wip/experiments/experiments.html 200
