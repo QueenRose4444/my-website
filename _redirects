@@ -14,10 +14,12 @@
  /experiments/BBCode_editor/            /experiments/BBCode_editor/bbcode_editor.html 200
  /experiments/keyboard_heatmap/         /experiments/keyboard_heatmap/keyboard-heatmap.html 200
  /experiments/promt_editor/             /experiments/promt_editor/promt_editor.html 200
+ /experiments/cs_rin_text_editor/       /experiments/cs_rin_text_editor/index.html 200
 
  /wip/experiments/BBCode_editor/        /wip/experiments/BBCode_editor/bbcode_editor.html 200
  /wip/experiments/keyboard_heatmap/     /wip/experiments/keyboard_heatmap/keyboard-heatmap.html 200
  /wip/experiments/promt_editor/         /wip/experiments/promt_editor/promt_editor.html 200
+ /wip/experiments/disc_notifier/        /wip/experiments/disc_notifier/index.html 200
 
 # === 2) Redirect direct .html access to clean folder URLs (avoid duplicate content) ===
 /home/home.html                         /home/                                        301
@@ -30,12 +32,10 @@
 /experiments/BBCode_editor/bbcode_editor.html   /experiments/BBCode_editor/      301
 /experiments/keyboard_heatmap/keyboard-heatmap.html /experiments/keyboard_heatmap/ 301
 /experiments/promt_editor/promt_editor.html     /experiments/promt_editor/       301
-/experiments/cs_rin_text_editor/index.html     /experiments/cs_rin_text_editor/ 301
 
 /wip/experiments/BBCode_editor/bbcode_editor.html /wip/experiments/BBCode_editor/ 301
 /wip/experiments/keyboard_heatmap/keyboard-heatmap.html /wip/experiments/keyboard_heatmap/ 301
 /wip/experiments/promt_editor/promt_editor.html /wip/experiments/promt_editor/ 301
-/wip/experiments/disc_notifier/index.html      /wip/experiments/disc_notifier/ 301
 
 # === 3) Root redirect (optional, keep last) ===
 /                                        /home/                                        301
