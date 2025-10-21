@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Info Formatter</title>
+    <!-- Tailwind CSS for rapid UI development -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Link to your custom stylesheet -->
+    <link rel="stylesheet" href="cs_rin_text_editor.css">
+</head>
+<body class="p-4 md:p-8">
+
+    <div id="app" class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        <!-- Left Column: Input & Settings -->
+        <div class="space-y-6">
+            <header class="text-center">
+                <h1 class="text-3xl font-bold text-white">Game Info Formatter</h1>
+                <p class="text-gray-400 mt-2">Upload or paste game data to format it with custom templates.</p>
+            </header>
+
+            <!-- Input Section -->
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                <h2 class="text-xl font-semibold text-white mb-4">1. Add Game Data</h2>
+                <div id="file-drop-zone" class="file-drop-zone p-6 text-center rounded-lg cursor-pointer">
+                    <p class="text-gray-400">Drag & drop .txt files here, or click to select</p>
+                    <input type="file" id="file-input" multiple accept=".txt" class="hidden">
+                </div>
+                <div class="mt-4 text-center text-gray-400">or paste content below</div>
+                <textarea id="text-input" class="w-full h-32 mt-2 p-3 bg-gray-900 border border-gray-700 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Paste raw game info here..."></textarea>
+                <button id="process-text-btn" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition-colors">Process Pasted Text</button>
+            </div>
+
+            <!-- Game Selection & Customization -->
+            <div id="customization-panel" class="bg-gray-800 p-6 rounded-lg shadow-lg hidden">
+                <h2 class="text-xl font-semibold text-white mb-4">2. Customize Output</h2>
+                <div class="mb-4">
+                    <label for="game-selector" class="block text-sm font-medium text-gray-300 mb-1">Select Game to Edit:</label>
+                    <select id="game-selector" class="w-full bg-gray-900 border border-gray-700 rounded-md p-2 focus:ring-2 focus:ring-blue-500"></select>
+                </div>
+                
+                <!-- Optional Version Input -->
+                <div id="game-version-container" class="mb-4">
+                    <!-- JS will populate this -->
+                </div>
+
+                <!-- Simple/Advanced Tabs -->
+                <div class="flex border-b border-gray-700 mb-4">
+                    <button id="simple-mode-btn" class="tab-button active py-2 px-4 font-semibold">Simple</button>
+                    <button id="advanced-mode-btn" class="tab-button py-2 px-4 font-semibold">Advanced</button>
+                </div>
+
+                <!-- Simple Mode Controls -->
+                <div id="simple-mode-controls" class="space-y-4">
+                    <div>
+                        <label for="title-color" class="block text-sm font-medium text-gray-300">Title Color</label>
+                        <input type="color" id="title-color" value="#00ff00" class="mt-1 p-1 h-10 w-full block bg-gray-900 border-gray-700 rounded-md cursor-pointer">
+                    </div>
+                     <div id="url-inputs" class="space-y-2">
+                        <!-- URL inputs will be generated here -->
+                    </div>
+                    <div id="cracked-options" class="space-y-4">
+                         <!-- Cracked options will be generated here -->
+                    </div>
+                    <div id="patchnotes-options" class="space-y-2">
+                        <!-- Patch notes options will be generated here -->
+                    </div>
+                </div>
+
+                <!-- Advanced Mode Controls -->
+                <div id="advanced-mode-controls" class="hidden space-y-4">
+                    <div>
+                        <label for="template-editor" class="block text-sm font-medium text-gray-300 mb-2">Full BBCode Template</label>
+                        <p class="text-xs text-gray-400 mb-2">Edit the full template below. Use placeholders like {gameTitle} and {titleColor}. Loops and conditionals are defined by `&lt;!--LOOP--&gt;` and `&lt;!--IF--&gt;` tags.</p>
+                        <textarea id="template-editor" class="w-full h-96 p-3 bg-gray-900 border border-gray-700 rounded-md font-mono text-xs focus:ring-2 focus:ring-blue-500"></textarea>
+                        <button id="reset-template-btn" class="mt-2 text-sm text-blue-400 hover:text-blue-300">Reset to Default</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Output & Preview -->
+        <div class="space-y-6">
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg h-full flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold text-white">3. Get Result</h2>
+                    <!-- NEW: Top copy button -->
+                    <button id="copy-btn-top" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed" disabled>Copy Code</button>
+                </div>
+                <!-- Preview/Code Tabs -->
+                <div class="flex border-b border-gray-700 mb-4">
+                    <button id="preview-tab-btn" class="tab-button active py-2 px-4 font-semibold">Preview</button>
+                    <button id="code-tab-btn" class="tab-button py-2 px-4 font-semibold">BBCode</button>
+                </div>
+
+                <!-- Preview Pane -->
+                <div id="preview-pane" class="flex-grow preview-body overflow-auto">
+                    <p class="text-gray-500">Preview will appear here...</p>
+                </div>
+
+                <!-- Code Pane -->
+                <div id="code-pane" class="hidden flex-grow">
+                    <textarea id="output-code" readonly class="w-full h-full p-3 bg-gray-900 border border-gray-700 rounded-md font-mono text-xs resize-none"></textarea>
+                </div>
+                
+                <div class="mt-4 flex gap-4">
+                     <button id="copy-btn-bottom" class="flex-grow bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed" disabled>Copy Code</button>
+                     <button id="download-btn" class="flex-grow bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed" disabled>Download .txt</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Default Template -->
+    <template id="default-bbcode-template">
+<!--IF:gameVersion-->Version: {gameVersion}
+<!--/IF:gameVersion-->
+Clean Steam Files:
+<!--LOOP:cleanFiles-->
+[url={file.cleanUrl}][color={titleColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] (Clean Steam Files)[/b][/color][/url]
+[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
+<!--/LOOP:cleanFiles-->
+<!--IF:crackedExists-->
+Cracked:
+<!--LOOP:crackedFiles-->
+[url={file.crackedUrl}][color={titleColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType})[/b][/color][/url]
+[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
+<!--/LOOP:crackedFiles-->
+<!--/IF:crackedExists-->
+Patch notes:
+<!--LOOP:patchNotes-->
+[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.fullDate} [Build {file.buildId}][/i][/color][/size]
+{file.patchNoteUrl}
+<!--/LOOP:patchNotes-->
+</template>
+
+    <!-- Link to your JavaScript file -->
+    <script src="cs_rin_text_editor.js"></script>
+</body>
+</html>
