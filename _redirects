@@ -2,59 +2,42 @@
 # Cloudflare Pages Redirects for rosiesite.rosestuffs.org
 # ------------------------------------------------------------------
 
-# --- Root Redirect ---
-/                            /home/                                       301
+# === 1) Explicit rewrites: keep browser URL, serve the HTML file (200) ===
+/home/                                  /home/home.html                              200
+/meds/                                  /meds/meds.html                              200
+/experiments/                           /experiments/experiments.html                200
+/wip/home/                              /wip/home/home.html                          200
+/wip/meds/                              /wip/meds/meds.html                          200
+/wip/experiments/                       /wip/experiments/experiments.html            200
 
-# --- Force Trailing Slash on Main Sections ---
-/home                        /home/                                       301
-/meds                        /meds/                                       301
-/experiments                 /experiments/                                301
-/wip                         /wip/                                        301
-/wip/home                    /wip/home/                                   301
-/wip/meds                    /wip/meds/                                   301
-/wip/experiments             /wip/experiments/                            301
+# experiment subfolders (explicit)
+ /experiments/BBCode_editor/            /experiments/BBCode_editor/bbcode_editor.html 200
+ /experiments/keyboard_heatmap/         /experiments/keyboard_heatmap/keyboard-heatmap.html 200
+ /experiments/promt_editor/             /experiments/promt_editor/promt_editor.html 200
+ /experiments/cs_rin_text_editor/       /experiments/cs_rin_text_editor/index.html 200
 
-# --- Force Trailing Slash on Experiment Subdirectories ---
-/experiments/BBCode_editor   /experiments/BBCode_editor/                  301
-/experiments/keyboard_heatmap /experiments/keyboard_heatmap/              301
-/experiments/promt_editor    /experiments/promt_editor/                   301
-/experiments/cs_rin_text_editor /experiments/cs_rin_text_editor/          301
-/wip/experiments/BBCode_editor /wip/experiments/BBCode_editor/            301
-/wip/experiments/keyboard_heatmap /wip/experiments/keyboard_heatmap/      301
-/wip/experiments/promt_editor /wip/experiments/promt_editor/              301
-/wip/experiments/disc_notifier /wip/experiments/disc_notifier/            301
+ /wip/experiments/BBCode_editor/        /wip/experiments/BBCode_editor/bbcode_editor.html 200
+ /wip/experiments/keyboard_heatmap/     /wip/experiments/keyboard_heatmap/keyboard-heatmap.html 200
+ /wip/experiments/promt_editor/         /wip/experiments/promt_editor/promt_editor.html 200
+ /wip/experiments/disc_notifier/        /wip/experiments/disc_notifier/index.html 200
 
-# --- Rewrite Directory URLs to Serve HTML Files (200 status = rewrite, URL stays the same) ---
-/home/                       /home/home.html                              200
-/meds/                       /meds/meds.html                              200
-/experiments/                /experiments/experiments.html                200
-/wip/home/                   /wip/home/home.html                          200
-/wip/meds/                   /wip/meds/meds.html                          200
-/wip/experiments/            /wip/experiments/experiments.html            200
+# === 2) Redirect direct .html access to clean folder URLs (avoid duplicate content) ===
+/home/home.html                         /home/                                        301
+/meds/meds.html                         /meds/                                        301
+/experiments/experiments.html           /experiments/                                 301
+/wip/home/home.html                     /wip/home/                                    301
+/wip/meds/meds.html                     /wip/meds/                                    301
+/wip/experiments/experiments.html       /wip/experiments/                             301
 
-# --- Experiment subdirectories ---
-/experiments/BBCode_editor/  /experiments/BBCode_editor/bbcode_editor.html 200
-/experiments/keyboard_heatmap/ /experiments/keyboard_heatmap/keyboard-heatmap.html 200
-/experiments/promt_editor/   /experiments/promt_editor/promt_editor.html   200
-/experiments/cs_rin_text_editor/ /experiments/cs_rin_text_editor/index.html 200
-/wip/experiments/BBCode_editor/ /wip/experiments/BBCode_editor/bbcode_editor.html 200
-/wip/experiments/keyboard_heatmap/ /wip/experiments/keyboard_heatmap/keyboard-heatmap.html 200
-/wip/experiments/promt_editor/ /wip/experiments/promt_editor/promt_editor.html 200
-/wip/experiments/disc_notifier/ /wip/experiments/disc_notifier/index.html 200
-
-# --- Redirect Direct .html Access to Clean URLs (301 = permanent redirect) ---
-/home/home.html              /home/                                       301
-/meds/meds.html              /meds/                                       301
-/experiments/experiments.html /experiments/                               301
-/wip/home/home.html          /wip/home/                                   301
-/wip/meds/meds.html          /wip/meds/                                   301
-/wip/experiments/experiments.html /wip/experiments/                       301
-
-/experiments/BBCode_editor/bbcode_editor.html /experiments/BBCode_editor/  301
+/experiments/BBCode_editor/bbcode_editor.html   /experiments/BBCode_editor/      301
 /experiments/keyboard_heatmap/keyboard-heatmap.html /experiments/keyboard_heatmap/ 301
-/experiments/promt_editor/promt_editor.html /experiments/promt_editor/     301
-/experiments/cs_rin_text_editor/index.html /experiments/cs_rin_text_editor/ 301
+/experiments/promt_editor/promt_editor.html     /experiments/promt_editor/       301
+/experiments/cs_rin_text_editor/index.html     /experiments/cs_rin_text_editor/ 301
+
 /wip/experiments/BBCode_editor/bbcode_editor.html /wip/experiments/BBCode_editor/ 301
 /wip/experiments/keyboard_heatmap/keyboard-heatmap.html /wip/experiments/keyboard_heatmap/ 301
 /wip/experiments/promt_editor/promt_editor.html /wip/experiments/promt_editor/ 301
-/wip/experiments/disc_notifier/index.html /wip/experiments/disc_notifier/ 301
+/wip/experiments/disc_notifier/index.html      /wip/experiments/disc_notifier/ 301
+
+# === 3) Root redirect (optional, keep last) ===
+/                                        /home/                                        301
