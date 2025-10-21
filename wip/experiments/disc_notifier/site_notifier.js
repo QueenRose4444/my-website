@@ -9,12 +9,12 @@ const ENVIRONMENT = 'wip'; // 'live' or 'wip'
 const envConfigs = {
     live: {
         storagePrefix: `${APP_NAME}_live_`,
-        loginBackendUrl: 'https://meds-login_api.rosestuffs.org',
+        loginBackendUrl: 'https://main-backend-live.rosiesite.workers.dev',
         notifierBackendUrl: 'https://disc_notifier.rosestuffs.org'
     },
     wip: {
         storagePrefix: `${APP_NAME}_wip_`,
-        loginBackendUrl: 'https://meds-login_api-wip.rosestuffs.org',
+        loginBackendUrl: 'https://main-backend-wip.rosiesite.workers.dev',
         notifierBackendUrl: 'https://disc_notifier.rosestuffs.org'
     }
 };
