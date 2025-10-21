@@ -1,45 +1,58 @@
-# Rewrite folder URLs to serve the actual HTML files (keeps URL as folder path)
-/home/ /home/home.html 200
-/meds/ /meds/meds.html 200
-/experiments/ /experiments/experiments.html 200
-/experiments/BBCode_editor/ /experiments/BBCode_editor/bbcode_editor.html 200
+# ------------------------------------------------------------------
+# Cloudflare Pages Redirects for rosiesite.rosestuffs.org
+# ------------------------------------------------------------------
+# This file is processed from top to bottom.
+# The order of these sections is important for correct routing.
+
+# --- PART 1: Force Trailing Slash on Directories ---
+# Redirects paths without a slash to the version with a slash.
+# This ensures relative URLs on your pages work as expected.
+# Example: /home -> /home/
+#
+/home                        /home/                                       301
+/meds                        /meds/                                       301
+/experiments                 /experiments/                                301
+/experiments/BBCode_editor   /experiments/BBCode_editor/                  301
+/experiments/keyboard_heatmap /experiments/keyboard_heatmap/                301
+/experiments/promt_editor    /experiments/promt_editor/                   301
+/wip                         /wip/                                        301
+/wip/home                    /wip/home/                                   301
+/wip/meds                    /wip/meds/                                   301
+/wip/experiments             /wip/experiments/                            301
+
+
+# --- PART 2: Rewrite Directory URLs to HTML Files ---
+# Serves the content of an HTML file when a user visits a directory.
+# This is a rewrite (200), so the URL in the browser bar does not change.
+# Example: User visits /home/, they see that URL, but get home/home.html content.
+#
+/home/                       /home/home.html                              200
+/meds/                       /meds/meds.html                              200
+/experiments/                /experiments/experiments.html                200
+/experiments/BBCode_editor/  /experiments/BBCode_editor/bbcode_editor.html 200
 /experiments/keyboard_heatmap/ /experiments/keyboard_heatmap/keyboard-heatmap.html 200
-/experiments/promt_editor/ /experiments/promt_editor/promt_editor.html 200
-/wip/home/ /wip/home/home.html 200
-/wip/meds/ /wip/meds/meds.html 200
-/wip/experiments/ /wip/experiments/experiments.html 200
+/experiments/promt_editor/   /experiments/promt_editor/promt_editor.html   200
+/wip/home/                   /wip/home/home.html                          200
+/wip/meds/                   /wip/meds/meds.html                          200
+/wip/experiments/            /wip/experiments/experiments.html            200
 
-# Redirect URLs without trailing slash to include it (301 = permanent redirect)
-/ /home/ 301
-/home /home/ 301
-/meds /meds/ 301
-/experiments /experiments/ 301
-/experiments/BBCode_editor /experiments/BBCode_editor/ 301
-/experiments/keyboard_heatmap /experiments/keyboard_heatmap/ 301
-/experiments/promt_editor /experiments/promt_editor/ 301
-/wip /wip/ 301
-/wip/home /wip/home/ 301
-/wip/meds /wip/meds/ 301
-/wip/experiments /wip/experiments/ 301
 
-# Prevent doubled paths by redirecting to single folder
-/home/home /home/ 301
-/home/home/ /home/ 301
-/meds/meds /meds/ 301
-/meds/meds/ /meds/ 301
-/experiments/experiments /experiments/ 301
-/experiments/experiments/ /experiments/ 301
-/wip/home/home /wip/home/ 301
-/wip/meds/meds /wip/meds/ 301
-/wip/experiments/experiments /wip/experiments/ 301
-
-# Redirect direct HTML file access to folder URL
-/home/home.html /home/ 301
-/meds/meds.html /meds/ 301
-/experiments/experiments.html /experiments/ 301
-/experiments/BBCode_editor/bbcode_editor.html /experiments/BBCode_editor/ 301
+# --- PART 3: Redirect Direct .html Links to Clean URLs ---
+# If a user lands on a .html file directly, redirect them to the clean directory URL.
+# Example: /home/home.html -> /home/
+#
+/home/home.html              /home/                                       301
+/meds/meds.html              /meds/                                       301
+/experiments/experiments.html /experiments/                               301
+/experiments/BBCode_editor/bbcode_editor.html /experiments/BBCode_editor/  301
 /experiments/keyboard_heatmap/keyboard-heatmap.html /experiments/keyboard_heatmap/ 301
-/experiments/promt_editor/promt_editor.html /experiments/promt_editor/ 301
-/wip/home/home.html /wip/home/ 301
-/wip/meds/meds.html /wip/meds/ 301
-/wip/experiments/experiments.html /wip/experiments/ 301
+/experiments/promt_editor/promt_editor.html /experiments/promt_editor/     301
+/wip/home/home.html          /wip/home/                                   301
+/wip/meds/meds.html          /wip/meds/                                   301
+/wip/experiments/experiments.html /wip/experiments/                       301
+
+
+# --- PART 4: Root Redirect ---
+# Redirect the homepage to your preferred default page.
+#
+/                            /home/
