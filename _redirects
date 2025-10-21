@@ -25,11 +25,3 @@
 /wip/home                   /wip/home/home.html             200
 /wip/meds                   /wip/meds/meds.html             200
 /wip/experiments            /wip/experiments/experiments.html   200
-
-# Block direct access to .html files in folders (prevents /home/home.html being accessible)
-/home/*                     /home/home.html                 200
-/meds/*                     /meds/meds.html                 200
-/experiments/BBCode_editor/*        /experiments/BBCode_editor/bbcode_editor.html    200
-/experiments/cs_rin_text_editor/*   /experiments/cs_rin_text_editor/index.html       200
-/experiments/keyboard_heatmap/*     /experiments/keyboard_heatmap/keyboard-heatmap.html   200
-/experiments/promt_editor/*         /experiments/promt_editor/promt_editor.html      200
