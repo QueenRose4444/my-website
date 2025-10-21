@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Template with Sync</title>
+    <!-- Link to the template CSS file -->
+    <link rel="stylesheet" href="template.css">
+</head>
+<body>
+
+    <!-- Top Navigation Bar -->
+    <header class="top-bar">
+        <nav class="nav-container">
+            <div class="nav-left">
+              <ul class="nav-links">
+                <li><a href="../../home/">Home</a></li>
+                <li><a href="../../meds/">Meds</a></li>
+                <li><a href="">WIP-PAGE</a></li>
+                <li><a href="../">Experiments</a></li>
+                <li><a href="#" class="active-link">Page_Name</a></li>
+            </ul>
+            </div>
+            <div class="nav-center">
+              <!-- GitHub logo removed as requested -->
+            </div>
+            <div class="nav-right">
+              <div class="user-account">
+                <span id="userStatus" style="color: #ccc; align-self: center; margin-right: 15px;">Loading...</span>
+                <button id="loginButton" style="display: none;">Login</button>
+                <button id="registerButton" style="display: none;">Register</button>
+                <button id="logoutButton" style="display: none;">Logout</button>
+                <button id="localSyncButton">Local Sync</button>
+                <button id="settingsButton">Settings</button>
+              </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container">
+        <h1>Your Main Content</h1>
+        <p>This is where the main content of your page will go. The login and sync functionality is now available through the buttons in the top-right corner.</p>
+    </main>
+
+
+    <!-- Modals for Login, Register, Sync, etc. -->
+    <div id="loginModal" class="auth-modal">
+      <div class="auth-modal-content">
+        <span class="close-auth-modal" data-modal-id="loginModal">&times;</span>
+        <h2>Login</h2>
+        <form id="loginForm">
+          <div class="input-group">
+            <label for="loginUsername">Username:</label>
+            <input type="text" id="loginUsername" required>
+          </div>
+          <div class="input-group">
+            <label for="loginPassword">Password:</label>
+            <input type="password" id="loginPassword" required>
+          </div>
+          <button type="submit">Login</button>
+          <button type="button" class="close-auth-modal-button" data-modal-id="loginModal">Cancel</button>
+          <div id="loginError" class="error-message"></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="registerModal" class="auth-modal">
+      <div class="auth-modal-content">
+        <span class="close-auth-modal" data-modal-id="registerModal">&times;</span>
+        <h2>Register</h2>
+        <form id="registerForm">
+          <div class="input-group">
+            <label for="registerUsername">Username:</label>
+            <input type="text" id="registerUsername" required>
+          </div>
+          <div class="input-group">
+            <label for="registerPassword">Password:</label>
+            <input type="password" id="registerPassword" required minlength="4">
+          </div>
+          <div class="input-group">
+            <label for="registerConfirmPassword">Confirm Password:</label>
+            <input type="password" id="registerConfirmPassword" required minlength="4">
+          </div>
+          <button type="submit">Register</button>
+          <button type="button" class="close-auth-modal-button" data-modal-id="registerModal">Cancel</button>
+          <div id="registerError" class="error-message"></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="changePasswordModal" class="auth-modal">
+        <div class="auth-modal-content">
+          <span class="close-auth-modal" data-modal-id="changePasswordModal">&times;</span>
+          <h2>Change Password</h2>
+          <form id="changePasswordForm">
+            <div class="input-group">
+              <label for="currentPassword">Current Password:</label>
+              <input type="password" id="currentPassword" required>
+            </div>
+            <div class="input-group">
+              <label for="newPassword">New Password:</label>
+              <input type="password" id="newPassword" required minlength="4">
+            </div>
+            <div class="input-group">
+              <label for="confirmNewPassword">Confirm New Password:</label>
+              <input type="password" id="confirmNewPassword" required minlength="4">
+            </div>
+            <button type="submit">Update Password</button>
+            <button type="button" class="close-auth-modal-button" data-modal-id="changePasswordModal">Cancel</button>
+            <div id="changePasswordError" class="error-message"></div>
+            <div id="changePasswordSuccess" class="error-message" style="color: #28a745;"></div>
+          </form>
+        </div>
+    </div>
+
+    <div id="syncModal" class="sync-modal">
+      <div class="sync-modal-content">
+        <span class="close-sync-modal" data-modal-id="syncModal">&times;</span>
+        <h2>Local File Sync</h2>
+        <p style="font-size: 0.9em; color: #ccc; margin-bottom: 15px;">Export your current data to a file, or import data from a previously exported file. This only affects local browser storage.</p>
+        <div class="input-group">
+          <button id="exportData" class="btn-sync">Export All Data to File</button>
+        </div>
+        <div class="input-group">
+          <label for="importData">Import Data from File:</label>
+          <input type="file" id="importData" accept=".json" style="color:#ccc;">
+        </div>
+        <div id="syncStatus" style="min-height: 1em; margin-top: 15px;"></div>
+        <button type="button" class="close-sync-modal-button" data-modal-id="syncModal">Close</button>
+      </div>
+    </div>
+
+    <div id="syncChoiceModal" class="auth-modal sync-choice-modal">
+        <div class="auth-modal-content">
+            <h2>Data Sync Conflict</h2>
+            <p style="text-align: center; color: #ccc;">Your local data is different from your server data. Choose which version you want to keep.</p>
+            <div class="comparison-container">
+                <div class="data-column">
+                    <h3>Local Data<br>(This Browser)</h3>
+                    <p><strong>Last Update:</strong> <span id="localLastUpdate">N/A</span></p>
+                    <p><strong>Entries:</strong> <span id="localEntryCount">N/A</span></p>
+                </div>
+                <div class="data-column">
+                    <h3>Server Data<br>(Your Account)</h3>
+                    <p><strong>Last Update:</strong> <span id="serverLastUpdate">N/A</span></p>
+                    <p><strong>Entries:</strong> <span id="serverEntryCount">N/A</span></p>
+                </div>
+            </div>
+            <div class="sync-choice-actions">
+                <button id="useLocalDataBtn" class="btn-upload">Use Local Data (Upload)</button>
+                <button id="useServerDataBtn" class="btn-download">Use Server Data (Download)</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="settingsModal" class="modal">
+      <div class="modal-content">
+        <span class="close-modal" data-modal-id="settingsModal">&times;</span>
+        <h2>Settings</h2>
+        <p>No configurable settings are available.</p>
+        <div style="margin-top: 20px;">
+            <button id="changePasswordButton" style="display: none;">Change Password</button>
+            <button type="button" class="close-modal-button" data-modal-id="settingsModal">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Your custom script, renamed to template.js -->
+    <script src="template.js"></script>
+
+</body>
+</html>

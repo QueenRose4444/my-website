@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Site Notifier</title>
+    <link rel="stylesheet" href="site_notifier.css">
+</head>
+<body>
+
+    <!-- Top Navigation Bar (from template) -->
+    <header class="top-bar">
+        <nav class="nav-container">
+            <div class="nav-left">
+              <ul class="nav-links">
+                <li><a href="../../home/">Home</a></li>
+                <li><a href="../../meds/">Meds</a></li>
+                <li><a href="">WIP-PAGE</a></li>
+                <li><a href="../">Experiments</a></li>
+                <li><a href="" class="active-link">Site Notifier</a></li>
+            </ul>
+            </div>
+            <div class="nav-center">
+            </div>
+            <div class="nav-right">
+              <div class="user-account">
+                <span id="userStatus" style="color: #ccc; align-self: center; margin-right: 15px;">Loading...</span>
+                <button id="loginButton" style="display: none;">Login</button>
+                <button id="registerButton" style="display: none;">Register</button>
+                <button id="logoutButton" style="display: none;">Logout</button>
+                <button id="localSyncButton">Local Sync</button>
+                <button id="settingsButton">Settings</button>
+              </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container">
+        <div class="main-grid">
+            <!-- Left Side: Form for adding a new monitor -->
+            <div class="form-container">
+                <h2>Add New Site to Monitor</h2>
+                <form id="addMonitorForm">
+                    <div class="input-group">
+                        <label for="monitorUrl">Website URL</label>
+                        <input type="text" id="monitorUrl" placeholder="https://example.com" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="pathType">Path Type</label>
+                        <select id="pathType">
+                            <option value="xpath">XPath</option>
+                            <option value="css">CSS Selector</option>
+                            <option value="jsonpath">JSONPath</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label for="monitorPath">Path</label>
+                        <input type="text" id="monitorPath" placeholder="/html/body/h1" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="monitorMessage">Notification Message</label>
+                        <input type="text" id="monitorMessage" placeholder="Change detected on the main page!" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="discordUserIdSelect">Discord User</label>
+                        <div class="discord-user-select-container">
+                            <select id="discordUserIdSelect" required>
+                                <option value="">-- Select a User --</option>
+                            </select>
+                            <button type="button" id="manageDiscordUsersBtn" class="manage-btn">Manage</button>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="monitorFrequencySelect">Check Frequency</label>
+                        <select id="monitorFrequencySelect">
+                            <option value="720">12 Hours</option>
+                            <option value="1080">18 Hours</option>
+                            <option value="1440" selected>24 Hours</option>
+                            <option value="2880">2 Days</option>
+                            <option value="4320">3 Days</option>
+                            <option value="5760">4 Days</option>
+                            <option value="7200">5 Days</option>
+                            <option value="8640">6 Days</option>
+                            <option value="10080">7 Days</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                    </div>
+                    <div class="input-group" id="customFrequencyGroup" style="display: none;">
+                        <label for="customMonitorFrequency">Custom Frequency (Minutes)</label>
+                        <input type="number" id="customMonitorFrequency" min="720" placeholder="e.g., 720 for 12 hours">
+                    </div>
+                    
+                    <!-- Load Images Toggle -->
+                    <div class="input-group checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="loadImagesCheckbox">
+                            <span>Load Images (slower but may be needed for some sites)</span>
+                        </label>
+                    </div>
+
+                    <!-- Cookie Upload Area -->
+                    <div class="input-group">
+                        <label>Cookies File (optional)</label>
+                        <div class="cookie-upload-area" id="cookieDropZone">
+                            <p>Drag & drop cookies.txt here or click to browse</p>
+                            <input type="file" id="cookieFileInput" accept=".txt" style="display: none;">
+                            <div id="cookieFileName" class="cookie-filename"></div>
+                        </div>
+                    </div>
+
+                    <button type="submit">Add Monitor</button>
+                    <div id="addMonitorError" class="error-message"></div>
+                </form>
+
+                 <div class="usage-notice">
+                    <p><strong>Usage Info:</strong></p>
+                    <ul>
+                        <li>Minimum check frequency is <strong>12 hours</strong> (720 minutes).</li>
+                        <li>A small random time is added to each check to avoid detection.</li>
+                        <li>Upload cookies.txt if the site requires authentication.</li>
+                        <li>Disable "Load Images" for faster checks (default).</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Right Side: List of current monitors -->
+            <div class="list-container">
+                <h2>Your Monitored Sites</h2>
+                <div id="monitorsList">
+                    <p class="empty-state">Please log in to see your monitors.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modals -->
+    <!-- Edit Monitor Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" data-modal-id="editModal">&times;</span>
+            <h2>Edit Monitor</h2>
+            <form id="editMonitorForm">
+                <input type="hidden" id="editMonitorId">
+                <div class="input-group">
+                    <label for="editMonitorUrl">Website URL</label>
+                    <input type="text" id="editMonitorUrl" readonly>
+                </div>
+                <div class="input-group">
+                    <label for="editMonitorMessage">Notification Message</label>
+                    <input type="text" id="editMonitorMessage" required>
+                </div>
+                <div class="input-group">
+                    <label for="editMonitorFrequency">Check Frequency (Minutes)</label>
+                    <input type="number" id="editMonitorFrequency" min="720" required>
+                </div>
+                
+                <!-- Load Images Toggle in Edit -->
+                <div class="input-group checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="editLoadImagesCheckbox">
+                        <span>Load Images</span>
+                    </label>
+                </div>
+
+                <button type="submit">Save Changes</button>
+                <button type="button" class="close-modal-button" data-modal-id="editModal">Cancel</button>
+                <div id="editMonitorError" class="error-message"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Manage Cookies Modal -->
+    <div id="cookiesModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" data-modal-id="cookiesModal">&times;</span>
+            <h2>Manage Cookies</h2>
+            <input type="hidden" id="cookieModalMonitorId">
+            <p id="cookieModalUrl" style="color: #999; margin-bottom: 20px; word-break: break-all;"></p>
+            
+            <div id="cookieStatus" class="cookie-status"></div>
+            
+            <div class="input-group">
+                <label>Upload New Cookies File</label>
+                <div class="cookie-upload-area" id="cookieModalDropZone">
+                    <p>Drag & drop cookies.txt here or click to browse</p>
+                    <input type="file" id="cookieModalFileInput" accept=".txt" style="display: none;">
+                    <div id="cookieModalFileName" class="cookie-filename"></div>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button id="deleteCookiesBtn" class="delete-btn" style="flex: 1;">Delete Cookies</button>
+                <button type="button" class="close-modal-button" data-modal-id="cookiesModal" style="flex: 1;">Close</button>
+            </div>
+            <div id="cookieModalError" class="error-message"></div>
+        </div>
+    </div>
+
+    <!-- Manage Discord Users Modal -->
+    <div id="discordUsersModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" data-modal-id="discordUsersModal">&times;</span>
+            <h2>Manage Discord Users</h2>
+            <div id="discordUsersList">
+                <!-- User list will be populated here -->
+            </div>
+            <form id="addDiscordUserForm">
+                <h3>Add New User</h3>
+                <div class="input-group">
+                    <label for="discordUserLabel">Label</label>
+                    <input type="text" id="discordUserLabel" placeholder="e.g., My Main Account" required>
+                </div>
+                <div class="input-group">
+                    <label for="discordUserId">Discord User ID</label>
+                    <input type="text" id="discordUserId" placeholder="123456789012345678" required>
+                </div>
+                <button type="submit">Add User</button>
+                <div id="discordUserError" class="error-message"></div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Login Modal -->
+    <div id="loginModal" class="auth-modal">
+      <div class="auth-modal-content">
+        <span class="close-auth-modal" data-modal-id="loginModal">&times;</span>
+        <h2>Login</h2>
+        <form id="loginForm">
+          <div class="input-group">
+            <label for="loginUsername">Username:</label>
+            <input type="text" id="loginUsername" required>
+          </div>
+          <div class="input-group">
+            <label for="loginPassword">Password:</label>
+            <input type="password" id="loginPassword" required>
+          </div>
+          <button type="submit">Login</button>
+          <button type="button" class="close-auth-modal-button" data-modal-id="loginModal">Cancel</button>
+          <div id="loginError" class="error-message"></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div id="registerModal" class="auth-modal">
+      <div class="auth-modal-content">
+        <span class="close-auth-modal" data-modal-id="registerModal">&times;</span>
+        <h2>Register</h2>
+        <form id="registerForm">
+          <div class="input-group">
+            <label for="registerUsername">Username:</label>
+            <input type="text" id="registerUsername" required>
+          </div>
+          <div class="input-group">
+            <label for="registerPassword">Password:</label>
+            <input type="password" id="registerPassword" required minlength="4">
+          </div>
+          <div class="input-group">
+            <label for="registerConfirmPassword">Confirm Password:</label>
+            <input type="password" id="registerConfirmPassword" required minlength="4">
+          </div>
+          <button type="submit">Register</button>
+          <button type="button" class="close-auth-modal-button" data-modal-id="registerModal">Cancel</button>
+          <div id="registerError" class="error-message"></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="changePasswordModal" class="auth-modal">
+        <div class="auth-modal-content">
+          <span class="close-auth-modal" data-modal-id="changePasswordModal">&times;</span>
+          <h2>Change Password</h2>
+          <form id="changePasswordForm">
+            <div class="input-group">
+              <label for="currentPassword">Current Password:</label>
+              <input type="password" id="currentPassword" required>
+            </div>
+            <div class="input-group">
+              <label for="newPassword">New Password:</label>
+              <input type="password" id="newPassword" required minlength="4">
+            </div>
+            <div class="input-group">
+              <label for="confirmNewPassword">Confirm New Password:</label>
+              <input type="password" id="confirmNewPassword" required minlength="4">
+            </div>
+            <button type="submit">Update Password</button>
+            <button type="button" class="close-auth-modal-button" data-modal-id="changePasswordModal">Cancel</button>
+            <div id="changePasswordError" class="error-message"></div>
+            <div id="changePasswordSuccess" class="error-message" style="color: #28a745;"></div>
+          </form>
+        </div>
+    </div>
+
+    <!-- Local Sync Modal -->
+    <div id="syncModal" class="sync-modal">
+      <div class="sync-modal-content">
+        <span class="close-sync-modal" data-modal-id="syncModal">&times;</span>
+        <h2>Local File Sync</h2>
+        <p>This is for emergency local backups only. The server is the main source of truth.</p>
+        <div class="input-group">
+          <button id="exportData" class="btn-sync">Export All Data to File</button>
+        </div>
+        <div class="input-group">
+          <label for="importData">Import Data from File:</label>
+          <input type="file" id="importData" accept=".json" style="color:#ccc;">
+        </div>
+        <div id="syncStatus" style="min-height: 1em; margin-top: 15px;"></div>
+        <button type="button" class="close-sync-modal-button" data-modal-id="syncModal">Close</button>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+      <div class="modal-content">
+        <span class="close-modal" data-modal-id="settingsModal">&times;</span>
+        <h2>Settings</h2>
+        <div style="margin-top: 20px;">
+            <button id="changePasswordButton" style="display: none;">Change Password</button>
+            <button type="button" class="close-modal-button" data-modal-id="settingsModal">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="site_notifier.js"></script>
+
+</body>
+</html>

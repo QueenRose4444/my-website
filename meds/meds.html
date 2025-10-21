@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+    <title>Med & Weight Tracker</title>
+    <link rel="stylesheet" href="meds.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <style>
+        /* Basic styles for modals */
+        .auth-modal, .sync-modal { /* Apply to both types */
+            display: none; position: fixed; z-index: 1001; left: 0; top: 0; width: 100%; height: 100%;
+            overflow: auto; background-color: rgba(0,0,0,0.8);
+        }
+        .auth-modal-content, .sync-modal-content { /* Apply to both types */
+            background-color: #1e1e1e; color: #eee; margin: 10% auto; padding: 25px; border: 1px solid #555;
+            width: 90%; max-width: 400px; border-radius: 8px; position: relative;
+        }
+        /* Specific styles if needed */
+        .auth-modal-content h2, .sync-modal-content h2 { text-align: center; margin-bottom: 20px; }
+        .auth-modal-content label, .sync-modal-content label { display: block; margin-bottom: 5px; color: #ccc; }
+        .auth-modal-content input[type="text"],
+        .auth-modal-content input[type="password"],
+        .auth-modal-content input[type="number"], /* Added for number inputs */
+        .sync-modal-content input[type="file"] {
+            width: 100%; padding: 10px; margin-bottom: 15px; background-color: #333; color: white;
+            border: 1px solid #555; border-radius: 4px; box-sizing: border-box;
+        }
+        .auth-modal-content button, .sync-modal-content button { margin-right: 10px; margin-top: 10px; }
+        .auth-modal-content .error-message, .sync-modal-content #syncStatus { margin-top: 10px; min-height: 1em; font-size: 0.9em; }
+        .auth-modal-content .error-message { color: #dc3545; }
+        .close-auth-modal, .close-sync-modal { /* Apply to both types */
+             position: absolute; top: 10px; right: 15px; color: #aaa;
+             font-size: 1.8em; font-weight: bold; cursor: pointer; line-height: 1;
+        }
+        .close-auth-modal:hover, .close-auth-modal:focus,
+        .close-sync-modal:hover, .close-sync-modal:focus { color: #fff; text-decoration: none; }
+
+        #settingsModal .modal-content .input-group { margin-bottom: 15px; }
+        #settingsModal .modal-content .input-group select,
+        #settingsModal .modal-content .input-group input[type="number"],
+        #settingsModal .modal-content .input-group input[type="checkbox"] {
+            width: 100%; padding: 8px; background-color: #333; color: white;
+            border: 1px solid #555; border-radius: 4px; box-sizing: border-box;
+        }
+         #settingsModal .close-modal { /* Settings close button styling */
+             position: absolute; top: 10px; right: 15px; color: #aaa;
+             font-size: 1.8em; font-weight: bold; cursor: pointer; line-height: 1;
+         }
+         #settingsModal .close-modal:hover, #settingsModal .close-modal:focus { color: #fff; text-decoration: none; }
+         #shotHistoryModal .modal-content button#closeModal { margin-top: 15px; }
+         .btn-sync { background-color: #28a745 !important; } /* Style for sync buttons */
+         #syncStatus.success { color: #28a745; }
+         #syncStatus.error { color: #dc3545; }
+
+        /* --- START: Styles for multi-input fields --- */
+        .multi-input-container > div {
+            display: flex;
+            gap: 10px;
+        }
+        .multi-input-container .multi-input {
+            flex: 1;
+            /* The base input styles handle the rest */
+        }
+        /* --- END: Styles for multi-input fields --- */
+
+        /* Other base styles */
+        body { font-family: sans-serif; background-color: #121212; color: #eee; margin: 0; }
+        .container { max-width: 1200px; margin: 20px auto; padding: 0 15px; }
+        .controls, .graph-controls, .box-container, .graph-container { margin-bottom: 20px; }
+
+        /* Styles for view mode toggle buttons */
+        .view-mode-controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .view-mode-controls button {
+            padding: 10px 15px;
+            margin: 0 5px;
+            background-color: #333;
+            color: #eee;
+            border: 1px solid #555;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .view-mode-controls button.active {
+            background-color: #4bc0c0;
+            color: #121212;
+            border-color: #4bc0c0;
+        }
+
+        /* Section-specific h2 styling */
+        .med-tracker-section h2, .weight-tracker-section h2 {
+            text-align: center;
+            color: #4bc0c0;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+        .hidden-section {
+            display: none !important;
+        }
+
+        /* --- START: Styles for Sync Choice Modal --- */
+        .sync-choice-modal .modal-content {
+            max-width: 700px;
+        }
+        .comparison-container {
+            display: flex; /* Use flexbox for layout */
+            justify-content: space-between;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .data-column {
+            flex: 1; /* Make columns flexible and equal width */
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 15px;
+            background-color: #2a2a2a;
+        }
+        .data-column h3 {
+            margin-top: 0;
+            color: #4bc0c0;
+            text-align: center;
+            min-height: 40px; /* Give titles space to prevent layout shift */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .data-column p {
+            margin: 8px 0;
+            font-size: 0.9em;
+            word-wrap: break-word;
+        }
+        .data-column p strong {
+            color: #ccc;
+        }
+        .sync-choice-actions {
+            text-align: center;
+            margin-top: 25px;
+        }
+        .sync-choice-actions button {
+            margin: 5px;
+        }
+        .btn-upload { background-color: #5cb85c; }
+        .btn-download { background-color: #337ab7; }
+        /* --- END: Styles for Sync Choice Modal --- */
+    </style>
+</head>
+<body>
+  <header class="top-bar">
+    <nav class="nav-container">
+        <div class="nav-left">
+          <ul class="nav-links">
+            <li><a href="../home/">Home</a></li>
+            <li><a href="../meds/" class="active-link">Meds</a></li>
+            <li><a href="#"></a></li> </ul> </div>
+        <div class="nav-center"> <a href="https://github.com/QueenRose4444/my-website" target="_blank"> <img src="/images/github-mark-white_logo.png" alt="GitHub" class="github-icon"> </a> </div>
+        <div class="nav-right"> <div class="user-account"> <span id="userStatus" style="color: #ccc; align-self: center; margin-right: 15px;">Loading...</span> <button id="loginButton" style="display: none;">Login</button> <button id="registerButton" style="display: none;">Register</button> <button id="logoutButton" style="display: none;">Logout</button> <button id="localSyncButton">Local Sync</button> <button id="settingsButton">Settings</button> </div> </div>
+    </nav>
+  </header>
+
+  <div class="container">
+    <div class="view-mode-controls">
+        <button id="viewModeCombined" class="active">Combined</button>
+        <button id="viewModeMeds">Meds Only</button>
+        <button id="viewModeWeight">Weight Only</button>
+    </div>
+
+    <div id="mainTrackerArea">
+
+        <section id="medTrackerSection" class="med-tracker-section">
+            <h2>Medication Tracker</h2>
+            <div class="controls">
+              <div class="input-group"> <label for="medication">Medication:</label> <select id="medication"> <option value="mounjaro">Mounjaro</option> </select> </div>
+              <div class="input-group"> <label for="dose">Dose:</label> <select id="dose"> <option value="2.5">2.5mg</option> <option value="5">5mg</option> <option value="7.5">7.5mg</option> <option value="10">10mg</option> <option value="12.5">12.5mg</option> <option value="15">15mg</option> </select> </div>
+              <div class="input-group"> <label for="date">Date:</label> <input type="text" id="date" placeholder="Select Date"> </div>
+              <div class="input-group"> <label for="time">Time:</label> <input type="text" id="time" placeholder="Select Time"> </div>
+              <button id="saveShot">Save Shot</button> <button id="shotHistory">Shot History</button>
+            </div>
+            <div class="graph-controls">
+                <div class="graph-view-selector">
+                    <label for="graphViewSelect">Graph View:</label>
+                    <select id="graphViewSelect">
+                        <option value="week">Week</option>
+                        <option value="14days">14 Days</option>
+                        <option value="month" selected>Month</option>
+                        <option value="90days">90 Days</option>
+                        <option value="alltime">All Time</option>
+                    </select>
+                </div>
+                <div id="penStatsContainer" class="pen-stats-inline">
+                    <span>Pen Stats:</span>
+                    <span>Doses Left: <span id="penDosesRemaining">N/A</span></span>
+                    <span>Est. Last Dose: <span id="penEmptyDate">N/A</span></span>
+                </div>
+            </div>
+            <div id="mostRecentShot" class="box-container">
+                <div class="box-left"> <p>Most Recent Shot:</p> <p id="lastShotDate">N/A</p> <p id="lastShotTime">N/A</p> <p id="lastShotMedication">N/A</p> <p id="lastShotDose">N/A</p> </div>
+                <div class="box-center"> <p>Current Estimated Medication Level:</p> <p id="currentMedicationLevel">0mg</p> </div>
+                <div class="box-right"> <p>Estimated Next Shot:</p> <p id="nextShotDate">N/A</p> <p id="nextShotTime">N/A</p> <p id="nextShotMedication">N/A</p> <p id="nextShotDose">N/A</p> </div>
+            </div>
+            <div class="graph-container"> <canvas id="medicationChart"></canvas> </div>
+        </section>
+
+        <section id="weightTrackerSection" class="weight-tracker-section">
+            <h2>Weight Tracker</h2>
+            <div class="controls">
+                <div class="input-group"> <label for="weightDate">Date:</label> <input type="text" id="weightDate" placeholder="Select Date"> </div>
+                <div class="input-group"> <label for="weightTime">Time:</label> <input type="text" id="weightTime" placeholder="Select Time"> </div>
+                
+                <!-- Weight Entry: Single Value -->
+                <div class="input-group" id="weightEntrySingleContainer">
+                    <label for="weightValue">Weight (<span id="weightEntryUnit">kg</span>):</label>
+                    <input type="number" id="weightValue" step="0.1" placeholder="Enter Weight">
+                </div>
+                <!-- Weight Entry: Stone/Pounds -->
+                <div id="weightEntryStonePoundsContainer" class="input-group multi-input-container" style="display: none;">
+                    <label>Weight (stone / pounds):</label>
+                    <div>
+                        <input type="number" id="weightEntryStone" placeholder="st" class="multi-input">
+                        <input type="number" id="weightEntryPounds" step="0.1" placeholder="lbs" class="multi-input">
+                    </div>
+                </div>
+
+                <button id="saveWeightEntry">Save Weight</button> <button id="weightHistoryButton">Weight History</button>
+            </div>
+             <div class="graph-controls">
+                <div class="graph-view-selector">
+                    <label for="weightGraphViewSelect">Graph View:</label>
+                    <select id="weightGraphViewSelect">
+                        <option value="week">Week</option>
+                        <option value="14days">14 Days</option>
+                        <option value="month" selected>Month</option>
+                        <option value="3months">3 Months</option>
+                        <option value="6months">6 Months</option>
+                        <option value="year">Year</option>
+                        <option value="alltime">All Time</option>
+                    </select>
+                </div>
+             </div>
+            <div id="weightStatsBox" class="box-container">
+                <div class="box-left">
+                    <p>Start Weight: <span id="startWeightStat">N/A</span></p>
+                    <p>Goal Weight: <span id="goalWeightStat">N/A</span></p>
+                    <p>To Go: <span id="toGoWeightStat">N/A</span></p>
+                </div>
+                <div class="box-center">
+                    <p>Current Weight: <span id="currentWeightStat">N/A</span></p>
+                    <p id="currentBmiLine" style="display:none;">Current BMI: <span id="currentBmiStat">N/A</span></p>
+                </div>
+                <div class="box-right">
+                    <p>Total Lost: <span id="totalLostWeightStat">N/A</span></p>
+                    <p>Lost This Week: <span id="lostThisWeekStat">N/A</span></p>
+                    <p>Avg Weekly Loss: <span id="avgWeeklyLossStat">N/A</span></p>
+                </div>
+            </div>
+            <div class="graph-container"> <canvas id="weightChart"></canvas> </div>
+        </section>
+
+    </div> <div id="shotHistoryModal" class="modal"> </div>
+    <div id="weightHistoryModal" class="modal"> </div>
+
+  </div> <div id="settingsModal" class="modal">
+    <div class="modal-content">
+        <span class="close-modal" data-modal-id="settingsModal">&times;</span>
+        <h2>Settings</h2>
+
+        <div class="settings-section">
+            <h3>Display Settings</h3>
+            <div class="input-group"> <label for="timeFormat">Time Format:</label> <select id="timeFormat"> <option value="12hr">12-hour</option> <option value="24hr">24-hour</option> </select> </div>
+            <div class="input-group"> <label for="dateFormat">Date Format:</label> <select id="dateFormat"> <option value="dd/mm/yyyy">DD/MM/YYYY</option> <option value="mm/dd/yyyy">MM/DD/YYYY</option> <option value="yyyy/mm/dd">YYYY/MM/DD</option> </select> </div>
+            <div class="input-group"> <label for="weekStart">Week Start:</label> <select id="weekStart"> <option value="Sunday">Sunday</option> <option value="Monday">Monday</option> <option value="Tuesday">Tuesday</option> <option value="Wednesday">Wednesday</option> <option value="Thursday">Thursday</option> <option value="Friday">Friday</option> <option value="Saturday">Saturday</option> </select> </div>
+        </div>
+        <hr style="border-color: #444; margin: 20px 0;">
+        <div class="settings-section">
+            <h3>Weight Tracking Settings</h3>
+            <div class="input-group"> <label for="weightUnit">Weight Unit:</label> <select id="weightUnit"> <option value="kg">Kilograms (kg)</option> <option value="lbs">Pounds (lbs)</option> <option value="st-lbs">Stone & Pounds (st/lbs)</option> </select> </div>
+            
+            <!-- Goal Weight: Single -->
+            <div class="input-group" id="goalWeightSingleContainer">
+                <label for="goalWeight">Goal Weight (<span id="goalWeightUnitLabel">kg</span>):</label>
+                <input type="number" id="goalWeight" step="0.1" placeholder="Enter Goal Weight">
+            </div>
+            <!-- Goal Weight: Stone/Pounds -->
+            <div id="goalWeightStonePoundsContainer" class="input-group multi-input-container" style="display: none;">
+                <label>Goal Weight (stone / pounds):</label>
+                <div>
+                    <input type="number" id="goalWeightStone" placeholder="st" class="multi-input">
+                    <input type="number" id="goalWeightPounds" step="0.1" placeholder="lbs" class="multi-input">
+                </div>
+            </div>
+
+            <!-- Height Unit -->
+            <div class="input-group"> <label for="heightUnit">Height Unit:</label> <select id="heightUnit"> <option value="cm">Centimeters (cm)</option> <option value="ft-in">Feet & Inches (ft/in)</option> </select> </div>
+
+            <!-- Height: Single -->
+            <div class="input-group" id="userHeightSingleContainer">
+                <label for="userHeight">Height (<span id="heightUnitLabel">cm</span>):</label>
+                <input type="number" id="userHeight" step="0.1" placeholder="Enter Height for BMI">
+            </div>
+            <!-- Height: Feet/Inches -->
+            <div id="userHeightFeetInchesContainer" class="input-group multi-input-container" style="display: none;">
+                <label>Height (feet / inches):</label>
+                <div>
+                    <input type="number" id="userHeightFeet" placeholder="ft" class="multi-input">
+                    <input type="number" id="userHeightInches" step="0.1" placeholder="in" class="multi-input">
+                </div>
+            </div>
+
+            <div class="input-group" style="display: flex; align-items: center;"> <input type="checkbox" id="showBmiToggle" style="width: auto; margin-right: 10px;"> <label for="showBmiToggle" style="margin-bottom: 0;">Show BMI</label> </div>
+        </div>
+
+        <hr style="border-color: #444; margin: 20px 0;">
+        <button id="changePasswordButton" style="display: none;">Change Password</button>
+        <hr style="border-color: #444; margin: 20px 0; display: none;" id="changePasswordSeparator"> <div style="margin-top:20px;">
+            <button id="saveSettings">Save Settings</button>
+            <button type="button" class="close-modal-button" data-modal-id="settingsModal">Close</button>
+        </div>
+    </div>
+  </div>
+
+  <div id="loginModal" class="auth-modal">
+    <div class="auth-modal-content"> <span class="close-auth-modal" data-modal-id="loginModal">&times;</span> <h2>Login</h2> <form id="loginForm"> <div class="input-group"> <label for="loginUsername">Username:</label> <input type="text" id="loginUsername" required> </div> <div class="input-group"> <label for="loginPassword">Password:</label> <input type="password" id="loginPassword" required> </div> <button type="submit">Login</button> <button type="button" class="close-auth-modal-button" data-modal-id="loginModal">Cancel</button> <div id="loginError" class="error-message"></div> </form> </div>
+  </div>
+
+  <div id="registerModal" class="auth-modal">
+    <div class="auth-modal-content"> <span class="close-auth-modal" data-modal-id="registerModal">&times;</span> <h2>Register</h2> <form id="registerForm"> <div class="input-group"> <label for="registerUsername">Username:</label> <input type="text" id="registerUsername" required> </div> <div class="input-group"> <label for="registerPassword">Password:</label> <input type="password" id="registerPassword" required minlength="4"> </div> <div class="input-group"> <label for="registerConfirmPassword">Confirm Password:</label> <input type="password" id="registerConfirmPassword" required minlength="4"> </div> <button type="submit">Register</button> <button type="button" class="close-auth-modal-button" data-modal-id="registerModal">Cancel</button> <div id="registerError" class="error-message"></div> </form> </div>
+  </div>
+
+  <div id="changePasswordModal" class="auth-modal">
+      <div class="auth-modal-content"> <span class="close-auth-modal" data-modal-id="changePasswordModal">&times;</span> <h2>Change Password</h2> <form id="changePasswordForm"> <div class="input-group"> <label for="currentPassword">Current Password:</label> <input type="password" id="currentPassword" required> </div> <div class="input-group"> <label for="newPassword">New Password:</label> <input type="password" id="newPassword" required minlength="4"> </div> <div class="input-group"> <label for="confirmNewPassword">Confirm New Password:</label> <input type="password" id="confirmNewPassword" required minlength="4"> </div> <button type="submit">Update Password</button> <button type="button" class="close-auth-modal-button" data-modal-id="changePasswordModal">Cancel</button> <div id="changePasswordError" class="error-message"></div> <div id="changePasswordSuccess" class="error-message" style="color: #28a745;"></div> </form> </div>
+  </div>
+
+  <div id="syncModal" class="sync-modal"> <div class="sync-modal-content"> <span class="close-sync-modal" data-modal-id="syncModal">&times;</span> <h2>Local File Sync</h2>
+      <p style="font-size: 0.9em; color: #ccc; margin-bottom: 15px;">Export your current data (shots, weight & settings) to a file, or import data from a previously exported file. This only affects local browser storage.</p>
+      <div class="input-group">
+        <button id="exportData" class="btn-sync">Export All Data to File</button>
+      </div>
+      <div class="input-group">
+        <label for="importData">Import Data from File:</label>
+        <input type="file" id="importData" accept=".json" style="color:#ccc;"> </div>
+      <div id="syncStatus" style="min-height: 1em; margin-top: 15px;"></div> <button type="button" class="close-sync-modal-button" data-modal-id="syncModal">Close</button> </div>
+  </div>
+
+  <!-- START: Sync Choice Modal -->
+  <div id="syncChoiceModal" class="auth-modal sync-choice-modal">
+      <div class="auth-modal-content">
+          <!-- REMOVED: Close button (x) to make the choice mandatory -->
+          <h2>Data Sync Conflict</h2>
+          <p style="text-align: center; color: #ccc;">Your local data is different from your server data. Choose which version you want to keep.</p>
+
+          <div class="comparison-container">
+              <!-- Local Data Column -->
+              <div class="data-column">
+                  <h3>Local Data<br>(This Browser)</h3>
+                  <p><strong>Last Update:</strong> <span id="localLastUpdate">N/A</span></p>
+                  <p><strong>Entries:</strong> <span id="localEntryCount">N/A</span></p>
+                  <hr style="border-color: #444;">
+                  <p><strong>Last Shot:</strong> <span id="localLastShot">N/A</span></p>
+                  <p><strong>Last Weight:</strong> <span id="localLastWeight">N/A</span></p>
+              </div>
+              <!-- Server Data Column -->
+              <div class="data-column">
+                  <h3>Server Data<br>(Your Account)</h3>
+                  <p><strong>Last Update:</strong> <span id="serverLastUpdate">N/A</span></p>
+                  <p><strong>Entries:</strong> <span id="serverEntryCount">N/A</span></p>
+                  <hr style="border-color: #444;">
+                  <p><strong>Last Shot:</strong> <span id="serverLastShot">N/A</span></p>
+                  <p><strong>Last Weight:</strong> <span id="serverLastWeight">N/A</span></p>
+              </div>
+          </div>
+
+          <div class="sync-choice-actions">
+              <button id="useLocalDataBtn" class="btn-upload">Use Local Data (Upload)</button>
+              <button id="useServerDataBtn" class="btn-download">Use Server Data (Download)</button>
+              <!-- REMOVED: "Decide Later" button to make the choice mandatory -->
+          </div>
+      </div>
+  </div>
+  <!-- END: Sync Choice Modal -->
+
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script> 
+  <script src="meds.js"></script>
+
+    <footer>
+        <p> <a href="https://github.com/QueenRose4444/my-website" target="_blank"></a></p>
+        <!-- The hidden link is a tiny spot in the bottom-right corner of this footer -->
+        <a href="../experiments/" class="truly-hidden-link" title="Experiments"></a>
+    </footer>
+
+</body>
+</html>

@@ -1,0 +1,432 @@
+/* Base and Navigation Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: sans-serif;
+    background-color: #030712; /* Darker background */
+    color: #e5e7eb;
+    line-height: 1.6;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.top-bar {
+    background-color: #1a1a1a;
+    padding: 12.5px 20px;
+    flex-shrink: 0;
+    z-index: 1000;
+}
+.top-bar nav ul {
+    list-style: none;
+    display: flex;
+    justify-content: flex-start;
+    margin: 0;
+    padding: 0;
+}
+.top-bar nav ul li {
+    margin-right: 20px;
+}
+.top-bar nav ul li a {
+    text-decoration: none;
+    color: #eee;
+    font-weight: bold;
+}
+.top-bar nav ul li a:hover,
+.top-bar nav ul li a.active-link {
+    color: #4bc0c0;
+}
+
+button {
+    padding: 10px 18px;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, opacity 0.2s ease;
+    font-size: 1em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Main App Layout and Styles */
+main.container {
+    flex-grow: 1;
+    margin: 20px; /* Gap from page edges */
+    padding: 0;
+    display: flex;
+    gap: 20px;
+    height: calc(100vh - 100px);
+}
+
+.panel {
+    background-color: #1f2937;
+    border: 1px solid #374151;
+    border-radius: 8px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.file-panel {
+    width: 30%; /* Smaller controls panel */
+    min-width: 300px;
+}
+
+.preview-panel {
+    width: 70%; /* Larger preview panel */
+    background-color: transparent;
+    border: none;
+    padding: 0;
+}
+
+h2 {
+    color: #e5e7eb;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #333;
+    padding-bottom: 10px;
+}
+
+/* Controls Panel (Left) */
+.panel-header {
+    margin-bottom: 16px;
+}
+.panel-header h1 {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #f9fafb;
+}
+.panel-header p {
+    color: #9ca3af;
+    margin-top: 4px;
+}
+.prompt-section {
+    margin-bottom: 24px;
+}
+.prompt-section label {
+    display: block;
+    font-size: 0.875em;
+    font-weight: 500;
+    color: #d1d5db;
+    margin-bottom: 8px;
+}
+
+#prompt-input {
+    width: 100%;
+    height: 200px;
+    background-color: #374151;
+    color: #eee;
+    border: 1px solid #4b5563;
+    border-radius: 4px;
+    padding: 10px;
+    font-size: 1em;
+    resize: vertical;
+}
+
+/* Drop Zone (Left Panel) */
+#drop-zone {
+    border: 2px dashed #4b5563;
+    border-radius: 8px;
+    padding: 2rem;
+    text-align: center;
+    color: #9ca3af;
+    transition: background-color 0.3s, border-color 0.3s;
+    margin-bottom: 24px;
+    cursor: pointer;
+}
+#drop-zone:hover, #drop-zone.drag-highlight {
+    background-color: #374151;
+    border-color: #6366f1;
+}
+#drop-zone svg {
+    margin: 0 auto;
+    height: 3rem;
+    width: 3rem;
+    color: #6b7280;
+}
+#drop-zone p {
+    margin-top: 8px;
+    font-size: 0.875em;
+}
+#drop-zone p .font-semibold {
+    font-weight: 600;
+    color: #818cf8;
+}
+
+/* File List (Left Panel) */
+#file-list-container {
+    flex-grow: 1;
+    overflow-y: auto;
+}
+.file-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+.file-list-header h2 {
+    font-size: 1.125em;
+    font-weight: 600;
+    margin-bottom: 0;
+    border: none;
+    padding: 0;
+    color: #e5e7eb;
+}
+#add-file-btn {
+    background-color: #374151;
+    font-size: 0.875em;
+    padding: 6px 12px;
+}
+#add-file-btn:hover {
+    background-color: #4b5563;
+}
+#file-list {
+    list-style-type: none;
+    padding: 0;
+}
+#file-list .file-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background-color: #374151;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+#file-list .file-item:active {
+    cursor: grabbing;
+}
+.sortable-ghost {
+    opacity: 0.4;
+    background: #444;
+}
+.drag-handle {
+    color: #9ca3af;
+    cursor: move;
+    opacity: 0.5;
+    transition: opacity 0.2s ease-in-out;
+    flex-shrink: 0;
+}
+.file-item:hover .drag-handle {
+    opacity: 1;
+}
+.drag-handle svg {
+    width: 20px;
+    height: 20px;
+    display: block;
+}
+.file-name-input {
+    flex-grow: 1;
+    background-color: transparent;
+    color: #e5e7eb;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.9em;
+    font-weight: 500;
+    transition: background-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    outline: none;
+}
+.file-name-input:focus {
+    background-color: #4b5563;
+    box-shadow: 0 0 0 1px #6366f1;
+}
+.remove-file-btn {
+    background: none;
+    border: none;
+    color: #9ca3af;
+    cursor: pointer;
+    margin-left: auto;
+    padding: 4px;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease-in-out;
+    flex-shrink: 0;
+}
+.remove-file-btn:hover {
+    color: #ef4444;
+}
+.remove-file-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* Preview Panel (Right) */
+.preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.preview-header h2 {
+    margin-bottom: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+}
+#output-preview-container {
+    flex-grow: 1;
+    background-color: #1f2937;
+    border-radius: 8px; /* Match other panel style */
+    border: 1px solid #374151;
+    padding: 15px;
+    overflow: auto;
+    margin-top: 15px;
+}
+#output-preview {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.9em;
+    color: #d1d5db;
+}
+.action-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+/* Button styling */
+#copy-button {
+    background-color: #4f46e5;
+}
+#copy-button:not(:disabled):hover {
+    background-color: #4338ca;
+}
+#download-button {
+    background-color: #16a34a;
+}
+#download-button:not(:disabled):hover {
+    background-color: #15803d;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Toast Notification */
+.toast-notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    z-index: 2000;
+    pointer-events: none; /* Ignore mouse events */
+}
+
+.toast-notification.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.toast-notification.success {
+    background-color: #e5e7eb; /* Light gray */
+    color: #111827; /* Dark text */
+}
+
+.toast-notification.error {
+    background-color: #ef4444; /* Red */
+    color: #ffffff; /* White text */
+}
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(17, 24, 39, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 3000;
+    backdrop-filter: blur(4px);
+}
+
+.modal-content {
+    background-color: #1f2937;
+    padding: 24px;
+    border-radius: 8px;
+    border: 1px solid #374151;
+    width: 90%;
+    max-width: 600px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.modal-content h3 {
+    font-size: 1.25em;
+    margin-bottom: 0;
+    color: #f9fafb;
+}
+
+.modal-content label {
+    font-size: 0.875em;
+    font-weight: 500;
+    color: #d1d5db;
+    margin-bottom: -8px; /* Reduce gap */
+}
+
+.modal-content input,
+.modal-content textarea {
+    width: 100%;
+    background-color: #374151;
+    color: #eee;
+    border: 1px solid #4b5563;
+    border-radius: 4px;
+    padding: 10px;
+    font-size: 1em;
+}
+
+.modal-content textarea {
+    resize: vertical;
+    min-height: 150px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+#modal-cancel-btn {
+    background-color: #4b5563;
+}
+#modal-cancel-btn:hover {
+    background-color: #6b7280;
+}
+#modal-save-btn {
+    background-color: #4f46e5;
+}
+#modal-save-btn:hover {
+    background-color: #4338ca;
+}
+
+
+/* Responsive */
+@media (max-width: 900px) {
+    main.container {
+        flex-direction: column;
+        height: auto;
+    }
+    .file-panel, .preview-panel {
+        width: 100%;
+        height: 50vh;
+    }
+}

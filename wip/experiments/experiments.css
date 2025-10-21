@@ -1,0 +1,163 @@
+/* Reset some default styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+html, body {
+    height: 100%; /* Make sure the body and html can fill the full height */
+}
+  
+body {
+    font-family: sans-serif;
+    background-color: #121212;
+    color: #eee;
+    line-height: 1.6;
+    min-height: 100vh; /* Ensure body takes at least full viewport height */
+    display: grid;
+    grid-template-rows: auto 1fr auto; /* header, main content, footer */
+    grid-template-areas: 
+        "header"
+        "main" 
+        "footer";
+}
+
+/* Top Navigation Bar */
+.top-bar {
+    background-color: #1a1a1a;
+    padding: 12.5px 20px;
+    grid-area: header;
+  }
+  
+/* Style for the active link */
+.top-bar nav ul li a.active-link {
+  color: #4bc0c0; /* Teal color for active link */
+  font-weight: bold;
+}
+
+  .top-bar nav ul {
+    list-style: none;
+    display: flex;
+    justify-content: flex-start;
+  }
+  
+  .top-bar nav ul li {
+    margin-right: 20px;
+  }
+  
+  .top-bar nav ul li a {
+    text-decoration: none;
+    color: #eee;
+    font-weight: bold;
+  }
+  
+  .top-bar nav ul li a:hover {
+    color: #4bc0c0;
+  }
+
+/* experiments.css */
+.experiments-content {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.experiments-content h1 {
+    text-align: center;
+    margin-bottom: 40px;
+    font-size: 2.2rem;
+    color: #4bc0c0;
+}
+
+.experiment {
+    margin-bottom: 50px;
+    background-color: #1e1e1e;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.experiment:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+.experiment-link {
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.experiment-image {
+    height: 300px;
+    overflow: hidden;
+}
+
+.experiment-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s;
+}
+
+.experiment:hover .experiment-image img {
+    transform: scale(1.05);
+}
+
+.experiment-info {
+    padding: 20px;
+}
+
+.experiment-info h2 {
+    margin-bottom: 10px;
+    font-size: 1.6rem;
+    color: #4bc0c0;
+}
+
+.experiment-info p {
+    color: #bbb;
+    line-height: 1.5;
+}
+
+/* Responsive layout */
+@media (min-width: 768px) {
+    .experiment-link {
+        flex-direction: row;
+    }
+    
+    .experiment-image {
+        width: 50%;
+        height: auto;
+    }
+    
+    .experiment-info {
+        width: 50%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+}
+
+/* Footer */
+footer {
+  text-align: center;
+  padding: 0px;
+  background-color: #121212;
+  font-size: 0.9rem;
+  color: #888;
+  position: relative; /* Needed for positioning the hidden link inside */
+  grid-area: footer;
+}
+
+footer a {
+    color: #4bc0c0;
+    text-decoration: none;
+}
+
+footer a:hover {
+    text-decoration: underline;
+}
