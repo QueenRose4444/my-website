@@ -1,15 +1,16 @@
-# Redirect root to /home/
+# Rewrite folder URLs to serve the actual HTML files (keeps URL as folder path)
+/home/ /home/home.html 200
+/meds/ /meds/meds.html 200
+/experiments/ /experiments/experiments.html 200
+/experiments/BBCode_editor/ /experiments/BBCode_editor/bbcode_editor.html 200
+/experiments/keyboard_heatmap/ /experiments/keyboard_heatmap/keyboard-heatmap.html 200
+/experiments/promt_editor/ /experiments/promt_editor/promt_editor.html 200
+/wip/home/ /wip/home/home.html 200
+/wip/meds/ /wip/meds/meds.html 200
+/wip/experiments/ /wip/experiments/experiments.html 200
+
+# Redirect URLs without trailing slash to include it (301 = permanent redirect)
 / /home/ 301
-
-# Ensure clean folder URLs (remove doubled paths)
-/home/home /home/ 301
-/meds/meds /meds/ 301
-/experiments/experiments /experiments/ 301
-/wip/home/home /wip/home/ 301
-/wip/meds/meds /wip/meds/ 301
-/wip/experiments/experiments /wip/experiments/ 301
-
-# Redirect URLs without trailing slash to include it
 /home /home/ 301
 /meds /meds/ 301
 /experiments /experiments/ 301
@@ -20,3 +21,25 @@
 /wip/home /wip/home/ 301
 /wip/meds /wip/meds/ 301
 /wip/experiments /wip/experiments/ 301
+
+# Prevent doubled paths by redirecting to single folder
+/home/home /home/ 301
+/home/home/ /home/ 301
+/meds/meds /meds/ 301
+/meds/meds/ /meds/ 301
+/experiments/experiments /experiments/ 301
+/experiments/experiments/ /experiments/ 301
+/wip/home/home /wip/home/ 301
+/wip/meds/meds /wip/meds/ 301
+/wip/experiments/experiments /wip/experiments/ 301
+
+# Redirect direct HTML file access to folder URL
+/home/home.html /home/ 301
+/meds/meds.html /meds/ 301
+/experiments/experiments.html /experiments/ 301
+/experiments/BBCode_editor/bbcode_editor.html /experiments/BBCode_editor/ 301
+/experiments/keyboard_heatmap/keyboard-heatmap.html /experiments/keyboard_heatmap/ 301
+/experiments/promt_editor/promt_editor.html /experiments/promt_editor/ 301
+/wip/home/home.html /wip/home/ 301
+/wip/meds/meds.html /wip/meds/ 301
+/wip/experiments/experiments.html /wip/experiments/ 301
