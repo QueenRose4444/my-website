@@ -1,0 +1,7 @@
+{
+  "name": "my-site",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "node build.js"
+  }
+}
