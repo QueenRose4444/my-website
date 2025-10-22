@@ -88,7 +88,7 @@ const defaultSettings = {
     shotLocationDisplay: 'box', // 'box', 'bar', or 'both'
     shotLocations: [
         'Left Arm', 'Right Arm',
-        'Left Belly', 'Right Belly',
+        'Right Belly', 'Left Belly',
         'Left Thigh', 'Right Thigh'
     ]
 };
