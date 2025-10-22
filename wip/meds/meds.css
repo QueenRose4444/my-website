@@ -537,6 +537,33 @@ button:hover {
     margin-left: 8px;
     vertical-align: middle;
     position: relative; /* Needed for tooltip positioning */
+    /* Increase touch target for mobile without changing visual size */
+    padding: 12px; /* Creates larger invisible tap area */
+    margin: -12px 8px -12px -4px; /* Negative margin to maintain visual spacing */
+}
+
+/* Ensure the visual circle remains the correct size */
+.info-icon::before {
+    content: '?';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 16px;
+    height: 16px;
+    line-height: 16px;
+    background-color: #555;
+    border-radius: 50%;
+    z-index: 1;
+}
+
+/* Hide the original content since we're using ::before */
+.info-icon {
+    font-size: 0;
+}
+
+.info-icon::before {
+    font-size: 12px;
 }
 
 /* Draggable List for Shot Locations */
