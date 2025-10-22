@@ -1670,6 +1670,128 @@ function populateSettingsModal() {
     els.abbreviationInfoIcon.title = tooltipText;
 }
 
+// Info Icon Tooltip System - Works on both desktop and mobile
+function initializeInfoIconTooltips() {
+    // Create a single tooltip element that we'll reuse
+    let tooltipElement = document.getElementById('info-tooltip');
+    let overlayElement = document.getElementById('tooltip-overlay');
+    
+    if (!tooltipElement) {
+        tooltipElement = document.createElement('div');
+        tooltipElement.id = 'info-tooltip';
+        tooltipElement.className = 'info-tooltip';
+        document.body.appendChild(tooltipElement);
+    }
+    
+    if (!overlayElement) {
+        overlayElement = document.createElement('div');
+        overlayElement.id = 'tooltip-overlay';
+        overlayElement.className = 'tooltip-overlay';
+        document.body.appendChild(overlayElement);
+    }
+
+    let currentIcon = null;
+    let hideTimeout = null;
+
+    // Function to show tooltip
+    function showTooltip(icon) {
+        clearTimeout(hideTimeout);
+        currentIcon = icon;
+        
+        const text = icon.getAttribute('title') || icon.dataset.tooltip;
+        if (!text) return;
+        
+        tooltipElement.textContent = text;
+        
+        // Position the tooltip
+        const rect = icon.getBoundingClientRect();
+        const tooltipRect = tooltipElement.getBoundingClientRect();
+        
+        // Calculate position (centered below the icon)
+        let left = rect.left + (rect.width / 2);
+        let top = rect.bottom + 8; // 8px gap below icon
+        
+        // Adjust if tooltip goes off screen horizontally
+        if (left + tooltipRect.width / 2 > window.innerWidth - 10) {
+            left = window.innerWidth - tooltipRect.width / 2 - 10;
+        } else if (left - tooltipRect.width / 2 < 10) {
+            left = tooltipRect.width / 2 + 10;
+        }
+        
+        // Adjust if tooltip goes off screen vertically (show above instead)
+        if (top + tooltipRect.height > window.innerHeight - 10) {
+            top = rect.top - tooltipRect.height - 8;
+            tooltipElement.style.setProperty('--arrow-direction', 'up');
+        } else {
+            tooltipElement.style.removeProperty('--arrow-direction');
+        }
+        
+        tooltipElement.style.left = left + 'px';
+        tooltipElement.style.top = top + 'px';
+        tooltipElement.style.transform = 'translateX(-50%)';
+        
+        tooltipElement.classList.add('show');
+        overlayElement.classList.add('show');
+    }
+
+    // Function to hide tooltip
+    function hideTooltip() {
+        tooltipElement.classList.remove('show');
+        overlayElement.classList.remove('show');
+        currentIcon = null;
+    }
+
+    // Handle all info icons
+    document.body.addEventListener('mouseenter', (e) => {
+        if (e.target.classList.contains('info-icon')) {
+            // Only show on hover for desktop (not for touch devices)
+            if (!('ontouchstart' in window)) {
+                showTooltip(e.target);
+            }
+        }
+    }, true);
+
+    document.body.addEventListener('mouseleave', (e) => {
+        if (e.target.classList.contains('info-icon')) {
+            if (!('ontouchstart' in window)) {
+                hideTimeout = setTimeout(hideTooltip, 200);
+            }
+        }
+    }, true);
+
+    // Handle click/tap for all devices
+    document.body.addEventListener('click', (e) => {
+        if (e.target.classList.contains('info-icon')) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            if (currentIcon === e.target) {
+                // Clicking the same icon again closes it
+                hideTooltip();
+            } else {
+                // Show tooltip for this icon
+                showTooltip(e.target);
+            }
+        }
+    });
+
+    // Close tooltip when clicking overlay or anywhere else
+    overlayElement.addEventListener('click', hideTooltip);
+    
+    // Also close on scroll (better mobile experience)
+    let scrollTimeout;
+    window.addEventListener('scroll', () => {
+        if (tooltipElement.classList.contains('show')) {
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(hideTooltip, 150);
+        }
+    }, true);
+}
+
+// Call this function in your DOMContentLoaded event
+// Add this to the existing DOMContentLoaded listener in meds.js:
+// initializeInfoIconTooltips();
+
 function saveSettings() {
     const elements = getElements();
     
@@ -2330,5 +2452,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateUIForLoginState();
     updateDisplay();
     updateDoseToLastUsed();
+    initializeInfoIconTooltips();
 });
 
