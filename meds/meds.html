@@ -175,6 +175,11 @@
               <div class="input-group"> <label for="dose">Dose:</label> <select id="dose"> <option value="2.5">2.5mg</option> <option value="5">5mg</option> <option value="7.5">7.5mg</option> <option value="10">10mg</option> <option value="12.5">12.5mg</option> <option value="15">15mg</option> </select> </div>
               <div class="input-group"> <label for="date">Date:</label> <input type="text" id="date" placeholder="Select Date"> </div>
               <div class="input-group"> <label for="time">Time:</label> <input type="text" id="time" placeholder="Select Time"> </div>
+              <!-- Shot Location Dropdown -->
+              <div class="input-group" id="shotLocationGroup" style="display: none;">
+                <label for="shotLocation">Shot Location:</label>
+                <select id="shotLocation"></select>
+              </div>
               <button id="saveShot">Save Shot</button> <button id="shotHistory">Shot History</button>
             </div>
             <div class="graph-controls">
@@ -188,16 +193,22 @@
                         <option value="alltime">All Time</option>
                     </select>
                 </div>
-                <div id="penStatsContainer" class="pen-stats-inline">
-                    <span>Pen Stats:</span>
-                    <span>Doses Left: <span id="penDosesRemaining">N/A</span></span>
-                    <span>Est. Last Dose: <span id="penEmptyDate">N/A</span></span>
-                </div>
+                 <div class="stats-bar-group">
+                    <div id="locationStatsContainer" class="pen-stats-inline" style="display: none;">
+                        <span>Next Location: <span id="barNextLocation">N/A</span></span>
+                        <span class="info-icon" id="barLocationInfoIcon" title="">?</span>
+                    </div>
+                    <div id="penStatsContainer" class="pen-stats-inline">
+                        <span>Pen Stats:</span>
+                        <span>Doses Left: <span id="penDosesRemaining">N/A</span></span>
+                        <span>Est. Last Dose: <span id="penEmptyDate">N/A</span></span>
+                    </div>
+                 </div>
             </div>
             <div id="mostRecentShot" class="box-container">
-                <div class="box-left"> <p>Most Recent Shot:</p> <p id="lastShotDate">N/A</p> <p id="lastShotTime">N/A</p> <p id="lastShotMedication">N/A</p> <p id="lastShotDose">N/A</p> </div>
+                <div class="box-left"> <p>Most Recent Shot:</p> <p id="lastShotDate">N/A</p> <p id="lastShotTime">N/A</p> <p id="lastShotMedication">N/A</p> <p id="lastShotDose">N/A</p> <p id="lastShotLocationLine" style="display: none;">Location: <span id="lastShotLocation">N/A</span></p></div>
                 <div class="box-center"> <p>Current Estimated Medication Level:</p> <p id="currentMedicationLevel">0mg</p> </div>
-                <div class="box-right"> <p>Estimated Next Shot:</p> <p id="nextShotDate">N/A</p> <p id="nextShotTime">N/A</p> <p id="nextShotMedication">N/A</p> <p id="nextShotDose">N/A</p> </div>
+                <div class="box-right"> <p>Estimated Next Shot:</p> <p id="nextShotDate">N/A</p> <p id="nextShotTime">N/A</p> <p id="nextShotMedication">N/A</p> <p id="nextShotDose">N/A</p> <p id="nextShotLocationLine" style="display: none;">Next Location: <span id="nextShotLocation">N/A</span></p></div>
             </div>
             <div class="graph-container"> <canvas id="medicationChart"></canvas> </div>
         </section>
@@ -236,6 +247,10 @@
                         <option value="year">Year</option>
                         <option value="alltime">All Time</option>
                     </select>
+                    <!-- [MOVED & UPDATED] This container now sits next to the dropdown -->
+                    <div id="periodLossContainer" class="pen-stats-inline" style="display: none;">
+                        <span><span id="periodLossLabel">Change:</span> <span id="periodLossStat">N/A</span></span>
+                    </div>
                 </div>
              </div>
             <div id="weightStatsBox" class="box-container">
@@ -308,6 +323,42 @@
             </div>
 
             <div class="input-group" style="display: flex; align-items: center;"> <input type="checkbox" id="showBmiToggle" style="width: auto; margin-right: 10px;"> <label for="showBmiToggle" style="margin-bottom: 0;">Show BMI</label> </div>
+        </div>
+
+        <hr style="border-color: #444; margin: 20px 0;">
+        <!-- Shot Location Settings -->
+        <div class="settings-section" id="shotLocationSettingsSection">
+            <h3>Shot Location Tracking</h3>
+            <div class="input-group" style="display: flex; align-items: center;">
+                <input type="checkbox" id="shotLocationToggle" style="width: auto; margin-right: 10px;">
+                <label for="shotLocationToggle" style="margin-bottom: 0;">Enable Shot Location Tracking</label>
+            </div>
+            <div id="shotLocationControls" style="display: none;">
+                 <div class="input-group" style="display: flex; align-items: center; margin-top: 10px;">
+                    <input type="checkbox" id="shotLocationAbbreviationToggle" style="width: auto; margin-right: 10px;">
+                    <label for="shotLocationAbbreviationToggle" style="margin-bottom: 0;">Use Abbreviations</label>
+                     <span class="info-icon" id="abbreviationInfoIcon" title="">?</span>
+                </div>
+                 <div class="input-group">
+                    <label for="shotLocationDisplaySelect">Display Style:</label>
+                    <select id="shotLocationDisplaySelect">
+                        <option value="box">Box View</option>
+                        <option value="bar">Bar View</option>
+                        <option value="both">Both</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Edit Locations (drag to reorder): <button type="button" id="restoreDefaultLocationsBtn" class="btn-link-style">Restore Defaults</button></label>
+                    <ul id="shotLocationOrderList" class="draggable-list"></ul>
+                </div>
+                <div class="input-group">
+                     <label for="newShotLocation">Add New Location:</label>
+                     <div style="display: flex; gap: 10px;">
+                        <input type="text" id="newShotLocation" placeholder="e.g., Upper Buttocks" style="flex-grow: 1;">
+                        <button id="addShotLocationBtn" style="flex-shrink: 0;">Add</button>
+                     </div>
+                </div>
+            </div>
         </div>
 
         <hr style="border-color: #444; margin: 20px 0;">
@@ -392,3 +443,4 @@
 
 </body>
 </html>
+
