@@ -81,16 +81,7 @@ const defaultSettings = {
     goalWeight: null,
     userHeight: null,
     showBmi: false,
-    weightGraphView: 'month',
-    // New settings for shot location tracking
-    shotLocationTrackingEnabled: true,
-    shotLocationAbbreviations: true,
-    shotLocationDisplay: 'both', // 'box', 'bar', or 'both'
-    shotLocations: [
-        'Left Arm', 'Right Arm',
-        'Right Belly', 'Left Belly',
-        'Left Thigh', 'Right Thigh'
-    ]
+    weightGraphView: 'month'
 };
 
 const flatpickrDateFormatMapping = {
@@ -209,27 +200,6 @@ function getElements() {
         exportDataButton: document.getElementById("exportData"),
         importDataInput: document.getElementById("importData"),
         syncStatus: document.getElementById("syncStatus"),
-        periodLossContainer: document.getElementById('periodLossContainer'),
-        periodLossStat: document.getElementById('periodLossStat'),
-        // Shot location elements
-        shotLocationGroup: document.getElementById('shotLocationGroup'),
-        shotLocationSelect: document.getElementById('shotLocation'),
-        lastShotLocationLine: document.getElementById('lastShotLocationLine'),
-        lastShotLocation: document.getElementById('lastShotLocation'),
-        nextShotLocationLine: document.getElementById('nextShotLocationLine'),
-        nextShotLocation: document.getElementById('nextShotLocation'),
-        shotLocationToggle: document.getElementById('shotLocationToggle'),
-        shotLocationControls: document.getElementById('shotLocationControls'),
-        shotLocationAbbreviationToggle: document.getElementById('shotLocationAbbreviationToggle'),
-        abbreviationInfoIcon: document.getElementById('abbreviationInfoIcon'),
-        shotLocationDisplaySelect: document.getElementById('shotLocationDisplaySelect'),
-        shotLocationOrderList: document.getElementById('shotLocationOrderList'),
-        newShotLocationInput: document.getElementById('newShotLocation'),
-        addShotLocationBtn: document.getElementById('addShotLocationBtn'),
-        restoreDefaultLocationsBtn: document.getElementById('restoreDefaultLocationsBtn'),
-        locationStatsContainer: document.getElementById('locationStatsContainer'),
-        barNextLocation: document.getElementById('barNextLocation'),
-        barLocationInfoIcon: document.getElementById('barLocationInfoIcon')
     };
     return elements;
 }
@@ -1122,176 +1092,10 @@ function calculateWeightStats() {
     }
 }
 
-/**
- * [NEW] Calculates and displays the weight loss over the currently selected graph time period.
- */
-function calculateAndDisplayPeriodLoss() {
-    const elements = getElements();
-    const graphView = elements.weightGraphViewSelect.value;
-    const container = elements.periodLossContainer;
-    const statEl = elements.periodLossStat;
-
-    if (graphView === 'alltime' || weightHistory.length < 2) {
-        container.style.display = 'none';
-        return;
-    }
-
-    // Determine date range based on the selected view
-    const now = new Date();
-    const endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-    let startDate;
-    const y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
-    switch(graphView) {
-        case 'week': startDate = new Date(y, m, d - 6); break;
-        case '14days': startDate = new Date(y, m, d - 13); break;
-        case 'month': startDate = new Date(y, m - 1, d); break;
-        case '3months': startDate = new Date(y, m - 3, d); break;
-        case '6months': startDate = new Date(y, m - 6, d); break;
-        case 'year': startDate = new Date(y - 1, m, d); break;
-    }
-    startDate.setHours(0, 0, 0, 0);
-
-    const sortedHistory = [...weightHistory].sort((a, b) => a.dateTime - b.dateTime);
-
-    // Find the data points that bound our view for an accurate calculation
-    const lastBefore = sortedHistory.filter(e => e.dateTime < startDate).pop();
-    const firstInOrAfter = sortedHistory.find(e => e.dateTime >= startDate);
-    const lastIn = sortedHistory.filter(e => e.dateTime <= endDate).pop();
-
-    if (!lastIn) { // No data within the period at all, so hide the stat
-        container.style.display = 'none';
-        return;
-    }
-
-    let startWeightKg;
-    // Determine the starting weight for the period, interpolating if necessary for accuracy
-    if (lastBefore && firstInOrAfter) {
-        // We have points on both sides of the start date, so we can calculate the trend
-        const timeDiff = firstInOrAfter.dateTime.getTime() - lastBefore.dateTime.getTime();
-        const weightDiff = firstInOrAfter.weightKg - lastBefore.weightKg;
-        if (timeDiff > 0) {
-            const weightPerMs = weightDiff / timeDiff;
-            const startOffset = startDate.getTime() - lastBefore.dateTime.getTime();
-            startWeightKg = lastBefore.weightKg + (weightPerMs * startOffset);
-        } else {
-            // This case handles if two points are at the exact same time
-            startWeightKg = firstInOrAfter.weightKg;
-        }
-    } else if (firstInOrAfter) {
-        // No data before the period, so the first point *in* the period is our start
-        startWeightKg = firstInOrAfter.weightKg;
-    } else {
-        // No data in or after the period, so we can't calculate loss
-        container.style.display = 'none';
-        return;
-    }
-
-    const endWeightKg = lastIn.weightKg;
-
-    // Don't show if the start and end weights are the same
-    if (startWeightKg === endWeightKg) {
-        container.style.display = 'none';
-        return;
-    }
-
-    const lossKg = startWeightKg - endWeightKg;
-    
-    // Format and display the result
-    statEl.textContent = formatWeightDisplay(lossKg, userSettings.weightUnit);
-    container.style.display = 'flex';
-}
-
 
 /*******************************
  * Update & Display Functions
  *******************************/
-function getAbbreviation(location) {
-    if (!location) return '';
-    const words = location.trim().split(/\s+/);
-    if (words.length > 1) {
-        return (words[0][0] + '-' + words[1][0]).toUpperCase();
-    }
-    return location.substring(0, 2).toUpperCase();
-}
-
-function updateShotLocationUI() {
-    const els = getElements();
-    const { shotLocationTrackingEnabled, shotLocationAbbreviations, shotLocations = [], shotLocationDisplay } = userSettings;
-    
-    // Hide all location elements initially
-    els.shotLocationGroup.style.display = 'none';
-    els.lastShotLocationLine.style.display = 'none';
-    els.nextShotLocationLine.style.display = 'none';
-    els.locationStatsContainer.style.display = 'none';
-
-    if (shotLocationTrackingEnabled) {
-        els.shotLocationGroup.style.display = 'flex';
-
-        // Populate dropdown
-        els.shotLocationSelect.innerHTML = '';
-        shotLocations.forEach(loc => {
-            const text = shotLocationAbbreviations ? getAbbreviation(loc) : loc;
-            const option = document.createElement('option');
-            option.value = loc;
-            option.textContent = text;
-            els.shotLocationSelect.appendChild(option);
-        });
-
-        // Set info icon tooltip text (vertical list)
-        const tooltipText = shotLocations.map(loc => `${getAbbreviation(loc)}: ${loc}`).join('\n');
-        
-        // Find last and suggest next
-        const sortedShots = [...shotHistory].sort((a, b) => b.dateTime - a.dateTime);
-        const lastShotWithLocation = sortedShots.find(s => s.location);
-        let nextLocation;
-
-        if (lastShotWithLocation) {
-            const lastLocation = lastShotWithLocation.location;
-            const lastLocationText = shotLocationAbbreviations ? getAbbreviation(lastLocation) : lastLocation;
-            if (shotLocationDisplay === 'box' || shotLocationDisplay === 'both') {
-                els.lastShotLocationLine.style.display = 'block';
-                els.lastShotLocation.textContent = lastLocationText;
-            }
-            
-            const rotationOrder = userSettings.shotLocations || [];
-            const lastIndex = rotationOrder.indexOf(lastLocation);
-            if (lastIndex !== -1 && rotationOrder.length > 0) {
-                nextLocation = rotationOrder[(lastIndex + 1) % rotationOrder.length];
-            } else {
-                nextLocation = rotationOrder[0];
-            }
-        } else {
-            if (shotLocationDisplay === 'box' || shotLocationDisplay === 'both') {
-                els.lastShotLocationLine.style.display = 'block';
-                els.lastShotLocation.textContent = "N/A";
-            }
-            nextLocation = (userSettings.shotLocations || [])[0];
-        }
-
-        if (nextLocation) {
-            const nextLocationText = shotLocationAbbreviations ? getAbbreviation(nextLocation) : nextLocation;
-            els.shotLocationSelect.value = nextLocation;
-            
-            if (shotLocationDisplay === 'box' || shotLocationDisplay === 'both') {
-                 els.nextShotLocationLine.style.display = 'block';
-                 els.nextShotLocation.textContent = nextLocationText;
-            }
-            if (shotLocationDisplay === 'bar' || shotLocationDisplay === 'both') {
-                els.locationStatsContainer.style.display = 'flex';
-                els.barNextLocation.textContent = nextLocationText;
-                els.barLocationInfoIcon.title = tooltipText;
-                els.barLocationInfoIcon.style.display = shotLocationAbbreviations ? 'inline-block' : 'none';
-            }
-        } else {
-            if (shotLocationDisplay === 'box' || shotLocationDisplay === 'both') {
-                 els.nextShotLocationLine.style.display = 'block';
-                 els.nextShotLocation.textContent = "N/A";
-            }
-        }
-    }
-}
-
-
 function updateMostRecentShotDisplay() {
     const elements = getElements();
     const sortedShots = [...shotHistory].filter(s => s.dateTime && !isNaN(new Date(s.dateTime))).sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
@@ -1315,7 +1119,6 @@ function updateMostRecentShotDisplay() {
             if (el) el.textContent = id === 'currentMedicationLevel' ? "Level: 0.000mg" : "N/A";
         });
     }
-     updateShotLocationUI(); // Update location display
 }
 
 function updatePenStatusDisplay() {
@@ -1406,7 +1209,6 @@ function updateDisplay() {
     updatePenStatusDisplay();
 
     calculateWeightStats();
-    calculateAndDisplayPeriodLoss(); // [NEW] Call the function to update the period loss stat
     const weightChartData = calculateWeightChartData(weightHistory, elements.weightGraphViewSelect.value);
     createWeightChart(weightChartData);
     updateWeightEntryUI();
@@ -1419,26 +1221,16 @@ function updateDisplay() {
 function renderShotHistory() {
     const elements = getElements();
     const sortedHistory = [...shotHistory].filter(s => s.dateTime).sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
-    let modalContent = `<div class="modal-content"><span class="close-modal" data-modal-id="shotHistoryModal">&times;</span><h2>Shot History</h2><table id="shotHistoryTable"><thead><tr><th>Date</th><th>Time</th><th>Medication</th><th>Dose (mg)</th>`;
-    if (userSettings.shotLocationTrackingEnabled) {
-        modalContent += `<th>Location</th>`;
-    }
-    modalContent += `<th>Actions</th></tr></thead><tbody>`;
-
+    let modalContent = `<div class="modal-content"><span class="close-modal" data-modal-id="shotHistoryModal">&times;</span><h2>Shot History</h2><table id="shotHistoryTable"><thead><tr><th>Date</th><th>Time</th><th>Medication</th><th>Dose (mg)</th><th>Actions</th></tr></thead><tbody>`;
     if (sortedHistory.length > 0) {
         sortedHistory.forEach((shot) => {
             const originalIndex = shotHistory.findIndex(s => new Date(s.dateTime).getTime() === new Date(shot.dateTime).getTime() && s.medication === shot.medication && String(s.dose) === String(shot.dose));
             if (originalIndex !== -1) {
-                modalContent += `<tr><td>${formatDate(new Date(shot.dateTime))}</td><td>${formatTime(new Date(shot.dateTime))}</td><td>${shot.medication}</td><td>${shot.dose}</td>`;
-                if (userSettings.shotLocationTrackingEnabled) {
-                     const locText = userSettings.shotLocationAbbreviations ? getAbbreviation(shot.location) : shot.location;
-                     modalContent += `<td>${locText || 'N/A'}</td>`;
-                }
-                modalContent += `<td><button class="editShotButton" data-index="${originalIndex}">Edit</button></td></tr>`;
+                modalContent += `<tr><td>${formatDate(new Date(shot.dateTime))}</td><td>${formatTime(new Date(shot.dateTime))}</td><td>${shot.medication}</td><td>${shot.dose}</td><td><button class="editShotButton" data-index="${originalIndex}">Edit</button></td></tr>`;
             }
         });
     } else {
-        modalContent += `<tr><td colspan="${userSettings.shotLocationTrackingEnabled ? 6 : 5}" style="text-align: center;">No shot history recorded.</td></tr>`;
+        modalContent += `<tr><td colspan="5" style="text-align: center;">No shot history recorded.</td></tr>`;
     }
     modalContent += `</tbody></table><button type="button" class="close-modal-button" data-modal-id="shotHistoryModal">Close</button></div>`;
     elements.shotHistoryModal.innerHTML = modalContent;
@@ -1453,17 +1245,9 @@ function editShot(index) {
     const shotDate = new Date(shot.dateTime);
     const medOptions = Object.keys(medicationData).map(k => `<option value="${k}" ${shot.medication === k ? "selected" : ""}>${k.charAt(0).toUpperCase() + k.slice(1)}</option>`).join('');
     const doseOptions = ["2.5", "5", "7.5", "10", "12.5", "15"].map(d => `<option value="${d}" ${String(shot.dose) === d ? "selected" : ""}>${d}mg</option>`).join('');
-    
-    let locationInputHTML = '';
-    if (userSettings.shotLocationTrackingEnabled) {
-        const locationOptions = (userSettings.shotLocations || []).map(loc => `<option value="${loc}" ${shot.location === loc ? "selected" : ""}>${userSettings.shotLocationAbbreviations ? getAbbreviation(loc) : loc}</option>`).join('');
-        locationInputHTML = `<div class="input-group"><label>Location:</label><select id="editLocation">${locationOptions}</select></div>`;
-    }
-
     const editContent = `<div class="modal-content"><span class="close-modal" data-modal-id="shotHistoryModal">&times;</span><h2>Edit Shot</h2>
         <div class="input-group"><label>Medication:</label><select id="editMedication">${medOptions}</select></div>
         <div class="input-group"><label>Dose:</label><select id="editDose">${doseOptions}</select></div>
-        ${locationInputHTML}
         <div class="input-group"><label>Date:</label><input type="text" id="editDate"></div>
         <div class="input-group"><label>Time:</label><input type="text" id="editTime"></div>
         <div style="margin-top: 20px; display: flex; justify-content: space-between;">
@@ -1481,8 +1265,7 @@ function editShot(index) {
             ...shotHistory[index],
             dateTime: new Date(newDate.getFullYear(), newDate.getMonth(), newDate.getDate(), newTime.getHours(), newTime.getMinutes()),
             medication: document.getElementById('editMedication').value,
-            dose: String(document.getElementById('editDose').value),
-            location: userSettings.shotLocationTrackingEnabled ? document.getElementById('editLocation').value : shot.location
+            dose: String(document.getElementById('editDose').value)
         };
         saveData();
         renderShotHistory();
@@ -1606,7 +1389,6 @@ function editWeightEntry(index) {
 function populateSettingsModal() {
     const els = getElements();
     
-    // Standard settings
     els.timeFormatSelect.value = tempSettings.timeFormat;
     els.dateFormatSelect.value = tempSettings.dateFormat;
     els.weekStartSelect.value = tempSettings.weekStart;
@@ -1658,139 +1440,7 @@ function populateSettingsModal() {
             els.userHeightInput.value = '';
         }
     }
-    
-    // Shot location settings
-    els.shotLocationToggle.checked = tempSettings.shotLocationTrackingEnabled;
-    els.shotLocationControls.style.display = tempSettings.shotLocationTrackingEnabled ? 'block' : 'none';
-    els.shotLocationAbbreviationToggle.checked = tempSettings.shotLocationAbbreviations;
-    els.shotLocationDisplaySelect.value = tempSettings.shotLocationDisplay;
-    populateLocationOrderList();
-
-    const tooltipText = (tempSettings.shotLocations || []).map(loc => `${getAbbreviation(loc)}: ${loc}`).join('\n');
-    els.abbreviationInfoIcon.title = tooltipText;
 }
-
-// Info Icon Tooltip System - Works on both desktop and mobile
-function initializeInfoIconTooltips() {
-    // Create a single tooltip element that we'll reuse
-    let tooltipElement = document.getElementById('info-tooltip');
-    let overlayElement = document.getElementById('tooltip-overlay');
-    
-    if (!tooltipElement) {
-        tooltipElement = document.createElement('div');
-        tooltipElement.id = 'info-tooltip';
-        tooltipElement.className = 'info-tooltip';
-        document.body.appendChild(tooltipElement);
-    }
-    
-    if (!overlayElement) {
-        overlayElement = document.createElement('div');
-        overlayElement.id = 'tooltip-overlay';
-        overlayElement.className = 'tooltip-overlay';
-        document.body.appendChild(overlayElement);
-    }
-
-    let currentIcon = null;
-    let hideTimeout = null;
-
-    // Function to show tooltip
-    function showTooltip(icon) {
-        clearTimeout(hideTimeout);
-        currentIcon = icon;
-        
-        const text = icon.getAttribute('title') || icon.dataset.tooltip;
-        if (!text) return;
-        
-        tooltipElement.textContent = text;
-        
-        // Position the tooltip
-        const rect = icon.getBoundingClientRect();
-        const tooltipRect = tooltipElement.getBoundingClientRect();
-        
-        // Calculate position (centered below the icon)
-        let left = rect.left + (rect.width / 2);
-        let top = rect.bottom + 8; // 8px gap below icon
-        
-        // Adjust if tooltip goes off screen horizontally
-        if (left + tooltipRect.width / 2 > window.innerWidth - 10) {
-            left = window.innerWidth - tooltipRect.width / 2 - 10;
-        } else if (left - tooltipRect.width / 2 < 10) {
-            left = tooltipRect.width / 2 + 10;
-        }
-        
-        // Adjust if tooltip goes off screen vertically (show above instead)
-        if (top + tooltipRect.height > window.innerHeight - 10) {
-            top = rect.top - tooltipRect.height - 8;
-            tooltipElement.style.setProperty('--arrow-direction', 'up');
-        } else {
-            tooltipElement.style.removeProperty('--arrow-direction');
-        }
-        
-        tooltipElement.style.left = left + 'px';
-        tooltipElement.style.top = top + 'px';
-        tooltipElement.style.transform = 'translateX(-50%)';
-        
-        tooltipElement.classList.add('show');
-        overlayElement.classList.add('show');
-    }
-
-    // Function to hide tooltip
-    function hideTooltip() {
-        tooltipElement.classList.remove('show');
-        overlayElement.classList.remove('show');
-        currentIcon = null;
-    }
-
-    // Handle all info icons
-    document.body.addEventListener('mouseenter', (e) => {
-        if (e.target.classList.contains('info-icon')) {
-            // Only show on hover for desktop (not for touch devices)
-            if (!('ontouchstart' in window)) {
-                showTooltip(e.target);
-            }
-        }
-    }, true);
-
-    document.body.addEventListener('mouseleave', (e) => {
-        if (e.target.classList.contains('info-icon')) {
-            if (!('ontouchstart' in window)) {
-                hideTimeout = setTimeout(hideTooltip, 200);
-            }
-        }
-    }, true);
-
-    // Handle click/tap for all devices
-    document.body.addEventListener('click', (e) => {
-        if (e.target.classList.contains('info-icon')) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            if (currentIcon === e.target) {
-                // Clicking the same icon again closes it
-                hideTooltip();
-            } else {
-                // Show tooltip for this icon
-                showTooltip(e.target);
-            }
-        }
-    });
-
-    // Close tooltip when clicking overlay or anywhere else
-    overlayElement.addEventListener('click', hideTooltip);
-    
-    // Also close on scroll (better mobile experience)
-    let scrollTimeout;
-    window.addEventListener('scroll', () => {
-        if (tooltipElement.classList.contains('show')) {
-            clearTimeout(scrollTimeout);
-            scrollTimeout = setTimeout(hideTooltip, 150);
-        }
-    }, true);
-}
-
-// Call this function in your DOMContentLoaded event
-// Add this to the existing DOMContentLoaded listener in meds.js:
-// initializeInfoIconTooltips();
 
 function saveSettings() {
     const elements = getElements();
@@ -1825,13 +1475,6 @@ function saveSettings() {
         finalSettings.userHeight = isNaN(heightVal) ? null : heightVal;
     }
     
-    // Save shot location settings
-    finalSettings.shotLocationTrackingEnabled = elements.shotLocationToggle.checked;
-    finalSettings.shotLocationAbbreviations = elements.shotLocationAbbreviationToggle.checked;
-    finalSettings.shotLocationDisplay = elements.shotLocationDisplaySelect.value;
-    const orderedLocations = Array.from(elements.shotLocationOrderList.querySelectorAll('li')).map(li => li.dataset.location);
-    finalSettings.shotLocations = orderedLocations;
-
     userSettings = JSON.parse(JSON.stringify(finalSettings));
     tempSettings = JSON.parse(JSON.stringify(finalSettings));
 
@@ -1845,35 +1488,6 @@ function saveSettings() {
         saveButton.textContent = originalText;
         saveButton.disabled = false;
     }, 2000);
-}
-
-
-function populateLocationOrderList() {
-    const els = getElements();
-    els.shotLocationOrderList.innerHTML = '';
-    const locations = tempSettings.shotLocations || [];
-    locations.forEach(location => {
-        const li = document.createElement('li');
-        li.draggable = true;
-        li.dataset.location = location;
-        
-        const span = document.createElement('span');
-        span.textContent = location;
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.innerHTML = '&times;';
-        deleteBtn.className = 'delete-location-btn';
-        deleteBtn.title = `Remove ${location}`;
-        deleteBtn.onclick = (e) => {
-            e.stopPropagation();
-            tempSettings.shotLocations = tempSettings.shotLocations.filter(l => l !== location);
-            populateLocationOrderList();
-        };
-
-        li.appendChild(span);
-        li.appendChild(deleteBtn);
-        els.shotLocationOrderList.appendChild(li);
-    });
 }
 
 /********************************
@@ -1900,7 +1514,7 @@ function getCanonicalString(dataSet) {
     const dataCopy = JSON.parse(JSON.stringify(dataSet));
 
     const processedShots = (dataCopy.shotHistory || [])
-        .map(s => ({ dateTime: new Date(s.dateTime).getTime(), dose: String(s.dose), medication: s.medication, location: s.location || null }))
+        .map(s => ({ dateTime: new Date(s.dateTime).getTime(), dose: String(s.dose), medication: s.medication }))
         .sort((a, b) => a.dateTime - b.dateTime);
     const processedWeights = (dataCopy.weightHistory || [])
         .map(w => ({ dateTime: new Date(w.dateTime).getTime(), weightKg: Number(parseFloat(w.weightKg).toFixed(4)) }))
@@ -1910,11 +1524,8 @@ function getCanonicalString(dataSet) {
     for (const key of settingsKeys) {
         if (dataCopy.settings && dataCopy.settings[key] != null) {
             if (key === 'goalWeight' || key === 'userHeight') {
-                settingsToCompare[key] = dataCopy.settings[key] === null ? null : Number(parseFloat(dataCopy.settings[key]).toFixed(4));
-            } else if(Array.isArray(dataCopy.settings[key])) {
-                settingsToCompare[key] = [...dataCopy.settings[key]].sort();
-            }
-             else {
+                settingsToCompare[key] = Number(parseFloat(dataCopy.settings[key]).toFixed(4));
+            } else {
                 settingsToCompare[key] = dataCopy.settings[key];
             }
         } else {
@@ -2188,15 +1799,7 @@ function setupEventListeners() {
         const shotTime = timePicker?.selectedDates[0];
         if (!shotDate || !shotTime) return alert("Please select date and time.");
         const combined = new Date(shotDate.getFullYear(), shotDate.getMonth(), shotDate.getDate(), shotTime.getHours(), shotTime.getMinutes());
-        
-        const shotData = {
-            dateTime: combined,
-            medication: elements.medicationSelect.value,
-            dose: elements.doseSelect.value,
-            location: userSettings.shotLocationTrackingEnabled ? elements.shotLocationSelect.value : null
-        };
-
-        shotHistory.unshift(shotData);
+        shotHistory.unshift({ dateTime: combined, medication: elements.medicationSelect.value, dose: elements.doseSelect.value });
         saveData();
         setTimeout(updateDoseToLastUsed, 100);
     });
@@ -2266,7 +1869,6 @@ function setupEventListeners() {
         elements.settingsModal.style.display = "block";
     });
 
-    // --- Settings Listeners ---
     elements.weightUnitSelect.addEventListener('change', (e) => {
         const newUnit = e.target.value;
         const oldUnit = tempSettings.weightUnit;
@@ -2309,71 +1911,6 @@ function setupEventListeners() {
         tempSettings.userHeight = isNaN(heightCm) ? null : heightCm;
         tempSettings.heightUnit = newUnit;
         populateSettingsModal();
-    });
-
-    elements.shotLocationToggle.addEventListener('change', (e) => {
-        tempSettings.shotLocationTrackingEnabled = e.target.checked;
-        elements.shotLocationControls.style.display = e.target.checked ? 'block' : 'none';
-    });
-    
-    elements.shotLocationAbbreviationToggle.addEventListener('change', (e) => {
-        tempSettings.shotLocationAbbreviations = e.target.checked;
-    });
-
-    elements.shotLocationDisplaySelect.addEventListener('change', (e) => {
-        tempSettings.shotLocationDisplay = e.target.value;
-    });
-
-    elements.addShotLocationBtn.addEventListener('click', () => {
-        const newLocation = elements.newShotLocationInput.value.trim();
-        if (newLocation && !(tempSettings.shotLocations || []).includes(newLocation)) {
-            tempSettings.shotLocations.push(newLocation);
-            populateLocationOrderList();
-            elements.newShotLocationInput.value = '';
-        }
-    });
-
-    elements.restoreDefaultLocationsBtn.addEventListener('click', () => {
-        const defaultLocations = defaultSettings.shotLocations;
-        const currentLocations = tempSettings.shotLocations || [];
-        
-        defaultLocations.forEach(defaultLoc => {
-            if (!currentLocations.includes(defaultLoc)) {
-                currentLocations.push(defaultLoc);
-            }
-        });
-        
-        tempSettings.shotLocations = currentLocations;
-        populateLocationOrderList();
-    });
-
-    let draggedItem = null;
-    elements.shotLocationOrderList.addEventListener('dragstart', (e) => {
-        draggedItem = e.target;
-        setTimeout(() => e.target.classList.add('dragging'), 0);
-    });
-    elements.shotLocationOrderList.addEventListener('dragend', (e) => {
-        e.target.classList.remove('dragging');
-        const newOrder = Array.from(elements.shotLocationOrderList.querySelectorAll('li')).map(li => li.dataset.location);
-        tempSettings.shotLocations = newOrder;
-    });
-    elements.shotLocationOrderList.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        const afterElement = [...elements.shotLocationOrderList.querySelectorAll('li:not(.dragging)')].reduce((closest, child) => {
-            const box = child.getBoundingClientRect();
-            const offset = e.clientY - box.top - box.height / 2;
-            if (offset < 0 && offset > closest.offset) {
-                return { offset: offset, element: child };
-            } else {
-                return closest;
-            }
-        }, { offset: Number.NEGATIVE_INFINITY }).element;
-        
-        if (afterElement == null) {
-            elements.shotLocationOrderList.appendChild(draggedItem);
-        } else {
-            elements.shotLocationOrderList.insertBefore(draggedItem, afterElement);
-        }
     });
 
     elements.saveSettingsButton.addEventListener("click", saveSettings);
@@ -2452,6 +1989,4 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateUIForLoginState();
     updateDisplay();
     updateDoseToLastUsed();
-    initializeInfoIconTooltips();
 });
-
