@@ -522,49 +522,42 @@ button:hover {
     background-color: #e0a800;
 }
 
-/* Info Icon Tooltip */
+/* --- UPDATED: Info Icon Tooltip --- */
 .info-icon {
-    display: inline-block;
-    width: 16px;
-    height: 16px;
+    display: inline-flex; /* Use flex to center the ::before */
+    align-items: center;
+    justify-content: center;
+    width: 40px;  /* Total tap target width (40x40 is great for mobile) */
+    height: 40px; /* Total tap target height */
     border-radius: 50%;
-    background-color: #555;
-    color: #eee;
-    text-align: center;
-    font-size: 12px;
-    line-height: 16px;
     cursor: help;
-    margin-left: 8px;
+    margin-left: 8px; /* Maintain original visual spacing */
     vertical-align: middle;
-    position: relative; /* Needed for tooltip positioning */
-    /* Increase touch target for mobile without changing visual size */
-    padding: 12px; /* Creates larger invisible tap area */
-    margin: -12px 8px -12px -4px; /* Negative margin to maintain visual spacing */
+    position: relative; 
+    font-size: 0; /* Hide any accidental text on main element */
+    /* Add a subtle hover for discoverability on desktop */
+    transition: background-color 0.2s;
+}
+.info-icon:hover {
+    background-color: rgba(255, 255, 255, 0.1); /* Subtle hover feedback */
 }
 
-/* Ensure the visual circle remains the correct size */
+/* The visual '?' circle */
 .info-icon::before {
     content: '?';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 16px;
-    height: 16px;
-    line-height: 16px;
+    position: relative; /* No longer needs absolute */
+    width: 20px;        /* New *visual* width (was 16px) */
+    height: 20px;       /* New *visual* height (was 16px) */
+    line-height: 20px;  /* Center text vertically (was 16px) */
     background-color: #555;
+    color: #eee;
     border-radius: 50%;
+    text-align: center;
+    font-size: 14px;    /* Slightly larger '?' (was 12px) */
     z-index: 1;
 }
+/* --- END OF UPDATE --- */
 
-/* Hide the original content since we're using ::before */
-.info-icon {
-    font-size: 0;
-}
-
-.info-icon::before {
-    font-size: 12px;
-}
 
 /* Draggable List for Shot Locations */
 .draggable-list {
@@ -664,4 +657,3 @@ button:hover {
     background-color: #1d1d1d;
     border-radius: 50%;
   }
-
