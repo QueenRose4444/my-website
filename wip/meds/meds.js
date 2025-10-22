@@ -83,9 +83,9 @@ const defaultSettings = {
     showBmi: false,
     weightGraphView: 'month',
     // New settings for shot location tracking
-    shotLocationTrackingEnabled: false,
+    shotLocationTrackingEnabled: true,
     shotLocationAbbreviations: true,
-    shotLocationDisplay: 'box', // 'box', 'bar', or 'both'
+    shotLocationDisplay: 'both', // 'box', 'bar', or 'both'
     shotLocations: [
         'Left Arm', 'Right Arm',
         'Right Belly', 'Left Belly',
