@@ -557,6 +557,8 @@ const updateUIForActiveGame = () => {
                 <select data-file-index="${index}" data-prop="crackType" class="w-full mt-1 p-1 bg-gray-900 border border-gray-600 rounded-md text-sm">
                     <option value="Cracked: Goldberg" ${file.crackType === 'Cracked: Goldberg' ? 'selected' : ''}>Goldberg</option>
                     <option value="Cracked: Goldberg + Steamless" ${file.crackType === 'Cracked: Goldberg + Steamless' ? 'selected' : ''}>Goldberg + Steamless</option>
+                    <option value="Cracked: Goldberg GBE Fork" ${file.crackType === 'Cracked: Goldberg GBE Fork' ? 'selected' : ''}>Goldberg GBE Fork</option>
+                    <option value="Cracked: Goldberg GBE Fork + Steamless" ${file.crackType === 'Cracked: Goldberg GBE Fork + Steamless' ? 'selected' : ''}>Goldberg GBE Fork + Steamless</option>
                     <option value="custom">Custom</option>
                 </select>
                 <input type="text" data-file-index="${index}" data-prop="customCrackType" class="w-full mt-1 p-1 bg-gray-900 border border-gray-600 rounded-md text-sm ${file.crackType.startsWith('Cracked:') ? 'hidden' : ''}" placeholder="Enter custom crack name" value="${!file.crackType.startsWith('Cracked:') ? file.crackType : ''}">
