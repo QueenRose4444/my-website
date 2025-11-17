@@ -82,18 +82,41 @@
                 </div>
 
                 <!-- Simple Mode Controls -->
-                <div id="simple-mode-controls" class="space-y-4">
+                <div id="simple-mode-controls" class="space-y-6">
+                    <!-- Section Title Color -->
                     <div>
-                        <label for="title-color" class="block text-sm font-medium text-gray-300">Title Color</label>
-                        <input type="color" id="title-color" value="#00ff00" class="mt-1 p-1 h-10 w-full block bg-gray-900 border-gray-700 rounded-md cursor-pointer">
+                        <label for="section-title-color" class="block text-sm font-medium text-gray-300">Section Title Color</label>
+                        <input type="color" id="section-title-color" value="#ffffff" class="mt-1 p-1 h-10 w-full block bg-gray-900 border-gray-700 rounded-md cursor-pointer">
                     </div>
-                     <div id="url-inputs" class="space-y-2">
+
+                    <!-- Clean URL Color -->
+                    <div>
+                        <label for="clean-url-color" class="block text-sm font-medium text-gray-300">Clean URL Color</label>
+                        <input type="color" id="clean-url-color" value="#00ff00" class="mt-1 p-1 h-10 w-full block bg-gray-900 border-gray-700 rounded-md cursor-pointer">
+                    </div>
+
+                    <!-- Cracked URL Color -->
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <label for="use-same-url-color" class="text-sm font-medium text-gray-300">Use same color for Cracked URLs</label>
+                            <input type="checkbox" id="use-same-url-color" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                        </div>
+                        <div id="cracked-url-color-container" class="hidden"> <!-- Hidden by default, JS will manage -->
+                            <label for="cracked-url-color" class="block text-sm font-medium text-gray-300">Cracked URL Color</label>
+                            <input type="color" id="cracked-url-color" value="#00ff00" class="mt-1 p-1 h-10 w-full block bg-gray-900 border-gray-700 rounded-md cursor-pointer">
+                        </div>
+                    </div>
+                    
+                    <!-- Separator -->
+                    <hr class="border-gray-700">
+
+                    <div id="url-inputs" class="space-y-4">
                         <!-- URL inputs will be generated here -->
                     </div>
                     <div id="cracked-options" class="space-y-4">
                          <!-- Cracked options will be generated here -->
                     </div>
-                    <div id="patchnotes-options" class="space-y-2">
+                    <div id="patchnotes-options" class="space-y-4"> <!-- Increased spacing -->
                         <!-- Patch notes options will be generated here -->
                     </div>
                 </div>
@@ -102,7 +125,7 @@
                 <div id="advanced-mode-controls" class="hidden space-y-4">
                     <div>
                         <label for="template-editor" class="block text-sm font-medium text-gray-300 mb-2">Full BBCode Template</label>
-                        <p class="text-xs text-gray-400 mb-2">Edit the full template below. Use placeholders like {gameTitle} and {titleColor}. Loops and conditionals are defined by `&lt;!--LOOP--&gt;` and `&lt;!--IF--&gt;` tags.</p>
+                        <p class="text-xs text-gray-400 mb-2">Edit the full template below. Use placeholders like {gameTitle} and {cleanUrlColor}. Loops and conditionals are defined by `&lt;!--LOOP--&gt;` and `&lt;!--IF--&gt;` tags.</p>
                         <textarea id="template-editor" class="w-full h-96 p-3 bg-gray-900 border border-gray-700 rounded-md font-mono text-xs focus:ring-2 focus:ring-blue-500"></textarea>
                         <button id="reset-template-btn" class="mt-2 text-sm text-blue-400 hover:text-blue-300">Reset to Default</button>
                     </div>
@@ -143,24 +166,24 @@
     </main>
 
     <!-- Default Template -->
-    <template id="default-bbcode-template">
+<template id="default-bbcode-template">
 <!--IF:gameVersion-->Version: {gameVersion}
 <!--/IF:gameVersion-->
-Clean Steam Files:
+[color={sectionTitleColor}]Clean Steam Files:[/color]
 <!--LOOP:cleanFiles-->
-[url={file.cleanUrl}][color={titleColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] (Clean Steam Files)[/b][/color][/url]
+[url={file.cleanUrl}][color={cleanUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] (Clean Steam Files)[/b][/color][/url]
 [size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
 <!--/LOOP:cleanFiles-->
 <!--IF:crackedExists-->
-Cracked:
+[color={sectionTitleColor}]Cracked:[/color]
 <!--LOOP:crackedFiles-->
-[url={file.crackedUrl}][color={titleColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType})[/b][/color][/url]
+[url={file.crackedUrl}][color={crackedUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType})[/b][/color][/url]
 [size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
 <!--/LOOP:crackedFiles-->
 <!--/IF:crackedExists-->
-Patch notes:
+[color={sectionTitleColor}]Patch notes:[/color]
 <!--LOOP:patchNotes-->
-[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.fullDate} [Build {file.buildId}][/i][/color][/size]
+[size=88][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.fullDate} [Build {file.buildId}][/i][/color][/size]
 {file.patchNoteUrl}
 <!--/LOOP:patchNotes-->
 </template>

@@ -54,7 +54,10 @@ let state = {
     games: [],
     activeGameIndex: 0,
     settings: {
-        titleColor: '#00ff00',
+        cleanUrlColor: '#00aa00',
+        crackedUrlColor: '#00babd',
+        useSameUrlColor: false,
+        sectionTitleColor: '#ee11d5',
     },
     template: '', // Will be loaded from the DOM on init
 };
@@ -86,7 +89,11 @@ function getElements() {
         advancedModeControls: document.getElementById('advanced-mode-controls'),
         templateEditor: document.getElementById('template-editor'),
         resetTemplateBtn: document.getElementById('reset-template-btn'),
-        titleColorInput: document.getElementById('title-color'),
+        cleanUrlColorInput: document.getElementById('clean-url-color'),
+        crackedUrlColorInput: document.getElementById('cracked-url-color'),
+        useSameUrlColorCheckbox: document.getElementById('use-same-url-color'),
+        crackedUrlColorContainer: document.getElementById('cracked-url-color-container'),
+        sectionTitleColorInput: document.getElementById('section-title-color'),
         urlInputsContainer: document.getElementById('url-inputs'),
         crackedOptionsContainer: document.getElementById('cracked-options'),
         patchNotesOptionsContainer: document.getElementById('patchnotes-options'),
@@ -132,17 +139,45 @@ function getElements() {
  ************************************/
 function loadLocalData() {
     syncLog("Loading app data from localStorage...");
+    const defaultSettings = {
+        cleanUrlColor: '#00ff00',
+        crackedUrlColor: '#00ff00',
+        useSameUrlColor: true,
+        sectionTitleColor: '#ffffff',
+    };
+
     try {
         const storedData = localStorage.getItem(`${storagePrefix}appData`);
         if (storedData) {
             const parsedData = JSON.parse(storedData);
+
+            // --- Migration Logic ---
+            if (parsedData.settings && parsedData.settings.titleColor && !parsedData.settings.cleanUrlColor) {
+                syncLog("Migrating old 'titleColor' setting...");
+                parsedData.settings.cleanUrlColor = parsedData.settings.titleColor;
+                parsedData.settings.crackedUrlColor = parsedData.settings.titleColor; // Default to same
+                parsedData.settings.useSameUrlColor = true;
+                delete parsedData.settings.titleColor;
+            }
+            
             // Merge loaded data with defaults to prevent errors if structure changes
-            state = { ...state, ...parsedData };
+            state = {
+                ...state,
+                ...parsedData,
+                settings: {
+                    ...defaultSettings,
+                    ...(parsedData.settings || {}),
+                }
+            };
+
+        } else {
+             // No stored data, ensure state has defaults
+             state.settings = defaultSettings;
         }
     } catch (e) {
         console.error("Error loading local data:", e);
         // Reset to default state on error
-        state = { games: [], activeGameIndex: 0, settings: { titleColor: '#00ff00' }, template: '' };
+        state = { games: [], activeGameIndex: 0, settings: defaultSettings, template: '' };
     }
     // Always ensure the template is loaded from the DOM after any local data is loaded.
     state.template = state.template || document.getElementById('default-bbcode-template').innerHTML;
@@ -298,9 +333,17 @@ const sanitizeGameTitle = (title) => {
     return title.replace(/&/g, 'and').replace(/[^\w\s-]/gi, '').trim();
 };
 
+// PARTIAL UPDATE FOR bbcode_editor.js
+// Find the parseInputText function and update this section
+
 const parseInputText = (text) => {
-    const parsedGames = {};
-    
+    // 1. Get the current map of games from state.
+    const gamesMap = new Map(state.games.map(game => [game.gameTitle, game]));
+
+    // 2. This object will hold games that are *mentioned* in the new text.
+    // We'll deep-copy them here to modify them.
+    const gamesToUpdate = new Map();
+
     const gameBlocks = text.split(/(?=\[url=)/).filter(block => block.trim().length > 10);
     const blockRegex = /\[b\](?<gameName>.+?)\s\[(?<platform>Win\d+|Linux\d+|Mac)\]\s\[Branch:\s(?<branch>[^\]]+)\].*?Version:\[\/b\]\s\[i\](?<fullDate>.+?UTC\s\[Build\s(?<buildId>\d+)\])/s;
 
@@ -311,56 +354,125 @@ const parseInputText = (text) => {
         const { gameName, platform, branch, fullDate, buildId } = match.groups;
         const sanitizedTitle = sanitizeGameTitle(gameName);
 
-        if (!parsedGames[sanitizedTitle]) {
-            parsedGames[sanitizedTitle] = {
-                gameTitle: sanitizedTitle,
-                originalTitle: gameName,
-                files: [],
-                gameVersion: ''
-            };
+        let currentGame;
+
+        // 3. Check if we've *already* started processing this game in this batch
+        if (gamesToUpdate.has(sanitizedTitle)) {
+            currentGame = gamesToUpdate.get(sanitizedTitle);
+        } else {
+            // 4. If not, get it from the main gamesMap (or create it)
+            const existingGame = gamesMap.get(sanitizedTitle);
+            if (existingGame) {
+                // Deep copy the existing game to modify it
+                // This is the key fix: we keep the existing files array
+                currentGame = JSON.parse(JSON.stringify(existingGame));
+            } else {
+                // It's a brand new game
+                currentGame = {
+                    gameTitle: sanitizedTitle,
+                    originalTitle: gameName,
+                    files: [],
+                    gameVersion: ''
+                };
+            }
+            gamesToUpdate.set(sanitizedTitle, currentGame);
         }
         
-        const shortDate = fullDate.split(' - ')[0];
+        // 5. We're now working with `currentGame`. Update its original title.
+        currentGame.originalTitle = gameName; // Always update to the latest name from the file
 
-        const existingFile = parsedGames[sanitizedTitle].files.find(f => f.platform === platform && f.branch === branch);
-        if (!existingFile) {
-            parsedGames[sanitizedTitle].files.push({
+        // 6. Check if this platform/branch file *already exists* in `currentGame.files`.
+        const existingFileIndex = currentGame.files.findIndex(f => f.platform === platform && f.branch === branch);
+        
+        // 7. Parse dates and REMOVE build ID from fullDate since we'll add it separately
+        const shortDate = fullDate.split(' - ')[0];
+        // Remove the build ID portion from fullDate (everything after "UTC")
+        const cleanFullDate = fullDate.replace(/\s*\[Build\s+\d+\]\s*$/, '').trim();
+        
+        if (existingFileIndex !== -1) {
+            // *** FIX FOR ISSUE 1: File exists - UPDATE it while preserving user data ***
+            const existingFile = currentGame.files[existingFileIndex];
+            
+            // Only update the data that comes from the .txt file
+            existingFile.fullDate = cleanFullDate; // Now without build ID
+            existingFile.shortDate = shortDate;
+            existingFile.buildId = buildId;
+            existingFile.patchNoteUrl = `https://steamdb.info/patchnotes/${buildId}/`;
+            // Keep existing: cleanUrl, crackedUrl, includeCracked, crackType
+        } else {
+            // *** It's a NEW file for this game ***
+            const newFile = {
                 platform,
                 branch,
-                fullDate,
+                fullDate: cleanFullDate, // Now without build ID
                 shortDate,
                 buildId,
-                cleanUrl: '',
-                crackedUrl: '',
                 patchNoteUrl: `https://steamdb.info/patchnotes/${buildId}/`,
+                // Defaults for new files
+                cleanUrl: '', 
+                crackedUrl: '',
                 includeCracked: true,
                 crackType: 'Cracked: Goldberg'
-            });
+            };
+            currentGame.files.push(newFile);
         }
     }
     
-    for (const key in parsedGames) {
-        if (Object.hasOwnProperty.call(parsedGames, key)) {
-            const game = parsedGames[key];
-            game.files.sort((a, b) => {
-                const getOrder = (platform) => {
-                    if (platform.startsWith('Win')) return 1;
-                    if (platform.startsWith('Linux')) return 2;
-                    if (platform.startsWith('Mac')) return 3;
-                    return 4;
-                };
-                return getOrder(a.platform) - getOrder(b.platform);
-            });
-        }
+    // 8. Now, `gamesToUpdate` has all the new/updated game objects.
+    // Merge them back into the main `gamesMap`.
+    for (const [title, game] of gamesToUpdate.entries()) {
+        // Also sort the files for the game (new or updated)
+        game.files.sort((a, b) => {
+            const getOrder = (platform) => {
+                if (platform.startsWith('Win')) return 1;
+                if (platform.startsWith('Linux')) return 2;
+                if (platform.startsWith('Mac')) return 3;
+                return 4;
+            };
+            return getOrder(a.platform) - getOrder(b.platform);
+        });
+        
+        // Set the updated/new game in the main map.
+        gamesMap.set(title, game);
     }
 
-    state.games = Object.values(parsedGames);
+    // Get the title of the currently selected game, if any.
+    const previouslySelectedGameTitle = state.games[state.activeGameIndex]?.gameTitle;
+
+    // 9. Convert the map values back to an array for the state.
+    state.games = Array.from(gamesMap.values());
+    
+    // 10. Sort the *entire* games list alphabetically by title.
+    state.games.sort((a, b) => a.gameTitle.localeCompare(b.gameTitle));
+
     if(state.games.length > 0) {
-        state.activeGameIndex = 0;
+        
+        // 11. Find the new index of the previously selected game.
+        let newActiveIndex = 0;
+        if (previouslySelectedGameTitle) {
+            const foundIndex = state.games.findIndex(g => g.gameTitle === previouslySelectedGameTitle);
+            if (foundIndex !== -1) {
+                newActiveIndex = foundIndex;
+            }
+        }
+        
+        // If the *newly parsed* games (from `gamesToUpdate`) contain only one game, select that one.
+        if (gamesToUpdate.size === 1) {
+             const newGameTitle = gamesToUpdate.keys().next().value;
+             const foundIndex = state.games.findIndex(g => g.gameTitle === newGameTitle);
+             if (foundIndex !== -1) {
+                newActiveIndex = foundIndex;
+             }
+        }
+        
+        state.activeGameIndex = newActiveIndex;
+        
         getElements().customizationPanel.classList.remove('hidden');
     } else {
         console.warn("Could not find any valid game data in the input.");
+        state.activeGameIndex = 0; // Reset index if no games
     }
+    
     updateDisplay(); // This will update the UI
     saveData(); // This will save to local and backend
 };
@@ -421,10 +533,17 @@ const renderOutput = () => {
             const templateData = { 
                 file: file, 
                 gameTitle: activeGame.originalTitle, 
-                titleColor: state.settings.titleColor 
+                cleanUrlColor: state.settings.cleanUrlColor,
+                crackedUrlColor: state.settings.useSameUrlColor ? state.settings.cleanUrlColor : state.settings.crackedUrlColor,
+                sectionTitleColor: state.settings.sectionTitleColor
             };
             return applyTemplate(trimmedLoopContent, templateData);
         }).join('\n\n');
+    });
+
+    // Apply colors to the main template *after* loops (for section titles)
+    processedTemplate = applyTemplate(processedTemplate, {
+        sectionTitleColor: state.settings.sectionTitleColor
     });
 
     const finalOutput = processedTemplate.trim();
@@ -506,7 +625,8 @@ const updateGameSelector = () => {
 
 const updateUIForActiveGame = () => {
     const { 
-        customizationPanel, gameVersionContainer, titleColorInput, 
+        customizationPanel, gameVersionContainer, 
+        cleanUrlColorInput, crackedUrlColorInput, useSameUrlColorCheckbox, crackedUrlColorContainer, sectionTitleColorInput,
         urlInputsContainer, crackedOptionsContainer, patchNotesOptionsContainer,
         templateEditor
     } = getElements();
@@ -527,7 +647,18 @@ const updateUIForActiveGame = () => {
         <input type="text" id="game-version-input" value="${activeGame.gameVersion || ''}" class="w-full mt-1 p-2 bg-gray-900 border border-gray-700 rounded-md text-sm">
     `;
 
-    titleColorInput.value = state.settings.titleColor;
+    // Set values for new color pickers
+    cleanUrlColorInput.value = state.settings.cleanUrlColor;
+    crackedUrlColorInput.value = state.settings.crackedUrlColor;
+    sectionTitleColorInput.value = state.settings.sectionTitleColor;
+    useSameUrlColorCheckbox.checked = state.settings.useSameUrlColor;
+
+    // Toggle visibility
+    if (state.settings.useSameUrlColor) {
+        crackedUrlColorContainer.classList.add('hidden');
+    } else {
+        crackedUrlColorContainer.classList.remove('hidden');
+    }
     
     urlInputsContainer.innerHTML = '';
     crackedOptionsContainer.innerHTML = '';
@@ -555,10 +686,8 @@ const updateUIForActiveGame = () => {
              <div id="crack-type-container-${index}" class="${file.includeCracked ? '' : 'hidden'} mt-2">
                 <label class="block text-xs font-medium text-gray-400">Crack Type</label>
                 <select data-file-index="${index}" data-prop="crackType" class="w-full mt-1 p-1 bg-gray-900 border border-gray-600 rounded-md text-sm">
-                    <option value="Cracked: Goldberg" ${file.crackType === 'Cracked: Goldberg' ? 'selected' : ''}>Goldberg</option>
-                    <option value="Cracked: Goldberg + Steamless" ${file.crackType === 'Cracked: Goldberg + Steamless' ? 'selected' : ''}>Goldberg + Steamless</option>
-                    <option value="Cracked: Goldberg GBE Fork" ${file.crackType === 'Cracked: Goldberg GBE Fork' ? 'selected' : ''}>Goldberg GBE Fork</option>
-                    <option value="Cracked: Goldberg GBE Fork + Steamless" ${file.crackType === 'Cracked: Goldberg GBE Fork + Steamless' ? 'selected' : ''}>Goldberg GBE Fork + Steamless</option>
+                    <option value="Cracked: Detanup01 Goldberg Fork" ${file.crackType === 'Cracked: Detanup01 Goldberg Fork' ? 'selected' : ''}>Detanup01 Goldberg Fork</option>
+                    <option value="Cracked: Detanup01 Goldberg Fork + Steamless" ${file.crackType === 'Cracked: Detanup01 Goldberg Fork + Steamless' ? 'selected' : ''}>Detanup01 Goldberg Fork + Steamless</option>
                     <option value="custom">Custom</option>
                 </select>
                 <input type="text" data-file-index="${index}" data-prop="customCrackType" class="w-full mt-1 p-1 bg-gray-900 border border-gray-600 rounded-md text-sm ${file.crackType.startsWith('Cracked:') ? 'hidden' : ''}" placeholder="Enter custom crack name" value="${!file.crackType.startsWith('Cracked:') ? file.crackType : ''}">
@@ -895,11 +1024,34 @@ function setupEventListeners() {
         elements.codeTabBtn.classList.add('active'); elements.previewTabBtn.classList.remove('active');
         elements.codePane.classList.remove('hidden'); elements.previewPane.classList.add('hidden');
     });
-    elements.titleColorInput.addEventListener('input', (e) => { state.settings.titleColor = e.target.value; renderOutput(); });
+
+    // Handle the checkbox 'change' event separately
+    elements.useSameUrlColorCheckbox.addEventListener('change', (e) => {
+        state.settings.useSameUrlColor = e.target.checked;
+        if (e.target.checked) {
+            elements.crackedUrlColorContainer.classList.add('hidden');
+        } else {
+            elements.crackedUrlColorContainer.classList.remove('hidden');
+        }
+        renderOutput();
+        saveData(); // Save on change
+    });
+    
+    // The main 'input' listener for the whole panel
     elements.customizationPanel.addEventListener('input', (e) => {
         const target = e.target;
         const activeGame = state.games[state.activeGameIndex];
         if (!activeGame) return;
+
+        // --- Handle color inputs ---
+        if (target.id === 'clean-url-color') {
+            state.settings.cleanUrlColor = target.value;
+        } else if (target.id === 'cracked-url-color') {
+            state.settings.crackedUrlColor = target.value;
+        } else if (target.id === 'section-title-color') {
+            state.settings.sectionTitleColor = target.value;
+        }
+        // --- End color inputs ---
 
         if (target.id === 'game-version-input') {
             activeGame.gameVersion = target.value;
