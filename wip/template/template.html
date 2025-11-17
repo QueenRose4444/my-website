@@ -5,8 +5,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Template with Sync</title>
-    <!-- Link to the template CSS file -->
+    <title>Template with Auth & Sync</title>
     <link rel="stylesheet" href="template.css">
 </head>
 <body>
@@ -18,12 +17,12 @@
               <ul class="nav-links">
                 <li><a href="../home/">Home</a></li>
                 <li><a href="../meds/">Meds</a></li>
-                <li><a href="">WIP-PAGE</a></li>
-                <li><a href="" class="active-link">Page_Name</a></li>
+                <li><a href="../bbcode/">BBCode</a></li>
+                <li><a href="" class="active-link">Template</a></li>
             </ul>
             </div>
             <div class="nav-center">
-              <!-- GitHub logo removed as requested -->
+              <!-- Optional: Site logo or title -->
             </div>
             <div class="nav-right">
               <div class="user-account">
@@ -33,23 +32,24 @@
                 <button id="logoutButton" style="display: none;">Logout</button>
                 <button id="localSyncButton">Local Sync</button>
                 <button id="settingsButton">Settings</button>
-                <button id="testApiButton" style="display: none;">Test API</button>
               </div>
             </div>
         </nav>
     </header>
 
     <main class="container">
-        <h1>Your Main Content</h1>
-        <p>This is where the main content of your page will go. The login and sync functionality is now available through the buttons in the top-right corner.</p>
-        <div id="apiResponse" style="margin-top: 20px; padding: 15px; border: 1px solid #555; border-radius: 5px; background-color: #2a2a2a; display: none;">
-            <h3>API Response:</h3>
-            <pre><code id="apiResponseContent"></code></pre>
-        </div>
+        <h1>Template Application</h1>
+        <p>This template demonstrates the complete auth and sync system.</p>
+        <p>Your app content goes here. This template includes:</p>
+        <ul>
+            <li>Global authentication (shared across all your apps)</li>
+            <li>Per-app data storage (isolated from other apps)</li>
+            <li>Automatic sync between local storage and server</li>
+            <li>Conflict resolution when local and server data differ</li>
+        </ul>
     </main>
 
-
-    <!-- Modals for Login, Register, Sync, etc. -->
+    <!-- Login Modal -->
     <div id="loginModal" class="auth-modal">
       <div class="auth-modal-content">
         <span class="close-auth-modal" data-modal-id="loginModal">&times;</span>
@@ -70,6 +70,7 @@
       </div>
     </div>
 
+    <!-- Register Modal -->
     <div id="registerModal" class="auth-modal">
       <div class="auth-modal-content">
         <span class="close-auth-modal" data-modal-id="registerModal">&times;</span>
@@ -94,6 +95,7 @@
       </div>
     </div>
 
+    <!-- Change Password Modal -->
     <div id="changePasswordModal" class="auth-modal">
         <div class="auth-modal-content">
           <span class="close-auth-modal" data-modal-id="changePasswordModal">&times;</span>
@@ -119,6 +121,7 @@
         </div>
     </div>
 
+    <!-- Local File Sync Modal -->
     <div id="syncModal" class="sync-modal">
       <div class="sync-modal-content">
         <span class="close-sync-modal" data-modal-id="syncModal">&times;</span>
@@ -136,6 +139,7 @@
       </div>
     </div>
 
+    <!-- Sync Choice Modal (for resolving conflicts) -->
     <div id="syncChoiceModal" class="auth-modal sync-choice-modal">
         <div class="auth-modal-content">
             <h2>Data Sync Conflict</h2>
@@ -144,12 +148,12 @@
                 <div class="data-column">
                     <h3>Local Data<br>(This Browser)</h3>
                     <p><strong>Last Update:</strong> <span id="localLastUpdate">N/A</span></p>
-                    <p><strong>Entries:</strong> <span id="localEntryCount">N/A</span></p>
+                    <p><strong>Summary:</strong> <span id="localSummary">N/A</span></p>
                 </div>
                 <div class="data-column">
                     <h3>Server Data<br>(Your Account)</h3>
                     <p><strong>Last Update:</strong> <span id="serverLastUpdate">N/A</span></p>
-                    <p><strong>Entries:</strong> <span id="serverEntryCount">N/A</span></p>
+                    <p><strong>Summary:</strong> <span id="serverSummary">N/A</span></p>
                 </div>
             </div>
             <div class="sync-choice-actions">
@@ -159,11 +163,12 @@
         </div>
     </div>
     
+    <!-- Settings Modal -->
     <div id="settingsModal" class="modal">
       <div class="modal-content">
         <span class="close-modal" data-modal-id="settingsModal">&times;</span>
         <h2>Settings</h2>
-        <p>No configurable settings are available.</p>
+        <p>Add your app-specific settings here.</p>
         <div style="margin-top: 20px;">
             <button id="changePasswordButton" style="display: none;">Change Password</button>
             <button type="button" class="close-modal-button" data-modal-id="settingsModal">Close</button>
@@ -171,9 +176,9 @@
       </div>
     </div>
 
-    <!-- The new AuthManager module -->
+    <!-- The global AuthManager module -->
     <script src="/wip/auth.js"></script>
-    <!-- Your custom script, which will now use the AuthManager -->
+    <!-- Your app-specific script -->
     <script src="template.js"></script>
 
 </body>

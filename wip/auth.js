@@ -1,22 +1,32 @@
-// web page/wip/auth.js - Reusable Authentication and Session Management Module
+// auth.js - Complete Global Authentication and Session Management Module
+// This provides a shared login system across all apps on the site.
+// Each app uses the same user account, but has separate data storage.
 
-const ENVIRONMENT = 'wip';
-
+/**
+ * AuthManager - Handles authentication and data sync for web applications
+ * 
+ * Features:
+ * - Global user accounts (one login works across all apps)
+ * - Automatic token refresh for persistent sessions
+ * - Per-app data isolation on the backend
+ * - Generic data fetch/save methods
+ * - Custom event system for UI updates
+ */
 class AuthManager {
     /**
      * Initializes the AuthManager for a specific application.
-     * The environment is now controlled by the `ENVIRONMENT` constant at the top of the file.
-     * @param {string} appName - A unique name for the application (e.g., 'med-tracker', 'bbcode-editor'). This isolates data on the backend and in local storage.
+     * @param {string} appName - Unique identifier for this app (e.g., 'med-tracker', 'bbcode-editor')
+     * @param {string} environment - Either 'live' or 'wip' (defaults to 'wip')
      */
-    constructor(appName) {
+    constructor(appName, environment = 'wip') {
         if (!appName) {
             throw new Error("AuthManager requires an 'appName' to be provided.");
         }
 
         this.appName = appName;
-        this.environment = ENVIRONMENT;
+        this.environment = environment;
 
-        // --- Environment-specific configurations (matches meds.js style) ---
+        // --- Environment-specific configurations ---
         const envConfigs = {
             live: {
                 backendUrl: 'https://main-backend-live.rosiesite.workers.dev'
@@ -28,7 +38,8 @@ class AuthManager {
         
         this.config = envConfigs[this.environment];
 
-        // Use a common prefix for auth tokens, independent of appName.
+        // IMPORTANT: Auth tokens are shared across ALL apps (global login)
+        // This allows users to stay logged in when navigating between apps
         this.authStoragePrefix = `auth_${this.environment}_`;
 
         // --- API Endpoints ---
@@ -38,6 +49,7 @@ class AuthManager {
             refresh: `${this.config.backendUrl}/api/auth/refresh`,
             logout: `${this.config.backendUrl}/api/auth/logout`,
             changePassword: `${this.config.backendUrl}/api/auth/change-password`,
+            // Data endpoint is app-specific to keep data isolated
             data: `${this.config.backendUrl}/api/data/${this.appName}`
         };
 
@@ -53,7 +65,7 @@ class AuthManager {
     }
 
     /**
-     * Internal logging utility.
+     * Internal logging utility (only logs in 'wip' environment)
      */
     _log(...args) {
         if (this.environment === 'wip') {
@@ -63,15 +75,19 @@ class AuthManager {
 
     /**
      * Decodes a JWT payload to extract user information.
-     * @param {string} token - The JWT.
-     * @returns {object|null} The decoded payload or null if decoding fails.
+     * @param {string} token - The JWT
+     * @returns {object|null} The decoded payload or null if decoding fails
      */
     _decodeJwtPayload(token) {
         try {
             const base64Url = token.split('.')[1];
             if (!base64Url) throw new Error("Invalid JWT structure");
             const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+            const jsonPayload = decodeURIComponent(
+                atob(base64).split('').map(c => 
+                    '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+                ).join('')
+            );
             return JSON.parse(jsonPayload);
         } catch (e) {
             console.error("Failed to decode JWT:", e);
@@ -81,15 +97,15 @@ class AuthManager {
 
     /**
      * Checks if a JWT is expired or close to expiring.
-     * @param {string} token - The JWT.
-     * @returns {boolean} True if the token is expired.
+     * @param {string} token - The JWT
+     * @returns {boolean} True if the token is expired
      */
     isTokenExpired(token) {
         if (!token) return true;
         try {
             const payload = this._decodeJwtPayload(token);
             const expiresAt = payload.exp * 1000;
-            // Consider expired if it's within 10 seconds of expiry
+            // Consider expired if within 10 seconds of expiry
             return Date.now() >= (expiresAt - 10000);
         } catch (e) {
             return true;
@@ -98,8 +114,8 @@ class AuthManager {
 
     /**
      * Attempts to get a new auth token using the refresh token.
-     * This is the core of session persistence.
-     * @returns {Promise<boolean>} True if the token was successfully refreshed.
+     * This is the core of session persistence across page loads.
+     * @returns {Promise<boolean>} True if the token was successfully refreshed
      */
     async attemptRefreshToken() {
         if (!this.refreshToken) {
@@ -107,7 +123,7 @@ class AuthManager {
             return false;
         }
 
-        // If a refresh is already in progress, wait for its result.
+        // If a refresh is already in progress, wait for its result
         if (this.isRefreshingToken) {
             this._log("Token refresh already in progress, subscribing to result...");
             return new Promise(resolve => this.refreshSubscribers.push(resolve));
@@ -138,7 +154,7 @@ class AuthManager {
             success = false;
         } finally {
             this.isRefreshingToken = false;
-            // Notify all subscribers of the result.
+            // Notify all subscribers of the result
             this.refreshSubscribers.forEach(cb => cb(success));
             this.refreshSubscribers = [];
         }
@@ -147,17 +163,17 @@ class AuthManager {
 
     /**
      * A wrapper for the native `fetch` API that automatically handles authentication.
-     * It adds the Authorization header and attempts to refresh the token if it's expired.
-     * @param {string} url - The URL to fetch.
-     * @param {object} options - Standard `fetch` options.
-     * @returns {Promise<Response>} The `fetch` Response object.
+     * It adds the Authorization header and attempts to refresh the token if needed.
+     * @param {string} url - The URL to fetch
+     * @param {object} options - Standard `fetch` options
+     * @returns {Promise<Response>} The `fetch` Response object
      */
     async fetchWithAuth(url, options = {}) {
         if (!this.isLoggedIn()) {
              throw new Error("User is not logged in. Cannot make an authenticated request.");
         }
 
-        // Check if token needs refreshing before the request.
+        // Check if token needs refreshing before the request
         if (this.isTokenExpired(this.authToken)) {
             const refreshed = await this.attemptRefreshToken();
             if (!refreshed) {
@@ -174,14 +190,13 @@ class AuthManager {
 
         let response = await fetch(url, options);
 
-        // If the request fails with a 401 (e.g., token was revoked server-side),
-        // try one more time to refresh the token.
+        // If the request fails with a 401, try to refresh and retry once
         if (response.status === 401) {
             this._log("Received 401 Unauthorized. Attempting token refresh and retry...");
             const refreshed = await this.attemptRefreshToken();
             if (refreshed) {
                 options.headers['Authorization'] = `Bearer ${this.authToken}`;
-                response = await fetch(url, options); // Retry the request
+                response = await fetch(url, options);
             } else {
                  throw new Error("Authentication failed after retry.");
             }
@@ -191,9 +206,9 @@ class AuthManager {
 
     /**
      * Logs a user in.
-     * @param {string} username - The user's username.
-     * @param {string} password - The user's password.
-     * @returns {Promise<object>} The user object from the decoded token.
+     * @param {string} username - The user's username
+     * @param {string} password - The user's password
+     * @returns {Promise<object>} The user object from the decoded token
      */
     async login(username, password) {
         this._log(`Attempting login for user: ${username}`);
@@ -217,24 +232,90 @@ class AuthManager {
         this._log(`Login successful for ${this.currentUser.username}`);
         
         // Dispatch a custom event to notify the application of the login
-        window.dispatchEvent(new CustomEvent('auth:login', { detail: { user: this.currentUser } }));
+        window.dispatchEvent(new CustomEvent('auth:login', { 
+            detail: { user: this.currentUser } 
+        }));
 
         return this.currentUser;
     }
 
     /**
+     * Registers a new user account.
+     * @param {string} username - Desired username
+     * @param {string} password - Desired password
+     * @returns {Promise<object>} Success message from server
+     */
+    async register(username, password) {
+        this._log(`Attempting registration for user: ${username}`);
+        const response = await fetch(this.endpoints.register, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || "Registration failed");
+        }
+
+        this._log(`Registration successful for ${username}`);
+        
+        // Dispatch event for registration success
+        window.dispatchEvent(new CustomEvent('auth:register', { 
+            detail: { username } 
+        }));
+
+        return data;
+    }
+
+    /**
+     * Changes the current user's password.
+     * NOTE: This will log the user out after success, requiring re-login.
+     * @param {string} currentPassword - The user's current password
+     * @param {string} newPassword - The desired new password
+     * @returns {Promise<object>} Success message from server
+     */
+    async changePassword(currentPassword, newPassword) {
+        if (!this.isLoggedIn()) {
+            throw new Error("User must be logged in to change password.");
+        }
+
+        this._log("Attempting password change...");
+        const response = await this.fetchWithAuth(this.endpoints.changePassword, {
+            method: 'POST',
+            body: JSON.stringify({ currentPassword, newPassword })
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || "Password change failed");
+        }
+
+        this._log("Password changed successfully.");
+        
+        // Dispatch event for password change
+        window.dispatchEvent(new CustomEvent('auth:password-changed', { 
+            detail: { message: data.message } 
+        }));
+
+        return data;
+    }
+
+    /**
      * Logs the user out, clears local session data, and notifies the backend.
-     * @param {string|null} [message=null] - An optional message (e.g., reason for logout).
+     * @param {string|null} [message=null] - Optional message (e.g., reason for logout)
      */
     async logout(message = null) {
         this._log("Logging out user.");
-        if (this.refreshToken) {
-            // Notify the backend that this refresh token is being invalidated.
-            // This is "fire and forget" - we don't block logout if it fails.
+        const tokenToInvalidate = this.refreshToken;
+        
+        if (tokenToInvalidate) {
+            // Notify the backend that this refresh token is being invalidated
+            // This is "fire and forget" - we don't block logout if it fails
             fetch(this.endpoints.logout, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ refreshToken: this.refreshToken })
+                body: JSON.stringify({ refreshToken: tokenToInvalidate })
             }).catch(err => this._log("Logout API call failed, but proceeding with client-side logout.", err));
         }
 
@@ -247,13 +328,15 @@ class AuthManager {
         localStorage.removeItem(`${this.authStoragePrefix}refreshToken`);
 
         // Dispatch a custom event to notify the application
-        window.dispatchEvent(new CustomEvent('auth:logout', { detail: { lastUser: loggedOutUser, message: message } }));
+        window.dispatchEvent(new CustomEvent('auth:logout', { 
+            detail: { lastUser: loggedOutUser, message: message } 
+        }));
         this._log("User has been logged out.");
     }
     
     /**
-     * Checks if the user is currently considered logged in (i.e., has a refresh token).
-     * @returns {boolean}
+     * Checks if the user is currently considered logged in.
+     * @returns {boolean} True if user has a valid refresh token
      */
     isLoggedIn() {
         return !!this.refreshToken;
@@ -262,18 +345,24 @@ class AuthManager {
     /**
      * Initializes the auth state on page load.
      * Checks for an existing session and refreshes it if found.
-     * @returns {Promise<object|null>} The user object if a session is restored, otherwise null.
+     * This should be called once when the page loads.
+     * @returns {Promise<object|null>} The user object if a session is restored, otherwise null
      */
     async initialize() {
         this._log("Initializing session...");
+        
         if (this.isLoggedIn()) {
+            // Try to refresh the token to ensure it's valid
             const refreshed = await this.attemptRefreshToken();
             if (refreshed) {
                 this._log("Session restored successfully for", this.currentUser.username);
-                window.dispatchEvent(new CustomEvent('auth:session-restored', { detail: { user: this.currentUser } }));
+                window.dispatchEvent(new CustomEvent('auth:session-restored', { 
+                    detail: { user: this.currentUser } 
+                }));
                 return this.currentUser;
             }
         }
+        
         this._log("No active session found.");
         window.dispatchEvent(new CustomEvent('auth:no-session'));
         return null;
