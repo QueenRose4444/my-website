@@ -33,6 +33,7 @@
                 <button id="logoutButton" style="display: none;">Logout</button>
                 <button id="localSyncButton">Local Sync</button>
                 <button id="settingsButton">Settings</button>
+                <button id="testApiButton" style="display: none;">Test API</button>
               </div>
             </div>
         </nav>
@@ -41,6 +42,10 @@
     <main class="container">
         <h1>Your Main Content</h1>
         <p>This is where the main content of your page will go. The login and sync functionality is now available through the buttons in the top-right corner.</p>
+        <div id="apiResponse" style="margin-top: 20px; padding: 15px; border: 1px solid #555; border-radius: 5px; background-color: #2a2a2a; display: none;">
+            <h3>API Response:</h3>
+            <pre><code id="apiResponseContent"></code></pre>
+        </div>
     </main>
 
 
@@ -166,7 +171,9 @@
       </div>
     </div>
 
-    <!-- Your custom script, renamed to template.js -->
+    <!-- The new AuthManager module -->
+    <script src="/wip/auth.js"></script>
+    <!-- Your custom script, which will now use the AuthManager -->
     <script src="template.js"></script>
 
 </body>
