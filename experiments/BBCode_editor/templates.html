@@ -1,0 +1,32 @@
+<template id="multi-url-group-template-with-updates">
+<!--IF:gameVersion--><!--IF:showVersionLabel-->Version: <!--/IF:showVersionLabel-->{gameVersion}
+
+<!--/IF:gameVersion--><!--IF:customGroups-->[size=85]{mainGroupTitle}[/size]
+<!--/IF:customGroups-->[color={sectionTitleColor}]Clean Steam Files:[/color]
+<!--LOOP:cleanFiles-->[url={file.cleanUrl}][color={cleanUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] (Clean Steam Files)[/b][/color][/url]
+[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
+
+<!--/LOOP:cleanFiles--><!--IF:crackedExists-->[color={sectionTitleColor}]Cracked:[/color]
+<!--LOOP:crackedFiles-->[url={file.crackedUrl}][color={crackedUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType})[/b][/color][/url]
+[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
+
+<!--/LOOP:crackedFiles--><!--/IF:crackedExists--><!--LOOP:customGroups-->[spoiler="{group.title}"][color={sectionTitleColor}]Clean Steam Files:[/color]
+<!--LOOP:groupCleanFiles-->[url={file.cleanUrl}][color={cleanUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] (Clean Steam Files)[/b][/color][/url]
+[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
+
+<!--/LOOP:groupCleanFiles--><!--IF:crackedExists-->[color={sectionTitleColor}]Cracked:[/color]
+<!--LOOP:groupCrackedFiles-->[url={file.crackedUrl}][color={crackedUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType})[/b][/color][/url]
+[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
+
+<!--/LOOP:groupCrackedFiles--><!--/IF:crackedExists--><!--IF:group.footer-->[size=85]{group.footer}[/size]
+<!--/IF:group.footer-->[/spoiler]
+<!--/LOOP:customGroups--><!--LOOP:updates-->[spoiler="{update.title}"]<!--LOOP:sections-->[color={sectionTitleColor}]{section.miniTitle}[/color]
+<!--LOOP:sectionLinks-->[url={link.url}][color={crackedUrlColor}][b]{link.name}[/b][/color][/url]
+<!--/LOOP:sectionLinks-->
+
+<!--/LOOP:sections-->[/spoiler]
+<!--/LOOP:updates-->[color={sectionTitleColor}]Patch notes:[/color]
+<!--LOOP:patchNotes-->[size=88][color=white][b] <!--IF:patchNotesTitle-->{patchNotesTitle} <!--/IF:patchNotesTitle--><!--IF:showPatchNotesVersionLabel-->Version:<!--/IF:showPatchNotesVersionLabel-->[/b] [i]{file.fullDate} [Build {file.buildId}][/i][/color][/size]
+[url={file.patchNoteUrl}]{file.patchNoteUrl}[/url]
+<!--/LOOP:patchNotes-->
+</template>

@@ -1,42 +1,18 @@
-// bbcode_editor.js - Combined application logic with sync and auth functionality.
+// bbcode_editor.js - Combined application logic with sync, auth, and collapsible modules.
 
 /*************************************
  * APPLICATION & ENVIRONMENT CONFIGURATION
  *************************************/
-// -- SET YOUR APPLICATION NAME HERE --
-// This MUST be unique for each application to keep data separate.
-const APP_NAME = 'bbcode_editor'; // bbcode editor site data
+const APP_NAME = 'bbcode_editor';
+const ENVIRONMENT = 'live';
 
-// SET THE ENVIRONMENT HERE: 'live' or 'wip'
-const ENVIRONMENT = 'live'; // 'live' or 'wip'
-
-// --- Configuration settings for each environment ---
 const envConfigs = {
-    live: {
-        storagePrefix: `${APP_NAME}_live_`,
-        backendUrl: 'https://main-backend-live.rosiesite.workers.dev'
-    },
-    wip: {
-        storagePrefix: `${APP_NAME}_wip_`,
-        backendUrl: 'https://main-backend-wip.rosiesite.workers.dev'
-    }
+    live: { storagePrefix: `${APP_NAME}_live_`, backendUrl: 'https://main-backend-live.rosiesite.workers.dev' },
+    wip: { storagePrefix: `${APP_NAME}_wip_`, backendUrl: 'https://main-backend-wip.rosiesite.workers.dev' }
 };
 const activeConfig = envConfigs[ENVIRONMENT];
-
-/*************************************
- * LOGGING CONFIGURATION
- *************************************/
-const LOGGING_ENABLED = ENVIRONMENT === 'wip';
-function syncLog(...args) {
-    if (LOGGING_ENABLED) {
-        console.log('[SYNC_LOG]', ...args);
-    }
-}
-
-/*************************************
- * CONSTANTS
- *************************************/
 const storagePrefix = activeConfig.storagePrefix;
+
 const BACKEND_URL = activeConfig.backendUrl;
 const LOGIN_ENDPOINT = `${BACKEND_URL}/api/auth/login`;
 const REGISTER_ENDPOINT = `${BACKEND_URL}/api/auth/register`;
@@ -45,24 +21,30 @@ const LOGOUT_ENDPOINT = `${BACKEND_URL}/api/auth/logout`;
 const USER_DATA_ENDPOINT = `${BACKEND_URL}/api/data/${APP_NAME}`;
 const CHANGE_PASSWORD_ENDPOINT = `${BACKEND_URL}/api/auth/change-password`;
 
+const LOGGING_ENABLED = ENVIRONMENT === 'wip';
+function syncLog(...args) { if (LOGGING_ENABLED) console.log('[SYNC_LOG]', ...args); }
+
 /*************************************
- * Global State & Settings
+ * Global State
  *************************************/
-// This is the main data model for the BBCode Editor application.
-// It will be saved locally and synced to the server.
 let state = {
     games: [],
     activeGameIndex: 0,
+    presets: [],
     settings: {
         cleanUrlColor: '#00aa00',
         crackedUrlColor: '#00babd',
         useSameUrlColor: false,
         sectionTitleColor: '#ee11d5',
+        patchNotesMode: 'multiple',
+        patchNotesTitle: '',
+        showVersionLabel: true, // Top Game Version
+        showPatchNotesVersionLabel: true, // Patch Notes Version (New separate toggle)
     },
-    template: '', // Will be loaded from the DOM on init
+    template: '',
 };
 
-// --- Auth State ---
+let templates = {};
 let currentUser = null;
 let authToken = localStorage.getItem(`${storagePrefix}authToken`);
 let refreshToken = localStorage.getItem(`${storagePrefix}refreshToken`);
@@ -70,12 +52,10 @@ let isRefreshingToken = false;
 let refreshSubscribers = [];
 
 /***********************
- * DOM Element References
+ * DOM Elements
  ***********************/
-// This function gets all DOM elements used by both the app and the sync system.
 function getElements() {
     return {
-        // App elements
         dropZone: document.getElementById('file-drop-zone'),
         fileInput: document.getElementById('file-input'),
         textInput: document.getElementById('text-input'),
@@ -83,20 +63,40 @@ function getElements() {
         customizationPanel: document.getElementById('customization-panel'),
         gameSelector: document.getElementById('game-selector'),
         gameVersionContainer: document.getElementById('game-version-container'),
+
         simpleModeBtn: document.getElementById('simple-mode-btn'),
         advancedModeBtn: document.getElementById('advanced-mode-btn'),
         simpleModeControls: document.getElementById('simple-mode-controls'),
         advancedModeControls: document.getElementById('advanced-mode-controls'),
-        templateEditor: document.getElementById('template-editor'),
-        resetTemplateBtn: document.getElementById('reset-template-btn'),
+
+        // Collapsible Controls
+        expandAllBtn: document.getElementById('expand-all-btn'),
+        collapseAllBtn: document.getElementById('collapse-all-btn'),
+
+        mainGroupContainer: document.getElementById('main-group-container'),
+        customGroupsContainer: document.getElementById('custom-groups-container'),
+        addCustomGroupBtn: document.getElementById('add-custom-group-btn'),
+        presetSelector: document.getElementById('preset-selector'),
+        loadPresetBtn: document.getElementById('load-preset-btn'),
+        savePresetBtn: document.getElementById('save-preset-btn'),
+
+        crackTogglesContainer: document.getElementById('crack-toggles-container'),
+        updatesContainer: document.getElementById('updates-container'),
+        addUpdateBtn: document.getElementById('add-update-btn'),
+
+        patchNotesOptionsContainer: document.getElementById('patchnotes-options'),
+        patchNotesUrlContainer: document.getElementById('patchnotes-url-container'),
+        patchNotesTitleInput: document.getElementById('patchnotes-title-input'),
+        patchNotesModeToggle: document.getElementById('patchnotes-mode-toggle'),
+        patchNotesVersionToggle: document.getElementById('patchnotes-version-toggle'),
+
         cleanUrlColorInput: document.getElementById('clean-url-color'),
         crackedUrlColorInput: document.getElementById('cracked-url-color'),
         useSameUrlColorCheckbox: document.getElementById('use-same-url-color'),
-        crackedUrlColorContainer: document.getElementById('cracked-url-color-container'),
         sectionTitleColorInput: document.getElementById('section-title-color'),
-        urlInputsContainer: document.getElementById('url-inputs'),
-        crackedOptionsContainer: document.getElementById('cracked-options'),
-        patchNotesOptionsContainer: document.getElementById('patchnotes-options'),
+
+        templateEditor: document.getElementById('template-editor'),
+        resetTemplateBtn: document.getElementById('reset-template-btn'),
         previewTabBtn: document.getElementById('preview-tab-btn'),
         codeTabBtn: document.getElementById('code-tab-btn'),
         previewPane: document.getElementById('preview-pane'),
@@ -106,7 +106,6 @@ function getElements() {
         copyBtnBottom: document.getElementById('copy-btn-bottom'),
         downloadBtn: document.getElementById('download-btn'),
 
-        // Auth/Sync elements
         settingsButton: document.getElementById("settingsButton"),
         localSyncButton: document.getElementById("localSyncButton"),
         settingsModal: document.getElementById("settingsModal"),
@@ -135,359 +134,333 @@ function getElements() {
 }
 
 /************************************
- * Data Loading / Saving Logic
+ * Data Loading & Templates
  ************************************/
-function loadLocalData() {
-    syncLog("Loading app data from localStorage...");
-    const defaultSettings = {
-        cleanUrlColor: '#00ff00',
-        crackedUrlColor: '#00ff00',
-        useSameUrlColor: true,
-        sectionTitleColor: '#ffffff',
-    };
+async function loadTemplates() {
+    const defaultTemplate = `<!--IF:gameVersion--><!--IF:showVersionLabel-->Version: <!--/IF:showVersionLabel-->{gameVersion}
 
+<!--/IF:gameVersion--><!--IF:customGroups-->{mainGroupTitle}
+<!--/IF:customGroups-->[color={sectionTitleColor}]Clean Steam Files:[/color]
+<!--LOOP:cleanFiles-->[url={file.cleanUrl}][color={cleanUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] (Clean Steam Files)[/b][/color][/url]
+[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
+
+<!--/LOOP:cleanFiles--><!--IF:crackedExists-->[color={sectionTitleColor}]Cracked:[/color]
+<!--LOOP:crackedFiles-->[url={file.crackedUrl}][color={crackedUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType})[/b][/color][/url]
+[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
+
+<!--/LOOP:crackedFiles--><!--/IF:crackedExists--><!--LOOP:customGroups-->[spoiler="{group.title}"][color={sectionTitleColor}]Clean Steam Files:[/color]
+<!--LOOP:groupCleanFiles-->[url={file.cleanUrl}][color={cleanUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] (Clean Steam Files)[/b][/color][/url]
+[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
+
+<!--/LOOP:groupCleanFiles--><!--IF:crackedExists-->[color={sectionTitleColor}]Cracked:[/color]
+<!--LOOP:groupCrackedFiles-->[url={file.crackedUrl}][color={crackedUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType})[/b][/color][/url]
+[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
+
+<!--/LOOP:groupCrackedFiles--><!--/IF:crackedExists--><!--IF:group.footer-->[size=85]{group.footer}[/size]
+<!--/IF:group.footer-->[/spoiler]
+<!--/LOOP:customGroups--><!--LOOP:updates-->[spoiler="{update.title}"]<!--LOOP:sections-->[color={sectionTitleColor}]{section.miniTitle}[/color]
+<!--LOOP:sectionLinks-->[url={link.url}][color={crackedUrlColor}][b]{link.name}[/b][/color][/url]
+<!--/LOOP:sectionLinks-->
+
+<!--/LOOP:sections-->[/spoiler]
+<!--/LOOP:updates-->[color={sectionTitleColor}]Patch notes:[/color]
+<!--LOOP:patchNotes-->[size=88][color=white][b] <!--IF:patchNotesTitle-->{patchNotesTitle} <!--/IF:patchNotesTitle--><!--IF:showPatchNotesVersionLabel-->Version:<!--/IF:showPatchNotesVersionLabel-->[/b] [i]{file.fullDate} [Build {file.buildId}][/i][/color][/size]
+[url={file.patchNoteUrl}]{file.patchNoteUrl}[/url]
+<!--/LOOP:patchNotes-->`;
+
+    templates.multiple = defaultTemplate;
+    templates.single = defaultTemplate;
+
+    try {
+        const response = await fetch('templates.html');
+        if (response.ok) {
+            const text = await response.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(text, 'text/html');
+            const loaded = doc.getElementById('multi-url-group-template-with-updates')?.innerHTML;
+            if (loaded) {
+                templates.multiple = loaded;
+                templates.single = loaded;
+            }
+        }
+    } catch (e) { console.warn("Using internal default template."); }
+}
+
+function migrateGameData(game) {
+    if (game.urlGroups && (!game.customGroups || game.customGroups.length === 0)) {
+        game.customGroups = game.urlGroups.map(ug => ({ title: ug.title || 'Proton Drive Links', footer: '', files: ug.files || [] }));
+    }
+    if (!game.customGroups) game.customGroups = [];
+
+    // NEW: Migrate Updates to Section-based structure
+    if (!game.updates) game.updates = [];
+    else {
+        game.updates = game.updates.map(u => {
+            // If it has 'links' (old array) and no 'sections', convert it
+            if (u.links && !u.sections) {
+                // Convert old links array to sections
+                // Old: { links: [{provider: 'PD', url: '...'}], fileName: 'Common' }
+                // New: { sections: [ { miniTitle: 'PD', links: [{name: 'Common', url: '...'}] } ] }
+                const newSections = u.links.map(l => ({
+                    miniTitle: l.provider || 'Download',
+                    links: [{ name: u.fileName || 'Update File', url: l.url }]
+                }));
+                u.sections = newSections;
+                delete u.links;
+                delete u.fileName;
+            }
+            // Ensure structure
+            if (!u.sections) u.sections = [];
+            u.sections.forEach(s => {
+                if (!s.miniTitle) s.miniTitle = 'Provider';
+                if (!s.links) s.links = [];
+                s.links.forEach(l => {
+                    if (!l.name) l.name = 'Part 1';
+                    if (!l.url) l.url = '';
+                });
+            });
+            return u;
+        });
+    }
+
+    const ensureFileProps = (files) => {
+        if (!files) return [];
+        return files.map(f => {
+            if (f.cleanUrl === undefined) f.cleanUrl = '';
+            if (f.crackedUrl === undefined) f.crackedUrl = '';
+            if (f.includeCracked === undefined) f.includeCracked = true;
+            if (f.crackType === undefined) f.crackType = 'Cracked: Detanup01 Goldberg Fork';
+            return f;
+        });
+    };
+    game.files = ensureFileProps(game.files);
+    game.customGroups.forEach(grp => { grp.files = ensureFileProps(grp.files); });
+    if (game.mainGroupTitle === undefined) game.mainGroupTitle = 'Proton Drive Links';
+    if (game.patchNotesTitle === undefined) game.patchNotesTitle = '';
+    return game;
+}
+
+function loadLocalData() {
+    // Default both toggles to TRUE
+    const defaultSettings = { cleanUrlColor: '#00aa00', crackedUrlColor: '#00babd', useSameUrlColor: false, sectionTitleColor: '#ee11d5', patchNotesMode: 'multiple', showVersionLabel: true, showPatchNotesVersionLabel: true };
     try {
         const storedData = localStorage.getItem(`${storagePrefix}appData`);
         if (storedData) {
             const parsedData = JSON.parse(storedData);
-
-            // --- Migration Logic ---
-            if (parsedData.settings && parsedData.settings.titleColor && !parsedData.settings.cleanUrlColor) {
-                syncLog("Migrating old 'titleColor' setting...");
-                parsedData.settings.cleanUrlColor = parsedData.settings.titleColor;
-                parsedData.settings.crackedUrlColor = parsedData.settings.titleColor; // Default to same
-                parsedData.settings.useSameUrlColor = true;
-                delete parsedData.settings.titleColor;
-            }
-            
-            // Merge loaded data with defaults to prevent errors if structure changes
-            state = {
-                ...state,
-                ...parsedData,
-                settings: {
-                    ...defaultSettings,
-                    ...(parsedData.settings || {}),
-                }
-            };
-
-        } else {
-             // No stored data, ensure state has defaults
-             state.settings = defaultSettings;
-        }
-    } catch (e) {
-        console.error("Error loading local data:", e);
-        // Reset to default state on error
-        state = { games: [], activeGameIndex: 0, settings: defaultSettings, template: '' };
-    }
-    // Always ensure the template is loaded from the DOM after any local data is loaded.
-    state.template = state.template || document.getElementById('default-bbcode-template').innerHTML;
+            if (parsedData.games) parsedData.games = parsedData.games.map(migrateGameData);
+            state = { ...state, ...parsedData, settings: { ...defaultSettings, ...(parsedData.settings || {}) }, presets: parsedData.presets || [] };
+        } else { state.settings = defaultSettings; }
+    } catch (e) { state = { games: [], activeGameIndex: 0, presets: [], settings: defaultSettings, template: '' }; }
 }
 
-function saveLocalData() {
-    syncLog("Saving app data to localStorage...");
-    try {
-        localStorage.setItem(`${storagePrefix}appData`, JSON.stringify(state));
-    } catch (e) {
-        console.error("Error saving local data:", e);
-    }
-}
-
-// This function is called by event listeners to save data everywhere.
-function saveData() {
-    saveLocalData();
-    if (currentUser && authToken) {
-        saveBackendData();
-    }
-    // No need to call updateDisplay here, as it's usually called after the action that triggered saveData.
-}
+function saveLocalData() { try { localStorage.setItem(`${storagePrefix}appData`, JSON.stringify(state)); } catch (e) { console.error("Error saving local data:", e); } }
+function saveData() { saveLocalData(); if (currentUser && authToken) saveBackendData(); }
 
 /************************************
- * Auth & Backend Data Logic
+ * Auth & Backend
  ************************************/
-function decodeJwtPayload(token) {
-    try {
-        const base64Url = token.split('.')[1];
-        if (!base64Url) return null;
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
-        return JSON.parse(jsonPayload);
-    } catch (e) {
-        console.error("Failed to decode JWT:", e);
-        return null;
-    }
-}
-
-function isTokenExpired(token) {
-    if (!token) return true;
-    const payload = decodeJwtPayload(token);
-    return payload ? Date.now() >= payload.exp * 1000 : true;
-}
-
+function decodeJwtPayload(token) { try { return JSON.parse(decodeURIComponent(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''))); } catch (e) { return null; } }
+function isTokenExpired(token) { if (!token) return true; const p = decodeJwtPayload(token); return p ? Date.now() >= p.exp * 1000 : true; }
 async function attemptRefreshToken() {
     if (!refreshToken) return false;
-    if (isRefreshingToken) {
-        return new Promise(resolve => refreshSubscribers.push(resolve));
-    }
+    if (isRefreshingToken) return new Promise(resolve => refreshSubscribers.push(resolve));
     isRefreshingToken = true;
-    let success = false;
     try {
-        const response = await fetch(REFRESH_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Refresh failed');
-        authToken = data.accessToken;
-        localStorage.setItem(`${storagePrefix}authToken`, authToken);
-        currentUser = decodeJwtPayload(authToken);
-        success = true;
-    } catch (error) {
-        await logoutUser("Your session has expired. Please log in again.");
-        success = false;
-    } finally {
-        isRefreshingToken = false;
-        refreshSubscribers.forEach(cb => cb(success));
-        refreshSubscribers = [];
-    }
-    return success;
+        const res = await fetch(REFRESH_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error();
+        authToken = data.accessToken; localStorage.setItem(`${storagePrefix}authToken`, authToken); currentUser = decodeJwtPayload(authToken);
+        isRefreshingToken = false; refreshSubscribers.forEach(cb => cb(true)); refreshSubscribers = []; return true;
+    } catch (e) { await logoutUser("Session expired."); isRefreshingToken = false; refreshSubscribers.forEach(cb => cb(false)); refreshSubscribers = []; return false; }
 }
-
-async function fetchWithAuth(url, options = {}) {
-    if (!authToken || isTokenExpired(authToken)) {
-        const refreshed = await attemptRefreshToken();
-        if (!refreshed) throw new Error("Authentication failed; session expired.");
-    }
-
-    options.headers = { ...options.headers, 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' };
-    let response = await fetch(url, options);
-
-    if (response.status === 401) {
-        const refreshed = await attemptRefreshToken();
-        if (refreshed) {
-            options.headers['Authorization'] = `Bearer ${authToken}`;
-            response = await fetch(url, options);
-        } else {
-             throw new Error("Authentication failed after retry.");
-        }
-    }
-    return response;
+async function fetchWithAuth(url, opt = {}) {
+    if (!authToken || isTokenExpired(authToken)) { if (!(await attemptRefreshToken())) throw new Error("Auth failed"); }
+    opt.headers = { ...opt.headers, 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' };
+    let res = await fetch(url, opt);
+    if (res.status === 401) { if (await attemptRefreshToken()) { opt.headers['Authorization'] = `Bearer ${authToken}`; res = await fetch(url, opt); } else throw new Error("Auth failed retry"); }
+    return res;
 }
-
-async function fetchBackendData() {
-    if (!authToken && !refreshToken) return null;
-    try {
-        const response = await fetchWithAuth(USER_DATA_ENDPOINT, { method: 'GET' });
-        if (!response.ok) throw new Error((await response.json()).error || 'Failed to fetch');
-        const data = await response.json();
-        // The server should return the complete 'state' object.
-        return data;
-    } catch (error) {
-        console.error("Failed to fetch backend data:", error);
-        return null;
-    }
-}
-
-async function saveBackendData() {
-    if (!currentUser || !authToken) return false;
-    
-    // The entire 'state' object is sent to the server.
-    const dataToSave = state;
-
-    syncLog("Saving data to backend:", dataToSave);
-    try {
-        const response = await fetchWithAuth(USER_DATA_ENDPOINT, {
-            method: 'POST',
-            body: JSON.stringify(dataToSave)
-        });
-        if (!response.ok) throw new Error((await response.json()).error || 'Failed to save');
-        syncLog("Backend save successful.");
-        return true;
-    } catch (error) {
-        console.error("Failed to save backend data:", error);
-        alert(`Failed to save data to server: ${error.message}`);
-        return false;
-    }
-}
-
-/************************************
- * Date/Time Formatting
- ************************************/
-function formatDate(date) {
-    if (!(date instanceof Date) || isNaN(date)) return "N/A";
-    const d = String(date.getDate()).padStart(2, "0");
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const y = date.getFullYear();
-    return `${d}/${m}/${y}`;
-}
-
-function formatTime(date) {
-    if (!(date instanceof Date) || isNaN(date)) return "N/A";
-    return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
-}
+async function fetchBackendData() { if (!authToken) return null; try { return await (await fetchWithAuth(USER_DATA_ENDPOINT, { method: 'GET' })).json(); } catch { return null; } }
+async function saveBackendData() { if (!authToken) return false; try { await fetchWithAuth(USER_DATA_ENDPOINT, { method: 'POST', body: JSON.stringify(state) }); return true; } catch { return false; } }
 
 /*******************************
- * BBCode App Core Functions
+ * PARSERS
  *******************************/
-const sanitizeGameTitle = (title) => {
-    return title.replace(/&/g, 'and').replace(/[^\w\s-]/gi, '').trim();
-};
+const sanitizeGameTitle = (title) => title.replace(/&/g, 'and').replace(/[^\w\s-]/gi, '').trim();
 
-// PARTIAL UPDATE FOR bbcode_editor.js
-// Find the parseInputText function and update this section
+const parseBBCodeInput = (text) => {
+    const versionMatch = text.match(/Version:\s+(.*?)\n/i);
+    const gameVersion = versionMatch ? versionMatch[1].trim() : '';
 
-const parseInputText = (text) => {
-    // 1. Get the current map of games from state.
-    const gamesMap = new Map(state.games.map(game => [game.gameTitle, game]));
+    const patchNotesSplit = text.split(/\[color=.*?\]Patch notes:\[\/color\]/i);
+    let mainBody = patchNotesSplit[0];
+    let patchNotesBody = patchNotesSplit.length > 1 ? patchNotesSplit[1] : '';
 
-    // 2. This object will hold games that are *mentioned* in the new text.
-    // We'll deep-copy them here to modify them.
-    const gamesToUpdate = new Map();
+    const pnMatch = patchNotesBody.match(/\[size=88\]\[color=white\]\[b\]\s*(.*?)\s*\[/);
+    const patchNotesTitle = pnMatch && !pnMatch[1].includes('Version') ? pnMatch[1].trim() : '';
 
-    const gameBlocks = text.split(/(?=\[url=)/).filter(block => block.trim().length > 10);
-    const blockRegex = /\[b\](?<gameName>.+?)\s\[(?<platform>Win\d+|Linux\d+|Mac)\]\s\[Branch:\s(?<branch>[^\]]+)\].*?Version:\[\/b\]\s\[i\](?<fullDate>.+?UTC\s\[Build\s(?<buildId>\d+)\])/s;
+    const updates = [];
+    const updateRegex = /\[spoiler="(Update.*?)"\](.*?)\[\/spoiler\]/gs;
 
-    for (const block of gameBlocks) {
-        const match = block.match(blockRegex);
-        if (!match) continue;
+    // NEW PARSER for Nested Sections
+    mainBody = mainBody.replace(updateRegex, (match, title, content) => {
+        const sections = [];
+        // Regex to split content by Mini Titles: [color=...]Mini Title[/color]
+        // We iterate through the content finding these headers
+        const sectionRegex = /\[color=[^\]]*?\](.*?)\[\/color\]/g;
+        let splitIndices = [];
+        let m;
+        while ((m = sectionRegex.exec(content)) !== null) {
+            splitIndices.push({ index: m.index, title: m[1], length: m[0].length });
+        }
 
-        const { gameName, platform, branch, fullDate, buildId } = match.groups;
-        const sanitizedTitle = sanitizeGameTitle(gameName);
-
-        let currentGame;
-
-        // 3. Check if we've *already* started processing this game in this batch
-        if (gamesToUpdate.has(sanitizedTitle)) {
-            currentGame = gamesToUpdate.get(sanitizedTitle);
+        if (splitIndices.length === 0) {
+            // Fallback for old format or plain lists: treat whole thing as one section
+            const links = [];
+            const linkBlockRegex = /\[url=([^\]]*?)\](?:.*?)\[b\](.*?)\[\/b\]/gs;
+            let lm;
+            while ((lm = linkBlockRegex.exec(content)) !== null) {
+                links.push({ name: lm[2], url: lm[1] });
+            }
+            if (links.length > 0) sections.push({ miniTitle: 'Links', links });
         } else {
-            // 4. If not, get it from the main gamesMap (or create it)
-            const existingGame = gamesMap.get(sanitizedTitle);
-            if (existingGame) {
-                // Deep copy the existing game to modify it
-                // This is the key fix: we keep the existing files array
-                currentGame = JSON.parse(JSON.stringify(existingGame));
-            } else {
-                // It's a brand new game
-                currentGame = {
-                    gameTitle: sanitizedTitle,
-                    originalTitle: gameName,
-                    files: [],
-                    gameVersion: ''
+            for (let i = 0; i < splitIndices.length; i++) {
+                const current = splitIndices[i];
+                const next = splitIndices[i + 1];
+                // Content for this section starts after the header, ends at start of next header (or end of string)
+                const startIdx = current.index + current.length;
+                const endIdx = next ? next.index : content.length;
+                const sectionContent = content.substring(startIdx, endIdx);
+
+                const links = [];
+                const linkBlockRegex = /\[url=([^\]]*?)\](?:.*?)\[b\](.*?)\[\/b\]/gs;
+                let lm;
+                while ((lm = linkBlockRegex.exec(sectionContent)) !== null) {
+                    links.push({ name: lm[2], url: lm[1] });
+                }
+                sections.push({ miniTitle: current.title, links });
+            }
+        }
+
+        updates.push({ title: title, sections: sections });
+        return '';
+    });
+
+    const customGroups = [];
+    const spoilerRegex = /\[spoiler="(.*?)"\](.*?)\[\/spoiler\]/gs;
+
+    const extractFilesFromBlock = (block) => {
+        const fileMap = new Map();
+        const urlLineRegex = /\[url=([^\]]*?)\]\[color=.*?\]\[b\](.*?) \[(.*?)\] \[Branch: (.*?)\] \((.*?)\)\[\/b\]\[\/color\]\[\/url\]/g;
+        const dateRegex = /\[size=85\].*?Version:\[\/b\] \[i\](.*?) \[Build (.*?)\]\[\/i\]/;
+
+        let match;
+        while ((match = urlLineRegex.exec(block)) !== null) {
+            const [fullLine, url, title, platform, branch, typeRaw] = match;
+            const key = `${platform}_${branch}`;
+
+            const remainder = block.substring(match.index + fullLine.length);
+            const dateMatch = remainder.match(dateRegex);
+
+            let fullDate = '', shortDate = '', buildId = '';
+            if (dateMatch && dateMatch.index < 50) {
+                fullDate = dateMatch[1];
+                shortDate = fullDate.split(' - ')[0];
+                buildId = dateMatch[2];
+            }
+
+            let fileObj = fileMap.get(key);
+            if (!fileObj) {
+                fileObj = {
+                    gameTitle: title, platform, branch, fullDate, shortDate, buildId,
+                    cleanUrl: '', crackedUrl: '', includeCracked: false, crackType: 'Cracked: Detanup01 Goldberg Fork',
+                    patchNoteUrl: `https://steamdb.info/patchnotes/${buildId}/`
                 };
+                fileMap.set(key, fileObj);
             }
-            gamesToUpdate.set(sanitizedTitle, currentGame);
-        }
-        
-        // 5. We're now working with `currentGame`. Update its original title.
-        currentGame.originalTitle = gameName; // Always update to the latest name from the file
 
-        // 6. Check if this platform/branch file *already exists* in `currentGame.files`.
-        const existingFileIndex = currentGame.files.findIndex(f => f.platform === platform && f.branch === branch);
-        
-        // 7. Parse dates and REMOVE build ID from fullDate since we'll add it separately
-        const shortDate = fullDate.split(' - ')[0];
-        // Remove the build ID portion from fullDate (everything after "UTC")
-        const cleanFullDate = fullDate.replace(/\s*\[Build\s+\d+\]\s*$/, '').trim();
-        
-        if (existingFileIndex !== -1) {
-            // *** FIX FOR ISSUE 1: File exists - UPDATE it while preserving user data ***
-            const existingFile = currentGame.files[existingFileIndex];
-            
-            // Only update the data that comes from the .txt file
-            existingFile.fullDate = cleanFullDate; // Now without build ID
-            existingFile.shortDate = shortDate;
-            existingFile.buildId = buildId;
-            existingFile.patchNoteUrl = `https://steamdb.info/patchnotes/${buildId}/`;
-            // Keep existing: cleanUrl, crackedUrl, includeCracked, crackType
-        } else {
-            // *** It's a NEW file for this game ***
-            const newFile = {
-                platform,
-                branch,
-                fullDate: cleanFullDate, // Now without build ID
-                shortDate,
-                buildId,
-                patchNoteUrl: `https://steamdb.info/patchnotes/${buildId}/`,
-                // Defaults for new files
-                cleanUrl: '', 
-                crackedUrl: '',
-                includeCracked: true,
-                crackType: 'Cracked: Goldberg'
-            };
-            currentGame.files.push(newFile);
-        }
-    }
-    
-    // 8. Now, `gamesToUpdate` has all the new/updated game objects.
-    // Merge them back into the main `gamesMap`.
-    for (const [title, game] of gamesToUpdate.entries()) {
-        // Also sort the files for the game (new or updated)
-        game.files.sort((a, b) => {
-            const getOrder = (platform) => {
-                if (platform.startsWith('Win')) return 1;
-                if (platform.startsWith('Linux')) return 2;
-                if (platform.startsWith('Mac')) return 3;
-                return 4;
-            };
-            return getOrder(a.platform) - getOrder(b.platform);
-        });
-        
-        // Set the updated/new game in the main map.
-        gamesMap.set(title, game);
-    }
+            if (typeRaw.includes('Clean Steam Files')) {
+                fileObj.cleanUrl = url;
+            } else if (typeRaw.includes('Cracked')) {
+                fileObj.crackedUrl = url;
+                fileObj.includeCracked = true;
+                fileObj.crackType = typeRaw.replace('(', '').replace(')', '');
+            }
 
-    // Get the title of the currently selected game, if any.
-    const previouslySelectedGameTitle = state.games[state.activeGameIndex]?.gameTitle;
-
-    // 9. Convert the map values back to an array for the state.
-    state.games = Array.from(gamesMap.values());
-    
-    // 10. Sort the *entire* games list alphabetically by title.
-    state.games.sort((a, b) => a.gameTitle.localeCompare(b.gameTitle));
-
-    if(state.games.length > 0) {
-        
-        // 11. Find the new index of the previously selected game.
-        let newActiveIndex = 0;
-        if (previouslySelectedGameTitle) {
-            const foundIndex = state.games.findIndex(g => g.gameTitle === previouslySelectedGameTitle);
-            if (foundIndex !== -1) {
-                newActiveIndex = foundIndex;
+            if (buildId && !fileObj.buildId) {
+                fileObj.fullDate = fullDate;
+                fileObj.shortDate = shortDate;
+                fileObj.buildId = buildId;
             }
         }
-        
-        // If the *newly parsed* games (from `gamesToUpdate`) contain only one game, select that one.
-        if (gamesToUpdate.size === 1) {
-             const newGameTitle = gamesToUpdate.keys().next().value;
-             const foundIndex = state.games.findIndex(g => g.gameTitle === newGameTitle);
-             if (foundIndex !== -1) {
-                newActiveIndex = foundIndex;
-             }
-        }
-        
-        state.activeGameIndex = newActiveIndex;
-        
-        getElements().customizationPanel.classList.remove('hidden');
-    } else {
-        console.warn("Could not find any valid game data in the input.");
-        state.activeGameIndex = 0; // Reset index if no games
-    }
-    
-    updateDisplay(); // This will update the UI
-    saveData(); // This will save to local and backend
+        return Array.from(fileMap.values());
+    };
+
+    mainBody = mainBody.replace(spoilerRegex, (match, title, content) => {
+        const files = extractFilesFromBlock(content);
+        const footerMatch = content.match(/\[size=85\](.*?)\[\/size\]\s*$/);
+        const footer = footerMatch ? footerMatch[1] : '';
+        customGroups.push({ title, files, footer });
+        return '';
+    });
+
+    let mainGroupTitle = 'Proton Drive Links';
+    const mainTitleMatch = mainBody.match(/^\s*\[size=85\](.*?)\[\/size\]/);
+    if (mainTitleMatch) mainGroupTitle = mainTitleMatch[1];
+
+    const mainFiles = extractFilesFromBlock(mainBody);
+
+    if (mainFiles.length === 0 && customGroups.length === 0) return null;
+
+    const gameTitle = mainFiles.length > 0 ? mainFiles[0].gameTitle : (customGroups[0]?.files[0]?.gameTitle || 'Imported Game');
+
+    return {
+        gameTitle: sanitizeGameTitle(gameTitle),
+        originalTitle: gameTitle,
+        files: mainFiles,
+        customGroups,
+        updates,
+        mainGroupTitle,
+        patchNotesTitle,
+        gameVersion
+    };
 };
 
 const handleFiles = (files) => {
+    if (files.length === 0) return;
     let combinedText = '';
     let filesRead = 0;
-    if (files.length === 0) return;
 
     Array.from(files).forEach(file => {
         const reader = new FileReader();
         reader.onload = (e) => {
+            // Priority 1: Handle JSON Backup Files immediately
+            if (file.name.endsWith('.json')) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.games) {
+                        state.games = data.games.map(migrateGameData);
+                        if (data.settings) state.settings = { ...state.settings, ...data.settings };
+                        if (data.presets) state.presets = data.presets;
+
+                        state.activeGameIndex = 0;
+                        saveData();
+                        updateDisplay();
+                        alert(`Successfully imported backup: ${file.name}`);
+                    }
+                } catch (err) {
+                    console.error("JSON Import Error", err);
+                    alert("Failed to parse JSON file.");
+                }
+                return;
+            }
+
+            // Priority 2: Accumulate Text Files
             combinedText += e.target.result + '\n\n';
             filesRead++;
-            if (filesRead === files.length) {
+
+            // Only process once all text files are read
+            if (filesRead === Array.from(files).filter(f => !f.name.endsWith('.json')).length) {
                 parseInputText(combinedText);
             }
         };
@@ -495,708 +468,788 @@ const handleFiles = (files) => {
     });
 };
 
+const parseInputText = (text) => {
+    // --- REGEX DEFINITION (Raw Import Format) ---
+    // Matches: [url=][color=white][b]Title [Platform] [Branch: Branch] (Clean Steam Files)[/b] ...
+    const rawBlockRegex = /\[url=.*?\](?:\[color=.*?\])?\[b\](?<gameName>.+?) \[(?<platform>Win\d+|Linux\d+|Mac)\] \[Branch: (?<branch>[^\]]+)\] \(Clean Steam Files\)\[\/b\][\s\S]*?Version:\[\/b\]\s*\[i\](?<fullDate>.+?)\s*\[Build\s(?<buildId>\d+)\]\[\/i\]/g;
+
+    // --- DETECTION LOGIC ---
+    // 1. Does this look like Raw Data? (Contains "Depots & Manifests" OR matches the raw regex)
+    // We check this FIRST to prevent the app from thinking the Depot spoilers are Link Groups.
+    const isRawData = text.includes('Depots & Manifests') || rawBlockRegex.test(text);
+
+    // Reset regex index after test
+    rawBlockRegex.lastIndex = 0;
+
+    // 2. BBCODE EDITOR MODE
+    // Only run this if it is NOT raw data, but looks like a formatted post (Has spoilers + Branch info)
+    if (!isRawData && text.includes('[spoiler=') && text.includes('Branch:')) {
+        const bbGame = parseBBCodeInput(text);
+        if (bbGame) {
+            const existIdx = state.games.findIndex(g => g.gameTitle === bbGame.gameTitle);
+            if (existIdx !== -1) {
+                if (confirm(`Update existing game "${bbGame.gameTitle}" from this BBCode export?`)) {
+                    state.games[existIdx] = bbGame;
+                }
+            } else {
+                state.games.push(bbGame);
+            }
+            finishImport(bbGame.gameTitle);
+            return;
+        }
+    }
+
+    // 3. RAW FILE IMPORT MODE (Smart Update)
+    const gamesMap = new Map(state.games.map(game => [game.gameTitle, game]));
+    const gamesToUpdate = new Map();
+
+    let match;
+    let matchCount = 0;
+
+    // Run the regex loop on the text
+    while ((match = rawBlockRegex.exec(text)) !== null) {
+        matchCount++;
+        const { gameName, platform, branch, fullDate, buildId } = match.groups;
+        const sanitizedTitle = sanitizeGameTitle(gameName);
+
+        let currentGame;
+
+        // Get existing game or create new
+        if (gamesToUpdate.has(sanitizedTitle)) {
+            currentGame = gamesToUpdate.get(sanitizedTitle);
+        } else {
+            const existingGame = gamesMap.get(sanitizedTitle);
+            if (existingGame) {
+                currentGame = JSON.parse(JSON.stringify(existingGame));
+                currentGame = migrateGameData(currentGame);
+            } else {
+                currentGame = {
+                    gameTitle: sanitizedTitle,
+                    originalTitle: gameName,
+                    files: [],
+                    customGroups: [], // Raw import does NOT create custom groups from spoilers
+                    updates: [],
+                    mainGroupTitle: 'Proton Drive Links',
+                    patchNotesTitle: '',
+                    gameVersion: ''
+                };
+            }
+            gamesToUpdate.set(sanitizedTitle, currentGame);
+        }
+
+        currentGame.originalTitle = gameName;
+
+        // Clean Date/Build info
+        const cleanFullDate = fullDate.trim();
+        const shortDate = cleanFullDate.split(' - ')[0];
+
+        // Find existing file
+        const existingFileIndex = currentGame.files.findIndex(f => f.platform === platform && f.branch === branch);
+
+        if (existingFileIndex !== -1) {
+            // --- UPDATE EXISTING ---
+            const existingFile = currentGame.files[existingFileIndex];
+
+            // Check for version change
+            if (existingFile.buildId !== buildId) {
+                existingFile.buildId = buildId;
+                existingFile.fullDate = cleanFullDate;
+                existingFile.shortDate = shortDate;
+                existingFile.patchNoteUrl = `https://steamdb.info/patchnotes/${buildId}/`;
+                // Flag for review in UI
+                existingFile.cleanUrlNeedsUpdate = true;
+            } else {
+                existingFile.fullDate = cleanFullDate;
+                existingFile.shortDate = shortDate;
+            }
+        } else {
+            // --- NEW FILE ---
+            const newFile = {
+                platform,
+                branch,
+                fullDate: cleanFullDate,
+                shortDate,
+                buildId,
+                patchNoteUrl: `https://steamdb.info/patchnotes/${buildId}/`,
+                cleanUrl: '',
+                crackedUrl: '',
+                includeCracked: true,
+                crackType: 'Cracked: Detanup01 Goldberg Fork',
+                cleanUrlNeedsUpdate: true
+            };
+            currentGame.files.push(newFile);
+
+            // Add new file slot to existing custom groups
+            if (currentGame.customGroups) {
+                currentGame.customGroups.forEach(grp => {
+                    grp.files.push({ ...newFile, cleanUrl: '', crackedUrl: '' });
+                });
+            }
+        }
+    }
+
+    if (matchCount === 0 && text.trim().length > 0) {
+        console.warn("No valid game data found.");
+    }
+
+    // Save updates
+    for (const [title, game] of gamesToUpdate.entries()) {
+        // Sort Files: Win > Linux > Mac
+        const sorter = (a, b) => {
+            const getOrder = (p) => {
+                if (p.startsWith('Win')) return 1;
+                if (p.startsWith('Linux')) return 2;
+                if (p.startsWith('Mac')) return 3;
+                return 4;
+            };
+            return getOrder(a.platform) - getOrder(b.platform);
+        };
+
+        game.files.sort(sorter);
+        if (game.customGroups) game.customGroups.forEach(g => g.files.sort(sorter));
+
+        gamesMap.set(title, game);
+    }
+
+    if (gamesToUpdate.size > 0) {
+        state.games = Array.from(gamesMap.values()).sort((a, b) => a.gameTitle.localeCompare(b.gameTitle));
+        const firstUpdatedTitle = gamesToUpdate.keys().next().value;
+        finishImport(firstUpdatedTitle);
+    }
+};
+
+// Helper to finish up the UI actions
+const finishImport = (targetTitle) => {
+    let newIdx = 0;
+    if (targetTitle) {
+        const idx = state.games.findIndex(g => g.gameTitle === targetTitle);
+        if (idx !== -1) newIdx = idx;
+    }
+    state.activeGameIndex = newIdx;
+    localStorage.setItem(`${storagePrefix}activeGameIndex`, state.activeGameIndex);
+    getElements().customizationPanel.classList.remove('hidden');
+    updateDisplay();
+    saveData();
+};
+
+// --- RENDER ENGINE ---
 const renderOutput = () => {
     const { outputCode, previewPane, copyBtnTop, copyBtnBottom, downloadBtn } = getElements();
-     if (state.games.length === 0) {
-         outputCode.value = '';
-         previewPane.innerHTML = '<p class="text-gray-500">No data to display.</p>';
-         [copyBtnTop, copyBtnBottom, downloadBtn].forEach(btn => btn.disabled = true);
-         return;
-     }
-    
+    if (state.games.length === 0) {
+        outputCode.value = ''; previewPane.innerHTML = '<p class="text-gray-500">No data.</p>';
+        [copyBtnTop, copyBtnBottom, downloadBtn].forEach(b => b.disabled = true);
+        return;
+    }
+
     const activeGame = state.games[state.activeGameIndex];
     if (!activeGame) return;
 
-    let processedTemplate = state.template;
+    let template = state.template;
 
-    const gameVersionExists = activeGame.gameVersion && activeGame.gameVersion.trim() !== '';
-    const versionIfRegex = /<!--IF:gameVersion-->([\s\S]*?)<!--\/IF:gameVersion-->/s;
-    processedTemplate = processedTemplate.replace(versionIfRegex, (match, innerContent) => {
-        return gameVersionExists ? applyTemplate(innerContent, { gameVersion: activeGame.gameVersion }) : '';
+    // Replace Top Level SHOW_VERSION_LABEL
+    template = template.replace(/<!--IF:showVersionLabel-->([\s\S]*?)<!--\/IF:showVersionLabel-->/g, state.settings.showVersionLabel ? '$1' : '');
+
+    template = template.replace(/<!--IF:gameVersion-->([\s\S]*?)<!--\/IF:gameVersion-->/g, activeGame.gameVersion ? '$1' : '');
+    template = template.replace(/<!--IF:crackedExists-->([\s\S]*?)<!--\/IF:crackedExists-->/g, activeGame.files.some(f => f.includeCracked) ? '$1' : '');
+    template = template.replace(/<!--IF:customGroups-->([\s\S]*?)<!--\/IF:customGroups-->/g, activeGame.customGroups && activeGame.customGroups.length > 0 ? '$1' : '');
+
+    const processLoops = (tmpl, context) => {
+        return tmpl.replace(/<!--LOOP:(\w+)-->([\s\S]*?)<!--\/LOOP:\1-->/g, (match, loopKey, loopContent) => {
+            let items = [];
+            if (loopKey === 'cleanFiles') items = context.files;
+            else if (loopKey === 'crackedFiles') items = context.files.filter(f => f.includeCracked);
+            else if (loopKey === 'patchNotes') items = state.settings.patchNotesMode === 'single' ? context.files.slice(0, 1) : context.files;
+            else if (loopKey === 'customGroups') items = context.customGroups || [];
+            else if (loopKey === 'groupCleanFiles') items = context.files;
+            else if (loopKey === 'groupCrackedFiles') items = context.files.filter(f => f.includeCracked);
+
+            // NEW LOOPS FOR UPDATES
+            else if (loopKey === 'updates') items = context.updates || [];
+            else if (loopKey === 'sections') items = context.sections || []; // Sections inside Updates
+            else if (loopKey === 'sectionLinks') items = context.links || []; // Links inside Sections
+
+            if (!items || items.length === 0) return '';
+
+            return items.map(item => {
+                let itemData = {
+                    file: item,
+                    group: item,
+                    update: item,
+                    section: item,
+                    link: item,
+                    ...item,
+                    // Inject patch mode flags for the template
+                    isMultiPatch: state.settings.patchNotesMode !== 'single',
+                    isSinglePatch: state.settings.patchNotesMode === 'single',
+                    showVersionLabel: state.settings.showVersionLabel,
+                    showPatchNotesVersionLabel: state.settings.showPatchNotesVersionLabel // Separate toggle
+                };
+                itemData.gameTitle = activeGame.originalTitle;
+                itemData.mainGroupTitle = activeGame.mainGroupTitle || 'Proton Drive Links';
+                itemData.cleanUrlColor = state.settings.cleanUrlColor;
+                itemData.crackedUrlColor = state.settings.useSameUrlColor ? state.settings.cleanUrlColor : state.settings.crackedUrlColor;
+                itemData.sectionTitleColor = state.settings.sectionTitleColor;
+                itemData.patchNotesTitle = activeGame.patchNotesTitle;
+
+                let processedContent = loopContent.replace(/<!--IF:([\w.]+)-->([\s\S]*?)<!--\/IF:\1-->/g, (m, k, c) => {
+                    // Check boolean flags injected above
+                    if (k === 'isMultiPatch' && itemData.isMultiPatch) return c;
+                    if (k === 'isSinglePatch' && itemData.isSinglePatch) return c;
+                    if (k === 'showVersionLabel' && itemData.showVersionLabel) return c;
+                    if (k === 'showPatchNotesVersionLabel' && itemData.showPatchNotesVersionLabel) return c; // Handle new separate toggle
+
+                    if (k === 'crackedExists' && itemData.files && itemData.files.some(f => f.includeCracked)) return c;
+                    if (k === 'group.footer' && item.footer) return c;
+                    if (k === 'patchNotesTitle' && activeGame.patchNotesTitle) return c;
+                    return '';
+                });
+
+                processedContent = processLoops(processedContent, item);
+                return applyTemplate(processedContent, itemData);
+            }).join('\n');
+        });
+    };
+
+    let processed = processLoops(template, activeGame);
+    processed = applyTemplate(processed, {
+        sectionTitleColor: state.settings.sectionTitleColor,
+        gameVersion: activeGame.gameVersion,
+        mainGroupTitle: activeGame.mainGroupTitle || 'Proton Drive Links'
     });
+    processed = processed.replace(/^\s*[\r\n]/gm, "\n").replace(/\n\n\n+/g, "\n\n").trim();
 
-    const crackedExists = activeGame.files.some(f => f.includeCracked);
-    const ifRegex = /<!--IF:crackedExists-->([\s\S]*?)<!--\/IF:crackedExists-->/s;
-    processedTemplate = processedTemplate.replace(ifRegex, crackedExists ? '$1' : '');
-
-    const loopRegex = /<!--LOOP:(\w+)-->([\s\S]*?)<!--\/LOOP:\1-->/gs;
-    processedTemplate = processedTemplate.replace(loopRegex, (match, loopType, loopContent) => {
-        let items;
-        if (loopType === 'cleanFiles' || loopType === 'patchNotes') items = activeGame.files;
-        else if (loopType === 'crackedFiles') items = activeGame.files.filter(f => f.includeCracked);
-        else return '';
-
-        if (!items || items.length === 0) return '';
-
-        const trimmedLoopContent = loopContent.trim();
-        return items.map(file => {
-            const templateData = { 
-                file: file, 
-                gameTitle: activeGame.originalTitle, 
-                cleanUrlColor: state.settings.cleanUrlColor,
-                crackedUrlColor: state.settings.useSameUrlColor ? state.settings.cleanUrlColor : state.settings.crackedUrlColor,
-                sectionTitleColor: state.settings.sectionTitleColor
-            };
-            return applyTemplate(trimmedLoopContent, templateData);
-        }).join('\n\n');
-    });
-
-    // Apply colors to the main template *after* loops (for section titles)
-    processedTemplate = applyTemplate(processedTemplate, {
-        sectionTitleColor: state.settings.sectionTitleColor
-    });
-
-    const finalOutput = processedTemplate.trim();
-    outputCode.value = finalOutput;
-    renderPreview(finalOutput);
-    [copyBtnTop, copyBtnBottom, downloadBtn].forEach(btn => btn.disabled = false);
+    outputCode.value = processed;
+    renderPreview(processed);
+    [copyBtnTop, copyBtnBottom, downloadBtn].forEach(b => b.disabled = false);
 };
 
-const applyTemplate = (template, data) => {
-    return template.replace(/\{([\w.]+)\}/g, (match, key) => {
-        const keys = key.split('.');
-        let value = data;
-        for (const k of keys) {
-            if (value && typeof value === 'object' && k in value) {
-                value = value[k];
-            } else { return match; }
-        }
-        return value !== undefined ? value : match;
-    });
-};
+const applyTemplate = (template, data) => template.replace(/\{([\w.]+)\}/g, (m, k) => {
+    let v = data; for (const key of k.split('.')) { if (v && typeof v === 'object' && key in v) v = v[key]; else return m; }
+    return (v !== undefined && v !== null) ? v : '';
+});
 
 const renderPreview = (bbcode) => {
     let html = bbcode
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/\[url=([^\]]*)\](.*?)\[\/url\]/gs, (match, url, text) => {
-            const hrefAttr = url ? `href="${url}"` : '';
-            return `<a ${hrefAttr} class="postlink" target="_blank" rel="nofollow">${text}</a>`;
-        })
-        .replace(/(?<!href=")(?<!\[url=])(https?:\/\/[^\s<\]\[]+)/g, '<a href="$1" class="postlink" target="_blank" rel="nofollow">$1</a>')
-        .replace(/\n/g, '<br>')
-        .replace(/\[b\](.*?)\[\/b\]/gs, '<span style="font-weight: bold;">$1</span>')
-        .replace(/\[i\](.*?)\[\/i\]/gs, '<span style="font-style: italic;">$1</span>')
-        .replace(/\[color=(.*?)\](.*?)\[\/color\]/gs, '<span style="color: $1;">$2</span>')
-        .replace(/\[size=(.*?)\](.*?)\[\/size\]/gs, '<span style="font-size: $1%; line-height: normal;">$2</span>');
-    
+        .replace(/\[url=([^\]]*)\](.*?)\[\/url\]/gs, (m, u, t) => `<a href="${u}" class="postlink" target="_blank">${t}</a>`)
+        .replace(/(^|\s)(https?:\/\/[^\s<]+)/g, '$1<a href="$2" class="postlink" target="_blank">$2</a>')
+        .replace(/\[spoiler="?(.*?)"?\](.*?)\[\/spoiler\]/gs, '<div style="margin:5px 0;border:1px solid #444;padding:5px;background:#222;"><div style="font-weight:bold;color:#fff;">$1</div><div style="margin-top:5px;">$2</div></div>')
+        .replace(/\n/g, '<br>').replace(/\[b\](.*?)\[\/b\]/gs, '<b>$1</b>').replace(/\[i\](.*?)\[\/i\]/gs, '<i>$1</i>')
+        .replace(/\[color=(.*?)\](.*?)\[\/color\]/gs, '<span style="color:$1;">$2</span>')
+        .replace(/\[size=(.*?)\](.*?)\[\/size\]/gs, '<span style="font-size:$1%;">$2</span>');
     getElements().previewPane.innerHTML = `<div class="postbody">${html}</div>`;
 };
 
 const handleCopyClick = async (button) => {
-    const { outputCode } = getElements();
-    if (!outputCode.value) return;
-    const originalText = button.textContent;
-    try {
-        await navigator.clipboard.writeText(outputCode.value);
-        button.textContent = 'Copied!';
-    } catch (err) {
-        console.warn('Clipboard API failed, falling back to execCommand.', err);
-        outputCode.select();
-        outputCode.setSelectionRange(0, 99999);
-        if (document.execCommand('copy')) {
-            button.textContent = 'Copied!';
-        } else {
-            button.textContent = 'Copy Failed';
-        }
-        window.getSelection().removeAllRanges();
-    } finally {
-        setTimeout(() => { button.textContent = originalText; }, 2000);
-    }
+    const { outputCode } = getElements(); if (!outputCode.value) return;
+    try { await navigator.clipboard.writeText(outputCode.value); button.textContent = 'Copied!'; }
+    catch { outputCode.select(); document.execCommand('copy'); button.textContent = 'Copied!'; }
+    setTimeout(() => button.textContent = 'Copy Code', 2000);
 };
 
 /*******************************
- * Update & Display Functions
+ * UI
  *******************************/
-// This is the main UI update function for the BBCode app.
-// It's called by the sync system's updateDisplay.
 const updateGameSelector = () => {
-    const { gameSelector } = getElements();
-    gameSelector.innerHTML = '';
-    state.games.forEach((game, index) => {
-        const option = document.createElement('option');
-        option.value = index;
-        option.textContent = game.gameTitle;
-        if (index === state.activeGameIndex) {
-            option.selected = true;
-        }
-        gameSelector.appendChild(option);
+    const { gameSelector } = getElements(); gameSelector.innerHTML = '';
+    state.games.forEach((g, i) => { const o = document.createElement('option'); o.value = i; o.textContent = g.gameTitle; if (i === state.activeGameIndex) o.selected = true; gameSelector.appendChild(o); });
+};
+
+const createPlatformInputs = (files, parentIndex, type = 'main') => {
+    let html = '';
+    files.forEach((file, fIndex) => {
+        const id = type === 'group' ? `data-group-index="${parentIndex}" data-file-index="${fIndex}"` : `data-file-index="${fIndex}"`;
+        const warn = file.cleanUrlNeedsUpdate ? '<span class="text-yellow-400 font-bold"> (!)</span>' : '';
+        html += `<div class="mb-3 pb-2 border-b border-gray-700 last:border-0">
+            <label class="block text-xs font-medium text-gray-400 mb-1">${file.platform} - ${file.branch}${warn}</label>
+            <input type="text" ${id} data-prop="cleanUrl" value="${file.cleanUrl || ''}" class="w-full p-1 bg-gray-900 border border-gray-600 rounded-md text-sm focus:border-blue-500">
+            <div class="${file.includeCracked ? 'mt-2' : 'hidden'}">
+                 <label class="block text-xs font-medium text-gray-500 mb-1">Cracked URL</label>
+                 <input type="text" ${id} data-prop="crackedUrl" value="${file.crackedUrl || ''}" class="w-full p-1 bg-gray-900 border border-gray-600 rounded-md text-sm text-gray-300">
+            </div>
+        </div>`;
     });
+    return html;
 };
 
 const updateUIForActiveGame = () => {
-    const { 
-        customizationPanel, gameVersionContainer, 
-        cleanUrlColorInput, crackedUrlColorInput, useSameUrlColorCheckbox, crackedUrlColorContainer, sectionTitleColorInput,
-        urlInputsContainer, crackedOptionsContainer, patchNotesOptionsContainer,
-        templateEditor
-    } = getElements();
+    const els = getElements();
+    if (state.games.length === 0) { els.customizationPanel.classList.add('hidden'); renderOutput(); return; }
+    els.customizationPanel.classList.remove('hidden');
 
-    if (state.games.length === 0) {
-        customizationPanel.classList.add('hidden');
-        renderOutput(); // Clear output panes
-        return;
-    } else {
-        customizationPanel.classList.remove('hidden');
-    }
+    const g = state.games[state.activeGameIndex]; if (!g) return;
 
-    const activeGame = state.games[state.activeGameIndex];
-    if (!activeGame) return;
-
-    gameVersionContainer.innerHTML = `
-        <label for="game-version-input" class="block text-sm font-medium text-gray-300">Optional Game Version (e.g., 1.1.1.G)</label>
-        <input type="text" id="game-version-input" value="${activeGame.gameVersion || ''}" class="w-full mt-1 p-2 bg-gray-900 border border-gray-700 rounded-md text-sm">
+    // Added Toggle for "Show Version Label"
+    els.gameVersionContainer.innerHTML = `
+        <div class="flex justify-between items-end mb-1">
+            <label class="block text-sm font-medium text-gray-300">Optional Game Version</label>
+            <div class="flex items-center">
+                <input type="checkbox" id="show-version-label" data-setting="showVersionLabel" ${state.settings.showVersionLabel !== false ? 'checked' : ''} class="h-3 w-3 rounded border-gray-600 text-blue-600 focus:ring-blue-500">
+                <label for="show-version-label" class="ml-2 text-xs text-gray-400 select-none cursor-pointer">Show "Version:"</label>
+            </div>
+        </div>
+        <input type="text" id="game-version-input" value="${g.gameVersion || ''}" class="w-full p-2 bg-gray-900 border border-gray-700 rounded-md text-sm">
     `;
 
-    // Set values for new color pickers
-    cleanUrlColorInput.value = state.settings.cleanUrlColor;
-    crackedUrlColorInput.value = state.settings.crackedUrlColor;
-    sectionTitleColorInput.value = state.settings.sectionTitleColor;
-    useSameUrlColorCheckbox.checked = state.settings.useSameUrlColor;
+    els.mainGroupContainer.innerHTML = `
+        <div class="mb-3">
+            <label class="block text-xs font-medium text-gray-400 mb-1">Group Title (Visible if other groups exist)</label>
+            <div class="flex gap-2">
+                <input type="text" data-prop="mainGroupTitle" value="${g.mainGroupTitle || ''}" class="w-full p-1 bg-gray-900 border border-gray-600 rounded text-sm placeholder-gray-600" placeholder="Default: Proton Drive Links">
+                <button onclick="window.resetMainTitle()" class="text-xs text-gray-400 hover:text-white whitespace-nowrap">Reset Default</button>
+            </div>
+        </div>
+        ${createPlatformInputs(g.files, null, 'main')}
+    `;
 
-    // Toggle visibility
-    if (state.settings.useSameUrlColor) {
-        crackedUrlColorContainer.classList.add('hidden');
-    } else {
-        crackedUrlColorContainer.classList.remove('hidden');
-    }
-    
-    urlInputsContainer.innerHTML = '';
-    crackedOptionsContainer.innerHTML = '';
-    patchNotesOptionsContainer.innerHTML = '';
-
-    activeGame.files.forEach((file, index) => {
-        const urlGroup = document.createElement('div');
-        urlGroup.className = 'p-3 bg-gray-700/50 rounded-md border border-gray-600';
-        urlGroup.innerHTML = `<p class="font-semibold text-white text-sm mb-2">${file.platform} - ${file.branch}</p>
-            <label class="block text-xs font-medium text-gray-400">Clean File URL</label>
-            <input type="text" data-file-index="${index}" data-prop="cleanUrl" value="${file.cleanUrl}" class="w-full mt-1 p-1 bg-gray-900 border border-gray-600 rounded-md text-sm">
-            <div id="cracked-url-container-${index}" class="${file.includeCracked ? '' : 'hidden'}">
-                <label class="block text-xs font-medium text-gray-400 mt-2">Cracked File URL</label>
-                <input type="text" data-file-index="${index}" data-prop="crackedUrl" value="${file.crackedUrl}" class="w-full mt-1 p-1 bg-gray-900 border border-gray-600 rounded-md text-sm">
-            </div>`;
-        urlInputsContainer.appendChild(urlGroup);
-
-        const crackGroup = document.createElement('div');
-        crackGroup.className = 'p-3 bg-gray-700/50 rounded-md border border-gray-600';
-        crackGroup.innerHTML = `<p class="font-semibold text-white text-sm mb-2">${file.platform} - ${file.branch}</p>
-             <div class="flex items-center justify-between">
-                <label class="text-sm text-gray-300">Include Cracked Version</label>
-                <input type="checkbox" data-file-index="${index}" data-prop="includeCracked" ${file.includeCracked ? 'checked' : ''} class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-             </div>
-             <div id="crack-type-container-${index}" class="${file.includeCracked ? '' : 'hidden'} mt-2">
-                <label class="block text-xs font-medium text-gray-400">Crack Type</label>
-                <select data-file-index="${index}" data-prop="crackType" class="w-full mt-1 p-1 bg-gray-900 border border-gray-600 rounded-md text-sm">
-                    <option value="Cracked: Detanup01 Goldberg Fork" ${file.crackType === 'Cracked: Detanup01 Goldberg Fork' ? 'selected' : ''}>Detanup01 Goldberg Fork</option>
-                    <option value="Cracked: Detanup01 Goldberg Fork + Steamless" ${file.crackType === 'Cracked: Detanup01 Goldberg Fork + Steamless' ? 'selected' : ''}>Detanup01 Goldberg Fork + Steamless</option>
-                    <option value="custom">Custom</option>
-                </select>
-                <input type="text" data-file-index="${index}" data-prop="customCrackType" class="w-full mt-1 p-1 bg-gray-900 border border-gray-600 rounded-md text-sm ${file.crackType.startsWith('Cracked:') ? 'hidden' : ''}" placeholder="Enter custom crack name" value="${!file.crackType.startsWith('Cracked:') ? file.crackType : ''}">
-             </div>`;
-        crackedOptionsContainer.appendChild(crackGroup);
-
-        const patchNotesGroup = document.createElement('div');
-        patchNotesGroup.className = 'p-3 bg-gray-700/50 rounded-md border border-gray-600';
-        patchNotesGroup.innerHTML = `<p class="font-semibold text-white text-sm mb-2">${file.platform} - ${file.branch}</p>
-            <label class="block text-xs font-medium text-gray-400">Patch Notes URL</label>
-            <input type="text" data-file-index="${index}" data-prop="patchNoteUrl" value="${file.patchNoteUrl}" class="w-full mt-1 p-1 bg-gray-900 border border-gray-600 rounded-md text-sm">`;
-        patchNotesOptionsContainer.appendChild(patchNotesGroup);
+    els.customGroupsContainer.innerHTML = '';
+    if (!g.customGroups) g.customGroups = [];
+    g.customGroups.forEach((grp, i) => {
+        const d = document.createElement('div'); d.className = 'p-3 bg-gray-700/30 rounded border border-gray-600 mb-3';
+        d.innerHTML = `<div class="flex justify-between items-center mb-3"><input type="text" data-group-index="${i}" data-prop="title" value="${grp.title || ''}" placeholder="Group Title" class="bg-transparent border-b border-gray-500 text-blue-300 text-sm font-bold w-2/3 focus:outline-none"><button class="text-red-400 hover:text-red-200 text-xs font-bold" onclick="removeCustomGroup(${i})">Remove Group</button></div>${createPlatformInputs(grp.files, i, 'group')}<div class="mt-2 pt-2 border-t border-gray-600"><label class="text-xs text-gray-400">Footer Message</label><input type="text" data-group-index="${i}" data-prop="footer" value="${grp.footer || ''}" class="w-full mt-1 p-1 bg-gray-900 border-gray-600 text-sm rounded"></div>`;
+        els.customGroupsContainer.appendChild(d);
     });
 
-    templateEditor.value = state.template;
+    els.presetSelector.innerHTML = '<option value="">Select Saved Preset...</option>';
+    state.presets.forEach((p, i) => { els.presetSelector.innerHTML += `<option value="${i}">${p.title}</option>`; });
+
+    els.crackTogglesContainer.innerHTML = '';
+    g.files.forEach((f, i) => {
+        const isCustom = !f.crackType.includes('Detanup01');
+        const d = document.createElement('div'); d.className = 'p-2 bg-gray-700/30 rounded mb-2 border border-gray-600';
+
+        // Added Copy Button logic below
+        d.innerHTML = `
+        <div class="flex justify-between items-center">
+            <span class="text-xs font-bold text-gray-300">${f.platform}</span>
+            <div class="flex items-center">
+                <button id="copy-crack-btn-${i}" onclick="window.copyCrackFileName(${i})" class="mr-2 text-gray-400 hover:text-blue-400" title="Copy Release Name">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                </button>
+                <label class="text-xs mr-2 text-gray-400">Include Cracked</label>
+                <input type="checkbox" data-file-index="${i}" data-prop="includeCracked" ${f.includeCracked ? 'checked' : ''} class="h-4 w-4 rounded border-gray-300">
+            </div>
+        </div>
+        ${f.includeCracked ? `<div class="mt-2 space-y-2"><select data-file-index="${i}" data-prop="crackType" class="w-full text-xs bg-gray-900 border-gray-600 rounded p-1"><option value="Cracked: Detanup01 Goldberg Fork" ${f.crackType.includes('Fork') && !f.crackType.includes('Steamless') ? 'selected' : ''}>Detanup01 Goldberg Fork</option><option value="Cracked: Detanup01 Goldberg Fork + Steamless" ${f.crackType.includes('Steamless') ? 'selected' : ''}>Detanup01 Goldberg Fork + Steamless</option><option value="custom" ${isCustom ? 'selected' : ''}>Custom</option></select><input type="text" data-file-index="${i}" data-prop="customCrackType" value="${f.crackType}" class="w-full text-xs bg-gray-900 border-gray-600 rounded p-1 ${isCustom ? '' : 'hidden'}"></div>` : ''}`;
+        els.crackTogglesContainer.appendChild(d);
+    });
+
+    // --- UPDATES SECTION REDESIGN ---
+    els.updatesContainer.innerHTML = '';
+    if (!g.updates) g.updates = [];
+    g.updates.forEach((u, ui) => {
+        let sectionsHtml = '';
+        if (!u.sections) u.sections = [{ miniTitle: 'Proton Drive', links: [{ name: 'Update v1.0', url: '' }] }];
+
+        u.sections.forEach((s, si) => {
+            let linksHtml = '';
+            s.links.forEach((l, li) => {
+                linksHtml += `
+                <div class="flex gap-2 mt-1 items-center">
+                     <input type="text" data-update-index="${ui}" data-section-index="${si}" data-link-index="${li}" data-prop="linkName" value="${l.name || ''}" class="w-1/3 text-xs bg-gray-900 border-gray-600 rounded p-1" placeholder="Name (e.g., Windows)">
+                     <input type="text" data-update-index="${ui}" data-section-index="${si}" data-link-index="${li}" data-prop="linkUrl" value="${l.url || ''}" class="w-2/3 text-xs bg-gray-900 border-gray-600 rounded p-1" placeholder="URL">
+                     <button class="text-red-400 font-bold ml-1 hover:text-red-200" onclick="window.removeSectionLink(${ui}, ${si}, ${li})">x</button>
+                </div>`;
+            });
+
+            sectionsHtml += `
+            <div class="mt-3 pl-2 border-l-2 border-gray-600">
+                <div class="flex justify-between items-center mb-1">
+                    <input type="text" data-update-index="${ui}" data-section-index="${si}" data-prop="miniTitle" value="${s.miniTitle || ''}" class="bg-transparent border-b border-gray-600 text-gray-300 text-xs font-bold focus:outline-none w-1/2" placeholder="Mini Title (e.g. Proton Drive)">
+                    <button class="text-xs text-red-400 hover:text-red-200" onclick="window.removeUpdateSection(${ui}, ${si})">Remove Provider</button>
+                </div>
+                ${linksHtml}
+                <button class="text-xs text-blue-400 mt-1 hover:text-blue-300" onclick="window.addSectionLink(${ui}, ${si})">+ Add Link</button>
+            </div>`;
+        });
+
+        const d = document.createElement('div'); d.className = 'p-3 bg-gray-700/30 rounded border border-gray-600 mb-3';
+        d.innerHTML = `
+        <div class="flex justify-between mb-2">
+            <input type="text" data-update-index="${ui}" data-prop="title" value="${u.title || ''}" class="bg-transparent border-b border-gray-500 text-green-400 text-sm font-bold focus:outline-none w-3/4" placeholder="Update Title (e.g. Update v1 to v2)">
+            <button class="text-red-400 text-xs hover:text-red-200" onclick="window.removeUpdate(${ui})">Remove Update</button>
+        </div>
+        ${sectionsHtml}
+        <div class="mt-2 pt-2 border-t border-gray-700">
+             <button class="text-xs text-green-400 font-bold hover:text-green-300" onclick="window.addUpdateSection(${ui})">+ Add Provider (Mini Title)</button>
+        </div>`;
+        els.updatesContainer.appendChild(d);
+    });
+
+    // Inject the checkbox for Patch Notes Version Toggle explicitly in JS 
+    // because we want to update the innerHTML of the container completely to include it.
+    els.patchNotesOptionsContainer.innerHTML = `
+        <div class="flex justify-between items-center">
+            <label class="text-xs text-gray-400 font-bold">Mini Title (e.g., Hotfix Patch!)</label>
+            <input type="text" id="patchnotes-title-input" data-setting="patchNotesTitle" value="${g.patchNotesTitle || ''}" class="bg-gray-800 border border-gray-600 text-xs p-1 rounded w-1/2">
+        </div>
+        <div class="flex items-center gap-4 mt-2">
+             <div class="flex items-center gap-2">
+                <input type="checkbox" id="patchnotes-mode-toggle" data-setting="patchNotesMode" ${state.settings.patchNotesMode === 'single' ? 'checked' : ''} class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <label for="patchnotes-mode-toggle" class="text-xs text-gray-300">Single Patch Note Link (Merged)</label>
+            </div>
+            <div class="flex items-center gap-2">
+                <input type="checkbox" id="show-patchnotes-version-label" data-setting="showPatchNotesVersionLabel" ${state.settings.showPatchNotesVersionLabel !== false ? 'checked' : ''} class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <label for="show-patchnotes-version-label" class="text-xs text-gray-300">Show "Version:"</label>
+            </div>
+        </div>
+        <div id="patchnotes-url-container" class="mt-2"></div>
+    `;
+
+    // Re-acquire the container after injecting HTML to populate URLs
+    const urlContainer = document.getElementById('patchnotes-url-container');
+
+    if (state.settings.patchNotesMode === 'single' && g.files.length > 0) {
+        urlContainer.innerHTML = `<input type="text" data-file-index="0" data-prop="patchNoteUrl" value="${g.files[0].patchNoteUrl || ''}" class="w-full bg-gray-900 border-gray-600 rounded p-1 text-sm">`;
+    } else {
+        g.files.forEach((f, i) => { urlContainer.innerHTML += `<div class="mb-1"><label class="text-xs text-gray-400">${f.platform}</label><input type="text" data-file-index="${i}" data-prop="patchNoteUrl" value="${f.patchNoteUrl || ''}" class="w-full bg-gray-900 border-gray-600 rounded p-1 text-sm"></div>`; });
+    }
+
+    els.cleanUrlColorInput.value = state.settings.cleanUrlColor;
+    els.crackedUrlColorInput.value = state.settings.crackedUrlColor;
+    els.sectionTitleColorInput.value = state.settings.sectionTitleColor;
+    els.useSameUrlColorCheckbox.checked = state.settings.useSameUrlColor;
+    els.templateEditor.value = state.template;
     renderOutput();
 };
 
-// This function is the single entry point for refreshing the app's UI.
-function updateDisplay() {
-    syncLog("updateDisplay called. App state will be refreshed.");
-    updateGameSelector();
-    updateUIForActiveGame();
-}
+const updateDisplay = () => { updateGameSelector(); updateUIForActiveGame(); };
 
-/********************************
- * Authentication UI & Actions
- ********************************/
-function updateUIForLoginState() {
-    const elements = getElements();
-    if (!elements.loginButton) return;
+// Global Actions
+window.resetMainTitle = () => { state.games[state.activeGameIndex].mainGroupTitle = 'Proton Drive Links'; updateUIForActiveGame(); saveData(); };
+window.addCustomGroup = () => { const g = state.games[state.activeGameIndex]; const f = g.files.map(x => ({ platform: x.platform, branch: x.branch, cleanUrl: '', crackedUrl: '', shortDate: x.shortDate, buildId: x.buildId, includeCracked: x.includeCracked, crackType: x.crackType })); g.customGroups.push({ title: 'New Group', files: f, footer: '' }); updateUIForActiveGame(); saveData(); };
+window.removeCustomGroup = (i) => { if (confirm('Delete group?')) { state.games[state.activeGameIndex].customGroups.splice(i, 1); updateUIForActiveGame(); saveData(); } };
+window.loadPreset = () => { const idx = getElements().presetSelector.value; if (idx === '') return; const p = state.presets[idx], g = state.games[state.activeGameIndex], f = g.files.map(x => ({ platform: x.platform, branch: x.branch, cleanUrl: '', crackedUrl: '', shortDate: x.shortDate, buildId: x.buildId, includeCracked: x.includeCracked, crackType: x.crackType })); g.customGroups.push({ title: p.title, footer: p.footer, files: f }); updateUIForActiveGame(); saveData(); };
+window.savePreset = () => { const t = prompt("Name:"); if (!t) return; const f = prompt("Footer:"); state.presets.push({ title: t, footer: f || '' }); updateUIForActiveGame(); saveData(); };
 
-    const isLoggedIn = !!refreshToken;
-    elements.loginButton.style.display = isLoggedIn ? 'none' : 'inline-block';
-    elements.registerButton.style.display = isLoggedIn ? 'none' : 'inline-block';
-    elements.logoutButton.style.display = isLoggedIn ? 'inline-block' : 'none';
-    elements.userStatus.textContent = isLoggedIn ? `Logged in: ${currentUser?.username || 'User'}` : 'Not logged in (Local)';
-    elements.userStatus.style.color = isLoggedIn ? '#4bc0c0' : '#ccc';
-    if(elements.changePasswordButton) elements.changePasswordButton.style.display = isLoggedIn ? 'inline-block' : 'none';
-}
+// UPDATED ACTIONS FOR NEW STRUCTURE
+window.addUpdate = () => {
+    state.games[state.activeGameIndex].updates.push({
+        title: 'Update X to Y',
+        sections: [{ miniTitle: 'Proton Drive', links: [{ name: 'Update File', url: '' }] }]
+    });
+    updateUIForActiveGame(); saveData();
+};
+window.removeUpdate = (i) => { if (confirm('Delete update?')) { state.games[state.activeGameIndex].updates.splice(i, 1); updateUIForActiveGame(); saveData(); } };
 
-function getCanonicalString(dataSet) {
-    if (!dataSet) return null;
-    // Deep copy to avoid modifying original data
-    const dataCopy = JSON.parse(JSON.stringify(dataSet));
-    // Sort games and files within games to ensure consistent string representation
-    if (dataCopy.games) {
-        dataCopy.games.forEach(game => {
-            if (game.files) {
-                game.files.sort((a, b) => (a.platform + a.branch).localeCompare(b.platform + b.branch));
+window.addUpdateSection = (uIndex) => {
+    state.games[state.activeGameIndex].updates[uIndex].sections.push({ miniTitle: 'New Provider', links: [{ name: 'File Name', url: '' }] });
+    updateUIForActiveGame(); saveData();
+};
+window.removeUpdateSection = (uIndex, sIndex) => {
+    if (confirm('Remove this provider section?')) {
+        state.games[state.activeGameIndex].updates[uIndex].sections.splice(sIndex, 1);
+        updateUIForActiveGame(); saveData();
+    }
+};
+window.addSectionLink = (uIndex, sIndex) => {
+    state.games[state.activeGameIndex].updates[uIndex].sections[sIndex].links.push({ name: 'Part X', url: '' });
+    updateUIForActiveGame(); saveData();
+};
+window.removeSectionLink = (uIndex, sIndex, lIndex) => {
+    state.games[state.activeGameIndex].updates[uIndex].sections[sIndex].links.splice(lIndex, 1);
+    updateUIForActiveGame(); saveData();
+};
+
+// COPY CRACK FUNCTION
+window.copyCrackFileName = (fileIndex) => {
+    const game = state.games[state.activeGameIndex];
+    const file = game.files[fileIndex];
+    // Convert Title Space to Dots
+    const title = game.originalTitle.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '.');
+    const platform = file.platform.toLowerCase();
+
+    // Clean up Crack Type (e.g. "Cracked: Detanup01..." -> "Cracked-Detanup01...")
+    let crack = file.crackType;
+    if (crack.startsWith('Cracked: ')) {
+        crack = crack.replace('Cracked: ', 'Cracked-');
+    }
+    crack = crack.replace(/\s+/g, '.');
+
+    // OLD: const str = `${title}.${platform}.Build.${file.buildId}.${crack}`;
+    // NEW: Game.Build.Platform.Crack
+    const str = `${title}.Build.${file.buildId}.${platform}.${crack}`;
+
+    navigator.clipboard.writeText(str).then(() => {
+        const btn = document.getElementById(`copy-crack-btn-${fileIndex}`);
+        if (btn) {
+            const originalHTML = btn.innerHTML;
+            // Simple Checkmark
+            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+            setTimeout(() => btn.innerHTML = originalHTML, 1500);
+        }
+    });
+};
+
+function setupEventListeners() {
+    const els = getElements();
+    els.dropZone.addEventListener('click', () => els.fileInput.click());
+    els.dropZone.addEventListener('dragover', (e) => { e.preventDefault(); els.dropZone.classList.add('dragover'); });
+    els.dropZone.addEventListener('dragleave', () => els.dropZone.classList.remove('dragover'));
+    els.dropZone.addEventListener('drop', (e) => { e.preventDefault(); els.dropZone.classList.remove('dragover'); if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); });
+    els.fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+    els.processTextBtn.addEventListener('click', () => { if (els.textInput.value.trim()) parseInputText(els.textInput.value); });
+    els.gameSelector.addEventListener('change', (e) => { state.activeGameIndex = parseInt(e.target.value, 10); localStorage.setItem(`${storagePrefix}activeGameIndex`, state.activeGameIndex); updateDisplay(); });
+
+    els.addCustomGroupBtn.addEventListener('click', window.addCustomGroup);
+    els.loadPresetBtn.addEventListener('click', window.loadPreset);
+    els.savePresetBtn.addEventListener('click', window.savePreset);
+    els.addUpdateBtn.addEventListener('click', window.addUpdate);
+
+    // Collapsible Logic
+    document.querySelectorAll('.toggle-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const content = header.nextElementSibling;
+            const icon = header.querySelector('.chevron-icon');
+            content.classList.toggle('hidden');
+            // Standard chevron is Down (V). Rotate 180 for Up (^).
+            // If hidden is active (closed), we want it pointing Down (V) -> rotate-0
+            // If hidden is inactive (open), we want it pointing Up (^) -> rotate-180
+            // Initial HTML state: content block (open), icon no-rotate (down? wait). 
+            // Let's fix logic: Open = Chevron Up (rotate-180). Closed = Chevron Down (rotate-0).
+            // In HTML I put rotate-0 (down). So default "open" looks like "closed" icon.
+            // Let's swap toggle logic:
+
+            if (content.classList.contains('hidden')) {
+                // Closed
+                icon.classList.remove('rotate-180');
+            } else {
+                // Open
+                icon.classList.add('rotate-180');
             }
         });
-        dataCopy.games.sort((a, b) => a.gameTitle.localeCompare(b.gameTitle));
+    });
+
+    // Global Expand/Collapse
+    if (els.expandAllBtn) {
+        els.expandAllBtn.addEventListener('click', () => {
+            document.querySelectorAll('.toggle-header').forEach(h => {
+                const c = h.nextElementSibling;
+                const i = h.querySelector('.chevron-icon');
+                c.classList.remove('hidden');
+                i.classList.add('rotate-180');
+            });
+        });
     }
-    return JSON.stringify(dataCopy);
-}
 
-function generateDataSummary(dataSet) {
-    if (!dataSet || !dataSet.games) return { lastUpdate: 'N/A', entryCount: '0 games' };
-    
-    const gameCount = dataSet.games.length;
-    // For this app, a simple count is a good summary.
-    // A "last updated" timestamp isn't stored per-game, so we'll omit it.
-    return {
-        lastUpdate: null, // No reliable timestamp available
-        entryCount: `${gameCount} game(s)`,
-    };
-}
+    if (els.collapseAllBtn) {
+        els.collapseAllBtn.addEventListener('click', () => {
+            document.querySelectorAll('.toggle-header').forEach(h => {
+                const c = h.nextElementSibling;
+                const i = h.querySelector('.chevron-icon');
+                c.classList.add('hidden');
+                i.classList.remove('rotate-180');
+            });
+        });
+    }
 
-function showSyncChoiceModal(localSummary, serverSummary, serverData) {
-    const modal = document.getElementById('syncChoiceModal');
-    if (!modal) return;
+    els.customizationPanel.addEventListener('input', (e) => {
+        const t = e.target;
+        const game = state.games[state.activeGameIndex];
+        if (!game) return;
 
-    document.getElementById('localLastUpdate').textContent = 'N/A';
-    document.getElementById('localEntryCount').textContent = localSummary.entryCount;
+        if (t.dataset.setting === 'patchNotesTitle') { game.patchNotesTitle = t.value; saveData(); renderOutput(); return; }
 
-    document.getElementById('serverLastUpdate').textContent = 'N/A';
-    document.getElementById('serverEntryCount').textContent = serverSummary.entryCount;
-
-    const useLocalBtn = document.getElementById('useLocalDataBtn');
-    const useServerBtn = document.getElementById('useServerDataBtn');
-
-    const uploadHandler = async () => {
-        syncLog("User chose to USE LOCAL data. Uploading to server...");
-        await saveBackendData();
-        modal.style.display = 'none';
-    };
-
-    const downloadHandler = () => {
-        syncLog("User chose to USE SERVER data. Overwriting local data...");
-        state = serverData; // Overwrite local state with server data
-        saveLocalData();
-        updateDisplay();
-        modal.style.display = 'none';
-    };
-    
-    useLocalBtn.replaceWith(useLocalBtn.cloneNode(true));
-    useServerBtn.replaceWith(useServerBtn.cloneNode(true));
-    
-    document.getElementById('useLocalDataBtn').addEventListener('click', uploadHandler);
-    document.getElementById('useServerDataBtn').addEventListener('click', downloadHandler);
-
-    modal.style.display = 'block';
-}
-
-async function handleLogin(event) {
-    event.preventDefault();
-    const elements = getElements();
-    elements.loginError.textContent = '';
-    const username = elements.loginForm.loginUsername.value.trim();
-    const password = elements.loginForm.loginPassword.value;
-    try {
-        const response = await fetch(LOGIN_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
-        
-        authToken = data.accessToken;
-        refreshToken = data.refreshToken;
-        localStorage.setItem(`${storagePrefix}authToken`, authToken);
-        localStorage.setItem(`${storagePrefix}refreshToken`, refreshToken);
-        currentUser = decodeJwtPayload(authToken);
-        
-        elements.loginModal.style.display = 'none';
-        
-        syncLog('Login successful. Starting data sync check.');
-        const serverData = await fetchBackendData();
-        const localData = state;
-        
-        const hasLocalData = (localData.games?.length || 0) > 0;
-        const hasServerData = serverData && ((serverData.games?.length || 0) > 0);
-        
-        if (hasLocalData && !hasServerData) {
-            syncLog("Local data exists, but no server data. Prompting to upload.");
-            if (confirm("No data found on server. Upload your local data to this account?")) {
-                await saveBackendData();
-            }
-        } else if (hasServerData) {
-            const localString = getCanonicalString(localData);
-            const serverString = getCanonicalString(serverData);
-            
-            if (localString !== serverString) {
-                syncLog('Data mismatch DETECTED. Showing sync choice modal.');
-                const localSummary = generateDataSummary(localData);
-                const serverSummary = generateDataSummary(serverData);
-                showSyncChoiceModal(localSummary, serverSummary, serverData);
-            } else {
-                syncLog('Data is IN SYNC. No action needed.');
-                state = serverData;
-            }
-        } else if (hasServerData && !hasLocalData) {
-             syncLog("No local data, but server data exists. Downloading server data.");
-             state = serverData;
-        } else {
-            syncLog("No data locally or on the server. Nothing to sync.");
+        const set = t.dataset.setting;
+        if (set) {
+            if (set === 'patchNotesMode') { state.settings.patchNotesMode = t.checked ? 'single' : 'multiple'; updateUIForActiveGame(); }
+            else if (set === 'showVersionLabel') { state.settings.showVersionLabel = t.checked; updateUIForActiveGame(); } // Handle Top Version Label Toggle
+            else if (set === 'showPatchNotesVersionLabel') { state.settings.showPatchNotesVersionLabel = t.checked; updateUIForActiveGame(); } // Handle Patch Notes Version Label Toggle
+            else state.settings[set] = t.value;
+            saveData(); renderOutput(); return;
         }
 
-        saveLocalData();
-        updateUIForLoginState();
-        updateDisplay();
-        
-    } catch (error) {
-        elements.loginError.textContent = error.message;
-    }
+        if (t.id === 'game-version-input') game.gameVersion = t.value;
+
+        const f = t.dataset.fileIndex, g = t.dataset.groupIndex, u = t.dataset.updateIndex, s = t.dataset.sectionIndex, l = t.dataset.linkIndex, p = t.dataset.prop;
+
+        if (p) {
+            if (g !== undefined && f !== undefined) game.customGroups[g].files[f][p] = t.value;
+            else if (g !== undefined) game.customGroups[g][p] = t.value;
+
+            // UPDATE LOGIC FOR NEW STRUCTURE
+            else if (u !== undefined && s !== undefined && l !== undefined) {
+                if (p === 'linkName') game.updates[u].sections[s].links[l].name = t.value;
+                else if (p === 'linkUrl') game.updates[u].sections[s].links[l].url = t.value;
+            }
+            else if (u !== undefined && s !== undefined && p === 'miniTitle') game.updates[u].sections[s].miniTitle = t.value;
+            else if (u !== undefined && p === 'title') game.updates[u].title = t.value;
+
+            else if (p === 'mainGroupTitle') game.mainGroupTitle = t.value;
+            else if (f !== undefined) {
+                const file = game.files[f];
+                // MODIFIED LOGIC: Propagate crack changes to custom groups
+                if (p === 'includeCracked') {
+                    file.includeCracked = t.checked;
+                    if (game.customGroups) {
+                        game.customGroups.forEach(grp => {
+                            if (grp.files[f]) grp.files[f].includeCracked = t.checked;
+                        });
+                    }
+                    updateUIForActiveGame();
+                }
+                else if (p === 'crackType') {
+                    const val = t.value;
+                    if (val === 'custom') {
+                        t.closest('div').querySelector('[data-prop="customCrackType"]').classList.remove('hidden');
+                    } else {
+                        t.closest('div').querySelector('[data-prop="customCrackType"]').classList.add('hidden');
+                        file.crackType = val;
+                        if (game.customGroups) {
+                            game.customGroups.forEach(grp => {
+                                if (grp.files[f]) grp.files[f].crackType = val;
+                            });
+                        }
+                    }
+                }
+                else if (p === 'customCrackType') {
+                    file.crackType = t.value;
+                    if (game.customGroups) {
+                        game.customGroups.forEach(grp => {
+                            if (grp.files[f]) grp.files[f].crackType = t.value;
+                        });
+                    }
+                }
+                else if (p === 'cleanUrl') { file.cleanUrl = t.value; file.cleanUrlNeedsUpdate = false; }
+                else file[p] = t.value;
+            }
+        }
+        if (t.type === 'color' || t.id === 'use-same-url-color') {
+            if (t.id === 'use-same-url-color') { state.settings.useSameUrlColor = t.checked; updateUIForActiveGame(); }
+            if (t.id === 'clean-url-color') state.settings.cleanUrlColor = t.value;
+            if (t.id === 'cracked-url-color') state.settings.crackedUrlColor = t.value;
+            if (t.id === 'section-title-color') state.settings.sectionTitleColor = t.value;
+        }
+        renderOutput(); saveData();
+    });
+
+    els.simpleModeBtn.addEventListener('click', () => { els.simpleModeBtn.classList.add('active'); els.advancedModeBtn.classList.remove('active'); els.simpleModeControls.classList.remove('hidden'); els.advancedModeControls.classList.add('hidden'); });
+    els.advancedModeBtn.addEventListener('click', () => { els.advancedModeBtn.classList.add('active'); els.simpleModeBtn.classList.remove('active'); els.advancedModeControls.classList.remove('hidden'); els.simpleModeControls.classList.add('hidden'); });
+    els.previewTabBtn.addEventListener('click', () => { els.previewTabBtn.classList.add('active'); els.codeTabBtn.classList.remove('active'); els.previewPane.classList.remove('hidden'); els.codePane.classList.add('hidden'); });
+    els.codeTabBtn.addEventListener('click', () => { els.codeTabBtn.classList.add('active'); els.previewTabBtn.classList.remove('active'); els.codePane.classList.remove('hidden'); els.previewPane.classList.add('hidden'); });
+    els.copyBtnTop.addEventListener('click', () => handleCopyClick(els.copyBtnTop));
+    els.copyBtnBottom.addEventListener('click', () => handleCopyClick(els.copyBtnBottom));
+    els.downloadBtn.addEventListener('click', () => { const blob = new Blob([els.outputCode.value], { type: 'text/plain' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${state.games[state.activeGameIndex].gameTitle}.txt`; a.click(); });
+    els.templateEditor.addEventListener('input', (e) => { state.template = e.target.value; renderOutput(); saveData(); });
+    els.resetTemplateBtn.addEventListener('click', () => { state.template = templates.multiple; els.templateEditor.value = state.template; renderOutput(); saveData(); });
+
+    // Auth Logic
+    els.loginButton.addEventListener('click', () => els.loginModal.style.display = 'block');
+    els.registerButton.addEventListener('click', () => els.registerModal.style.display = 'block');
+    els.logoutButton.addEventListener('click', () => logoutUser());
+    els.localSyncButton.addEventListener('click', () => els.syncModal.style.display = 'block');
+    els.settingsButton.addEventListener('click', () => els.settingsModal.style.display = 'block');
+    els.loginForm.addEventListener('submit', handleLogin);
+    els.registerForm.addEventListener('submit', handleRegister);
+    els.exportDataButton.addEventListener('click', exportDataToFile);
+    els.importDataInput.addEventListener('change', importDataFromFile);
+    els.importOldDataButton.addEventListener('click', () => {
+        const old = localStorage.getItem('gameInfoFormatterCache');
+        if (old && confirm('Import old data?')) {
+            try {
+                const p = JSON.parse(old);
+                if (p.games) {
+                    state.games = p.games.map(migrateGameData);
+                    saveData(); updateDisplay();
+                    alert("Legacy data imported successfully.");
+                }
+            } catch (e) { alert("Error importing legacy data."); }
+        } else if (!old) alert("No old data found.");
+    });
+    if (els.changePasswordButton) els.changePasswordButton.addEventListener('click', () => els.changePasswordModal.style.display = 'block');
+    if (els.changePasswordForm) els.changePasswordForm.addEventListener('submit', handleChangePassword);
+    document.body.addEventListener('click', (e) => { if (e.target.matches('.close-modal, .close-auth-modal, .close-sync-modal')) e.target.closest('div[id$="Modal"]').style.display = 'none'; });
 }
 
-async function handleRegister(event) {
-    event.preventDefault();
-    const elements = getElements();
-    elements.registerError.textContent = '';
-    const username = elements.registerForm.registerUsername.value.trim();
-    const password = elements.registerForm.registerPassword.value;
-    if (password !== elements.registerForm.registerConfirmPassword.value) {
-        elements.registerError.textContent = 'Passwords do not match.'; return;
-    }
-    try {
-        const response = await fetch(REGISTER_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
-        alert("Registration successful! Please log in.");
-        elements.registerModal.style.display = 'none';
-        elements.loginModal.style.display = 'block';
-        elements.loginForm.loginUsername.value = username;
-    } catch (error) {
-        elements.registerError.textContent = error.message;
-    }
-}
-
-async function logoutUser(logoutMessage = null) {
-    const tokenToInvalidate = refreshToken;
-    authToken = null; refreshToken = null; currentUser = null;
-    localStorage.removeItem(`${storagePrefix}authToken`);
-    localStorage.removeItem(`${storagePrefix}refreshToken`);
-    if (logoutMessage) alert(logoutMessage);
-    if (tokenToInvalidate) {
+function importDataFromFile(e) {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = async (ev) => {
         try {
-            await fetch(LOGOUT_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: tokenToInvalidate }) });
-        } catch (error) { console.warn("Backend logout failed:", error); }
-    }
-    loadLocalData();
-    updateUIForLoginState();
-    updateDisplay();
-}
-
-async function handleChangePassword(event) {
-    event.preventDefault();
-    const elements = getElements();
-    elements.changePasswordError.textContent = '';
-    elements.changePasswordSuccess.textContent = '';
-    const currentPassword = elements.changePasswordForm.currentPassword.value;
-    const newPassword = elements.changePasswordForm.newPassword.value;
-    if (newPassword !== elements.changePasswordForm.confirmNewPassword.value) {
-        elements.changePasswordError.textContent = 'New passwords do not match.';
-        return;
-    }
-    try {
-        const response = await fetchWithAuth(CHANGE_PASSWORD_ENDPOINT, { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
-        elements.changePasswordSuccess.textContent = data.message;
-        setTimeout(() => logoutUser("Password changed. Please log in again."), 3000);
-    } catch (error) {
-        elements.changePasswordError.textContent = `Error: ${error.message}`;
-    }
-}
-
-/********************************
- * Local File Sync Logic
- ********************************/
-function showSyncStatus(message, type = "info") {
-    const el = document.getElementById("syncStatus");
-    if(el) { el.textContent = message; el.className = `sync-status-${type}`; setTimeout(() => {el.textContent=''; el.className='';}, 5000); }
-}
-
-function exportDataToFile() {
-    const dataToExport = state;
-    const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${APP_NAME}-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showSyncStatus("Data exported!", "success");
-}
-
-function importDataFromFile(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        try {
-            const data = JSON.parse(e.target.result);
-            if (confirm("Import will overwrite current data in this browser. Proceed?")) {
-                // Basic check to see if the data structure is likely correct
-                if (data.games !== undefined && data.settings !== undefined) {
-                    state = data;
-                } else {
-                    throw new Error("Invalid file format");
+            const data = JSON.parse(ev.target.result);
+            if (data.games) {
+                data.games = data.games.map(migrateGameData);
+                if (confirm("Overwrite current data?")) {
+                    state = data; saveLocalData(); updateDisplay();
+                    if (currentUser && confirm("Save to server?")) await saveBackendData();
                 }
-                saveLocalData();
-                updateDisplay();
-                showSyncStatus("Import successful!", "success");
-                if(currentUser && confirm("Save imported data to your account? This will overwrite your current server data.")) {
-                     await saveBackendData();
-                }
-            }
-        } catch (error) {
-            showSyncStatus(`Import failed: ${error.message}`, "error");
-        }
+            } else alert("Invalid file.");
+        } catch (err) { alert("Import failed."); }
     };
-    reader.readAsText(file);
-}
-
-// --- NEW: Function to import data from the old cache key ---
-function importOldLocalData() {
-    const oldCacheKey = 'gameInfoFormatterCache';
-    const oldData = localStorage.getItem(oldCacheKey);
-
-    if (!oldData) {
-        showSyncStatus("No old data found to import.", "error");
-        return;
-    }
-
-    if (!confirm("This will import data from the previous version of this tool. It may overwrite some of your current data. Continue?")) {
-        return;
-    }
-
-    try {
-        const parsedOldData = JSON.parse(oldData);
-        if (parsedOldData.games) {
-            // Merge old data into the current state
-            state.games = parsedOldData.games;
-            state.activeGameIndex = parsedOldData.activeGameIndex || 0;
-            
-            saveData(); // Save the newly merged data
-            updateDisplay(); // Refresh the UI
-            showSyncStatus("Successfully imported old data!", "success");
-        } else {
-            throw new Error("Old data is in an invalid format.");
-        }
-    } catch (error) {
-        showSyncStatus(`Failed to import old data: ${error.message}`, "error");
-    }
-}
-
-/********************************
- * Event Listeners Setup
- ********************************/
-function setupEventListeners() {
-    const elements = getElements();
-    if (!elements.loginButton) return;
-
-    // --- App Listeners ---
-    elements.dropZone.addEventListener('click', () => elements.fileInput.click());
-    elements.dropZone.addEventListener('dragover', (e) => { e.preventDefault(); elements.dropZone.classList.add('dragover'); });
-    elements.dropZone.addEventListener('dragleave', () => elements.dropZone.classList.remove('dragover'));
-    elements.dropZone.addEventListener('drop', (e) => { e.preventDefault(); elements.dropZone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
-    elements.fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
-    elements.processTextBtn.addEventListener('click', () => { if (elements.textInput.value.trim()) { parseInputText(elements.textInput.value); } });
-    elements.gameSelector.addEventListener('change', (e) => { state.activeGameIndex = parseInt(e.target.value, 10); updateUIForActiveGame(); });
-    elements.simpleModeBtn.addEventListener('click', () => {
-        elements.simpleModeBtn.classList.add('active'); elements.advancedModeBtn.classList.remove('active');
-        elements.simpleModeControls.classList.remove('hidden'); elements.advancedModeControls.classList.add('hidden');
-    });
-    elements.advancedModeBtn.addEventListener('click', () => {
-        elements.advancedModeBtn.classList.add('active'); elements.simpleModeBtn.classList.remove('active');
-        elements.advancedModeControls.classList.remove('hidden'); elements.simpleModeControls.classList.add('hidden');
-    });
-    elements.previewTabBtn.addEventListener('click', () => {
-        elements.previewTabBtn.classList.add('active'); elements.codeTabBtn.classList.remove('active');
-        elements.previewPane.classList.remove('hidden'); elements.codePane.classList.add('hidden');
-    });
-    elements.codeTabBtn.addEventListener('click', () => {
-        elements.codeTabBtn.classList.add('active'); elements.previewTabBtn.classList.remove('active');
-        elements.codePane.classList.remove('hidden'); elements.previewPane.classList.add('hidden');
-    });
-
-    // Handle the checkbox 'change' event separately
-    elements.useSameUrlColorCheckbox.addEventListener('change', (e) => {
-        state.settings.useSameUrlColor = e.target.checked;
-        if (e.target.checked) {
-            elements.crackedUrlColorContainer.classList.add('hidden');
-        } else {
-            elements.crackedUrlColorContainer.classList.remove('hidden');
-        }
-        renderOutput();
-        saveData(); // Save on change
-    });
-    
-    // The main 'input' listener for the whole panel
-    elements.customizationPanel.addEventListener('input', (e) => {
-        const target = e.target;
-        const activeGame = state.games[state.activeGameIndex];
-        if (!activeGame) return;
-
-        // --- Handle color inputs ---
-        if (target.id === 'clean-url-color') {
-            state.settings.cleanUrlColor = target.value;
-        } else if (target.id === 'cracked-url-color') {
-            state.settings.crackedUrlColor = target.value;
-        } else if (target.id === 'section-title-color') {
-            state.settings.sectionTitleColor = target.value;
-        }
-        // --- End color inputs ---
-
-        if (target.id === 'game-version-input') {
-            activeGame.gameVersion = target.value;
-        }
-
-        const fileIndex = target.dataset.fileIndex;
-        if (fileIndex !== undefined) {
-            const file = activeGame.files[fileIndex];
-            const prop = target.dataset.prop;
-
-            if (prop === 'includeCracked') {
-                file.includeCracked = target.checked;
-                updateUIForActiveGame();
-            } else if (prop === 'crackType') {
-                const customInput = target.closest('.p-3').querySelector('[data-prop="customCrackType"]');
-                if (target.value === 'custom') {
-                    customInput.classList.remove('hidden');
-                    file.crackType = customInput.value || 'Custom';
-                } else {
-                    customInput.classList.add('hidden');
-                    file.crackType = target.value;
-                }
-            } else if (prop === 'customCrackType') {
-                 file.crackType = target.value || 'Custom';
-            } else if (prop === 'patchNoteUrl') {
-                file.patchNoteUrl = target.value;
-                const buildIdMatch = target.value.match(/\/(\d+)\/?$/);
-                if (buildIdMatch && buildIdMatch[1]) {
-                    file.buildId = buildIdMatch[1];
-                }
-            } else if (prop) {
-                file[prop] = target.value;
-            }
-        }
-        renderOutput();
-        saveData();
-    });
-    elements.templateEditor.addEventListener('input', (e) => { state.template = e.target.value; renderOutput(); saveData(); });
-    elements.resetTemplateBtn.addEventListener('click', () => {
-        state.template = document.getElementById('default-bbcode-template').innerHTML;
-        elements.templateEditor.value = state.template;
-        renderOutput();
-        saveData();
-    });
-    elements.copyBtnTop.addEventListener('click', () => handleCopyClick(elements.copyBtnTop));
-    elements.copyBtnBottom.addEventListener('click', () => handleCopyClick(elements.copyBtnBottom));
-    elements.downloadBtn.addEventListener('click', () => {
-        if (state.games.length === 0 || !elements.outputCode.value) return;
-        const activeGame = state.games[state.activeGameIndex];
-        const blob = new Blob([elements.outputCode.value], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${activeGame.gameTitle}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    });
-
-    // --- Auth/Sync Listeners ---
-    elements.loginButton.addEventListener('click', () => elements.loginModal.style.display = 'block');
-    elements.registerButton.addEventListener('click', () => elements.registerModal.style.display = 'block');
-    elements.logoutButton.addEventListener('click', () => logoutUser());
-    elements.loginForm.addEventListener('submit', handleLogin);
-    elements.registerForm.addEventListener('submit', handleRegister);
-    elements.settingsButton.addEventListener("click", () => {
-        if (elements.changePasswordButton) {
-            elements.changePasswordButton.style.display = authToken ? 'inline-block' : 'none';
-        }
-        elements.settingsModal.style.display = "block";
-    });
-    if (elements.changePasswordButton) {
-        elements.changePasswordButton.addEventListener('click', () => elements.changePasswordModal.style.display = 'block');
-    }
-    if (elements.changePasswordForm) {
-        elements.changePasswordForm.addEventListener('submit', handleChangePassword);
-    }
-    elements.localSyncButton.addEventListener('click', () => elements.syncModal.style.display = 'block');
-    elements.exportDataButton.addEventListener('click', exportDataToFile);
-    elements.importDataInput.addEventListener('change', importDataFromFile);
-    elements.importOldDataButton.addEventListener('click', importOldLocalData);
-
-    document.body.addEventListener('click', function(e) {
-        const modal = e.target.closest('.modal, .auth-modal, .sync-modal');
-        if (!modal || modal.id === 'syncChoiceModal') return;
-        
-        const isCloseControl = e.target.matches('.close-modal, .close-auth-modal, .close-sync-modal, .close-modal-button, .close-auth-modal-button, .close-sync-modal-button');
-        
-        if (isCloseControl || e.target === modal) {
-            modal.style.display = 'none';
-        }
-    });
-}
-
-/**********************
- * Initial Page Load
- **********************/
-async function syncOnLoad() {
-    if (!refreshToken) return;
-
-    syncLog("Performing automatic sync on page load...");
-    try {
-        const serverData = await fetchBackendData();
-        if (!serverData) {
-            syncLog("Could not fetch server data for sync. Using existing local data.");
-            return;
-        }
-        
-        state = serverData; // Overwrite local state with server data
-
-        syncLog("Sync successful. Local data has been overwritten from server.");
-        saveLocalData();
-        updateDisplay();
-
-    } catch (error) {
-        console.error("An error occurred during automatic sync-on-load:", error);
-    }
+    r.readAsText(f);
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-    // 1. Load any local data first
+    await loadTemplates();
     loadLocalData();
-    
-    // 2. Set up all event listeners
     setupEventListeners();
-    
-    // 3. Handle authentication state
-    authToken = localStorage.getItem(`${storagePrefix}authToken`);
-    refreshToken = localStorage.getItem(`${storagePrefix}refreshToken`);
-
     if (refreshToken) {
-        if (isTokenExpired(authToken)) {
-            await attemptRefreshToken();
-        } else {
-            currentUser = decodeJwtPayload(authToken);
-        }
-        
-        // 4. If logged in, perform initial data sync from server
-        if (currentUser) {
-            await syncOnLoad();
-        }
+        if (isTokenExpired(authToken)) await attemptRefreshToken();
+        currentUser = decodeJwtPayload(authToken);
+        if (currentUser) await syncOnLoad();
     }
-    
-    // 5. Update UI based on final state (auth and data)
-    updateUIForLoginState();
-    updateDisplay();
+    if (!state.template) state.template = templates.multiple;
+    const savedIndex = localStorage.getItem(`${storagePrefix}activeGameIndex`);
+    if (savedIndex !== null && state.games.length > savedIndex) state.activeGameIndex = parseInt(savedIndex);
+    updateUIForLoginState(); updateDisplay();
 });
+
+function updateUIForLoginState() {
+    const els = getElements(); if (!els.loginButton) return;
+    const loggedIn = !!refreshToken;
+    els.loginButton.style.display = loggedIn ? 'none' : 'inline-block';
+    els.registerButton.style.display = loggedIn ? 'none' : 'inline-block';
+    els.logoutButton.style.display = loggedIn ? 'inline-block' : 'none';
+    els.userStatus.textContent = loggedIn ? `Logged in: ${currentUser?.username || 'User'}` : 'Not logged in';
+    if (els.changePasswordButton) els.changePasswordButton.style.display = loggedIn ? 'inline-block' : 'none';
+}
+async function handleLogin(e) {
+    e.preventDefault(); const els = getElements(); els.loginError.textContent = '';
+    try {
+        const res = await fetch(LOGIN_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: els.loginForm.loginUsername.value, password: els.loginForm.loginPassword.value }) });
+        const data = await res.json(); if (!res.ok) throw new Error(data.error);
+        authToken = data.accessToken; refreshToken = data.refreshToken;
+        localStorage.setItem(`${storagePrefix}authToken`, authToken); localStorage.setItem(`${storagePrefix}refreshToken`, refreshToken);
+        currentUser = decodeJwtPayload(authToken); els.loginModal.style.display = 'none';
+        const serverData = await fetchBackendData();
+        if (serverData) {
+            if (JSON.stringify(state) !== JSON.stringify(serverData)) {
+                if (confirm("Server data found. Overwrite local data?")) { state = serverData; state.games = state.games.map(migrateGameData); }
+                else await saveBackendData();
+            } else state = serverData;
+        } else if (state.games.length > 0) await saveBackendData();
+        saveLocalData(); updateUIForLoginState(); updateDisplay();
+    } catch (err) { els.loginError.textContent = err.message; }
+}
+async function handleRegister(e) {
+    e.preventDefault(); const els = getElements(); els.registerError.textContent = '';
+    if (els.registerForm.registerPassword.value !== els.registerForm.registerConfirmPassword.value) { els.registerError.textContent = 'Mismatch'; return; }
+    try {
+        const res = await fetch(REGISTER_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: els.registerForm.registerUsername.value, password: els.registerForm.registerPassword.value }) });
+        const data = await res.json(); if (!res.ok) throw new Error(data.error);
+        alert("Registered."); els.registerModal.style.display = 'none'; els.loginModal.style.display = 'block';
+    } catch (err) { els.registerError.textContent = err.message; }
+}
+async function logoutUser(msg) {
+    if (refreshToken) try { await fetch(LOGOUT_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken }) }); } catch (e) { }
+    authToken = null; refreshToken = null; currentUser = null; localStorage.removeItem(`${storagePrefix}authToken`); localStorage.removeItem(`${storagePrefix}refreshToken`);
+    if (msg) alert(msg); loadLocalData(); updateUIForLoginState(); updateDisplay();
+}
+async function handleChangePassword(e) {
+    e.preventDefault(); const els = getElements(); els.changePasswordError.textContent = '';
+    if (els.changePasswordForm.newPassword.value !== els.changePasswordForm.confirmNewPassword.value) { els.changePasswordError.textContent = 'Mismatch'; return; }
+    try {
+        const res = await fetchWithAuth(CHANGE_PASSWORD_ENDPOINT, { method: 'POST', body: JSON.stringify({ currentPassword: els.changePasswordForm.currentPassword.value, newPassword: els.changePasswordForm.newPassword.value }) });
+        const data = await res.json(); if (!res.ok) throw new Error(data.error);
+        alert("Changed."); logoutUser();
+    } catch (err) { els.changePasswordError.textContent = err.message; }
+}
+function exportDataToFile() {
+    const b = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(b);
+    a.download = `${APP_NAME}-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+}
+function importOldLocalData() { const o = localStorage.getItem('gameInfoFormatterCache'); if (o && confirm('Import old?')) { state.games = JSON.parse(o).games.map(migrateGameData); saveData(); updateDisplay(); } }
+async function syncOnLoad() { const d = await fetchBackendData(); if (d) { state = d; state.games = state.games.map(migrateGameData); saveLocalData(); updateDisplay(); } }
