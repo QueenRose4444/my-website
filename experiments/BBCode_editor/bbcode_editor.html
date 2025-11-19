@@ -1,56 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
-    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Game Info Formatter</title>
-    <!-- Tailwind CSS for rapid UI development -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts for typography -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Link to your custom stylesheet -->
     <link rel="stylesheet" href="bbcode_editor.css">
 </head>
+
 <body>
     <header class="top-bar">
         <nav class="nav-container">
             <div class="nav-left">
-              <ul class="nav-links">
-                <li><a href="../../home/">Home</a></li>
-                <li><a href="../../meds/">Meds</a></li>
-                <li><a href="../">Experiments</a></li>
-                <li><a href="" class="active-link">bbcode editor</a></li>
-              </ul>
+                <ul class="nav-links">
+                    <li><a href="../../home/">Home</a></li>
+                    <li><a href="../../meds/">Meds</a></li>
+                    <li><a href="../">Experiments</a></li>
+                    <li><a href="" class="active-link">bbcode editor</a></li>
+                </ul>
             </div>
-            <div class="nav-center">
-              <!-- This div is for centering elements if needed, as per the template -->
-            </div>
+            <div class="nav-center"></div>
             <div class="nav-right">
-              <div class="user-account">
-                <span id="userStatus" style="color: #ccc; align-self: center; margin-right: 15px;">Loading...</span>
-                <button id="loginButton" style="display: none;">Login</button>
-                <button id="registerButton" style="display: none;">Register</button>
-                <button id="logoutButton" style="display: none;">Logout</button>
-                <button id="localSyncButton">Local Sync</button>
-                <button id="settingsButton">Settings</button>
-              </div>
+                <div class="user-account">
+                    <span id="userStatus" style="color: #ccc; align-self: center; margin-right: 15px;">Loading...</span>
+                    <button id="loginButton" style="display: none;">Login</button>
+                    <button id="registerButton" style="display: none;">Register</button>
+                    <button id="logoutButton" style="display: none;">Logout</button>
+                    <button id="localSyncButton">Local Sync</button>
+                    <button id="settingsButton">Settings</button>
+                </div>
             </div>
         </nav>
     </header>
 
     <main id="app" class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 p-4 md:p-8">
-        
-        <!-- Left Column: Input & Settings -->
         <div class="space-y-6">
             <header class="text-center">
                 <h1 class="text-3xl font-bold text-white">Game Info Formatter</h1>
                 <p class="text-gray-400 mt-2">Upload or paste game data to format it with custom templates.</p>
             </header>
-
-            <!-- Input Section -->
             <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
                 <h2 class="text-xl font-semibold text-white mb-4">1. Add Game Data</h2>
                 <div id="file-drop-zone" class="file-drop-zone p-6 text-center rounded-lg cursor-pointer">
@@ -58,264 +50,305 @@
                     <input type="file" id="file-input" multiple accept=".txt" class="hidden">
                 </div>
                 <div class="mt-4 text-center text-gray-400">or paste content below</div>
-                <textarea id="text-input" class="w-full h-32 mt-2 p-3 bg-gray-900 border border-gray-700 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Paste raw game info here..."></textarea>
-                <button id="process-text-btn" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition-colors">Process Pasted Text</button>
+                <textarea id="text-input"
+                    class="w-full h-32 mt-2 p-3 bg-gray-900 border border-gray-700 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    placeholder="Paste raw game info here..."></textarea>
+                <button id="process-text-btn"
+                    class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition-colors">Process
+                    Pasted Text</button>
             </div>
-
-            <!-- Game Selection & Customization -->
             <div id="customization-panel" class="bg-gray-800 p-6 rounded-lg shadow-lg hidden">
                 <h2 class="text-xl font-semibold text-white mb-4">2. Customize Output</h2>
                 <div class="mb-4">
-                    <label for="game-selector" class="block text-sm font-medium text-gray-300 mb-1">Select Game to Edit:</label>
-                    <select id="game-selector" class="w-full bg-gray-900 border border-gray-700 rounded-md p-2 focus:ring-2 focus:ring-blue-500"></select>
+                    <label for="game-selector" class="block text-sm font-medium text-gray-300 mb-1">Select Game to
+                        Edit:</label>
+                    <select id="game-selector"
+                        class="w-full bg-gray-900 border border-gray-700 rounded-md p-2 focus:ring-2 focus:ring-blue-500"></select>
                 </div>
-                
-                <!-- Optional Version Input -->
-                <div id="game-version-container" class="mb-4">
-                    <!-- JS will populate this -->
-                </div>
-
-                <!-- Simple/Advanced Tabs -->
+                <div id="game-version-container" class="mb-4"></div>
                 <div class="flex border-b border-gray-700 mb-4">
-                    <button id="simple-mode-btn" class="tab-button active py-2 px-4 font-semibold">Simple</button>
-                    <button id="advanced-mode-btn" class="tab-button py-2 px-4 font-semibold">Advanced</button>
+                    <button id="simple-mode-btn" class="tab-button active py-2 px-4 font-semibold">Builder</button>
+                    <button id="advanced-mode-btn" class="tab-button py-2 px-4 font-semibold">Template</button>
                 </div>
-
-                <!-- Simple Mode Controls -->
-                <div id="simple-mode-controls" class="space-y-6">
-                    <!-- Section Title Color -->
-                    <div>
-                        <label for="section-title-color" class="block text-sm font-medium text-gray-300">Section Title Color</label>
-                        <input type="color" id="section-title-color" value="#ffffff" class="mt-1 p-1 h-10 w-full block bg-gray-900 border-gray-700 rounded-md cursor-pointer">
+                <div id="simple-mode-controls" class="space-y-4">
+                    <!-- Collapse Controls -->
+                    <div class="flex justify-end gap-2 mb-2">
+                        <button id="expand-all-btn" class="text-xs text-gray-400 hover:text-white">Expand All</button>
+                        <span class="text-gray-600">|</span>
+                        <button id="collapse-all-btn" class="text-xs text-gray-400 hover:text-white">Collapse
+                            All</button>
                     </div>
 
-                    <!-- Clean URL Color -->
-                    <div>
-                        <label for="clean-url-color" class="block text-sm font-medium text-gray-300">Clean URL Color</label>
-                        <input type="color" id="clean-url-color" value="#00ff00" class="mt-1 p-1 h-10 w-full block bg-gray-900 border-gray-700 rounded-md cursor-pointer">
-                    </div>
-
-                    <!-- Cracked URL Color -->
-                    <div class="space-y-2">
-                        <div class="flex items-center justify-between">
-                            <label for="use-same-url-color" class="text-sm font-medium text-gray-300">Use same color for Cracked URLs</label>
-                            <input type="checkbox" id="use-same-url-color" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    <!-- Main Group -->
+                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
+                        <div
+                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
+                            <h3 class="text-md font-bold text-white">Main Group (SteamDB)</h3>
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
+                            </svg>
                         </div>
-                        <div id="cracked-url-color-container" class="hidden"> <!-- Hidden by default, JS will manage -->
-                            <label for="cracked-url-color" class="block text-sm font-medium text-gray-300">Cracked URL Color</label>
-                            <input type="color" id="cracked-url-color" value="#00ff00" class="mt-1 p-1 h-10 w-full block bg-gray-900 border-gray-700 rounded-md cursor-pointer">
+                        <div class="p-4 border-t border-gray-700 module-content">
+                            <div id="main-group-container"></div>
                         </div>
                     </div>
-                    
-                    <!-- Separator -->
-                    <hr class="border-gray-700">
 
-                    <div id="url-inputs" class="space-y-4">
-                        <!-- URL inputs will be generated here -->
+                    <!-- Additional Groups -->
+                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
+                        <div
+                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
+                            <h3 class="text-md font-bold text-white">Additional URL Groups</h3>
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="p-4 border-t border-gray-700 module-content">
+                            <div class="flex gap-2 mb-4">
+                                <select id="preset-selector"
+                                    class="bg-gray-800 border border-gray-600 text-xs rounded p-1 flex-grow text-white"></select>
+                                <button id="load-preset-btn"
+                                    class="bg-purple-600 hover:bg-purple-700 px-3 py-1 text-xs rounded text-white font-bold">Load</button>
+                                <button id="save-preset-btn"
+                                    class="bg-gray-600 hover:bg-gray-500 px-3 py-1 text-xs rounded text-white font-bold">Save
+                                    New</button>
+                            </div>
+                            <div id="custom-groups-container"></div>
+                            <button id="add-custom-group-btn"
+                                class="w-full py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded mt-2 shadow-sm transition-colors">+
+                                Add Group</button>
+                        </div>
                     </div>
-                    <div id="cracked-options" class="space-y-4">
-                         <!-- Cracked options will be generated here -->
+
+                    <!-- Crack Settings -->
+                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
+                        <div
+                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
+                            <h3 class="text-md font-bold text-white">Crack Settings</h3>
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="p-4 border-t border-gray-700 module-content">
+                            <div id="crack-toggles-container"></div>
+                        </div>
                     </div>
-                    <div id="patchnotes-options" class="space-y-4"> <!-- Increased spacing -->
-                        <!-- Patch notes options will be generated here -->
+
+                    <!-- Updates -->
+                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
+                        <div
+                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
+                            <h3 class="text-md font-bold text-white">Update Files</h3>
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="p-4 border-t border-gray-700 module-content">
+                            <div id="updates-container"></div>
+                            <button id="add-update-btn"
+                                class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded mt-2 shadow-sm transition-colors">+
+                                Add Update Section</button>
+                        </div>
+                    </div>
+
+                    <!-- Patch Notes -->
+                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
+                        <div
+                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
+                            <h3 class="text-md font-bold text-white">Patch Notes</h3>
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="p-4 border-t border-gray-700 module-content">
+                            <div id="patchnotes-options" class="space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <label class="text-xs text-gray-400 font-bold">Mini Title (e.g., Hotfix
+                                        Patch!)</label>
+                                    <input type="text" id="patchnotes-title-input" data-setting="patchNotesTitle"
+                                        class="bg-gray-800 border border-gray-600 text-xs p-1 rounded w-1/2">
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="patchnotes-mode-toggle" data-setting="patchNotesMode"
+                                        class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                    <label for="patchnotes-mode-toggle" class="text-xs text-gray-300">Single Patch Note
+                                        Link (Merged)</label>
+                                </div>
+                                <div id="patchnotes-url-container"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Colors -->
+                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
+                        <div
+                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
+                            <h3 class="text-md font-bold text-white">Colors</h3>
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="p-4 border-t border-gray-700 module-content">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div><label class="text-xs text-gray-400 block mb-1">Section Title</label><input
+                                        type="color" id="section-title-color"
+                                        class="w-full h-8 bg-gray-800 rounded cursor-pointer"></div>
+                                <div><label class="text-xs text-gray-400 block mb-1">Clean URLs</label><input
+                                        type="color" id="clean-url-color"
+                                        class="w-full h-8 bg-gray-800 rounded cursor-pointer"></div>
+                                <div><label class="text-xs text-gray-400 block mb-1">Cracked URLs</label><input
+                                        type="color" id="cracked-url-color"
+                                        class="w-full h-8 bg-gray-800 rounded cursor-pointer"></div>
+                                <div class="flex items-center justify-center">
+                                    <div class="flex items-center"><input type="checkbox" id="use-same-url-color"
+                                            class="mr-2 h-4 w-4"><label for="use-same-url-color"
+                                            class="text-xs text-gray-400">Match Clean</label></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-
-                <!-- Advanced Mode Controls -->
                 <div id="advanced-mode-controls" class="hidden space-y-4">
                     <div>
-                        <label for="template-editor" class="block text-sm font-medium text-gray-300 mb-2">Full BBCode Template</label>
-                        <p class="text-xs text-gray-400 mb-2">Edit the full template below. Use placeholders like {gameTitle} and {cleanUrlColor}. Loops and conditionals are defined by `&lt;!--LOOP--&gt;` and `&lt;!--IF--&gt;` tags.</p>
-                        <textarea id="template-editor" class="w-full h-96 p-3 bg-gray-900 border border-gray-700 rounded-md font-mono text-xs focus:ring-2 focus:ring-blue-500"></textarea>
-                        <button id="reset-template-btn" class="mt-2 text-sm text-blue-400 hover:text-blue-300">Reset to Default</button>
+                        <label for="template-editor" class="block text-sm font-medium text-gray-300 mb-2">Full BBCode
+                            Template</label>
+                        <p class="text-xs text-gray-400 mb-2">Edit the full template below.</p>
+                        <textarea id="template-editor"
+                            class="w-full h-96 p-3 bg-gray-900 border border-gray-700 rounded-md font-mono text-xs focus:ring-2 focus:ring-blue-500 text-green-400"></textarea>
+                        <button id="reset-template-btn"
+                            class="mt-2 text-sm text-blue-400 hover:text-blue-300 underline">Reset to Default</button>
                     </div>
                 </div>
             </div>
         </div>
-
-        <!-- Right Column: Output & Preview -->
         <div class="space-y-6">
             <div class="bg-gray-800 p-6 rounded-lg shadow-lg h-full flex flex-col">
                 <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-semibold text-white">3. Get Result</h2>
-                    <!-- NEW: Top copy button -->
-                    <button id="copy-btn-top" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed" disabled>Copy Code</button>
+                    <h2 class="text-xl font-semibold text-white">3. Result</h2>
+                    <button id="copy-btn-top"
+                        class="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed text-sm"
+                        disabled>Copy Code</button>
                 </div>
-                <!-- Preview/Code Tabs -->
                 <div class="flex border-b border-gray-700 mb-4">
                     <button id="preview-tab-btn" class="tab-button active py-2 px-4 font-semibold">Preview</button>
                     <button id="code-tab-btn" class="tab-button py-2 px-4 font-semibold">BBCode</button>
                 </div>
-
-                <!-- Preview Pane -->
-                <div id="preview-pane" class="flex-grow preview-body overflow-auto">
+                <div id="preview-pane"
+                    class="flex-grow preview-body overflow-auto border border-gray-700 rounded p-4 bg-black">
                     <p class="text-gray-500">Preview will appear here...</p>
                 </div>
-
-                <!-- Code Pane -->
-                <div id="code-pane" class="hidden flex-grow">
-                    <textarea id="output-code" readonly class="w-full h-full p-3 bg-gray-900 border border-gray-700 rounded-md font-mono text-xs resize-none"></textarea>
+                <div id="code-pane" class="hidden flex-grow"><textarea id="output-code" readonly
+                        class="w-full h-full p-3 bg-gray-900 border border-gray-700 rounded-md font-mono text-xs resize-none text-gray-300"></textarea>
                 </div>
-                
                 <div class="mt-4 flex gap-4">
-                     <button id="copy-btn-bottom" class="flex-grow bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed" disabled>Copy Code</button>
-                     <button id="download-btn" class="flex-grow bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed" disabled>Download .txt</button>
+                    <button id="copy-btn-bottom"
+                        class="flex-grow bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+                        disabled>Copy BBCode</button>
+                    <button id="download-btn"
+                        class="flex-grow bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+                        disabled>Download .txt</button>
                 </div>
             </div>
         </div>
     </main>
 
-    <!-- Default Template -->
-<template id="default-bbcode-template">
-<!--IF:gameVersion-->Version: {gameVersion}
-<!--/IF:gameVersion-->
-[color={sectionTitleColor}]Clean Steam Files:[/color]
-<!--LOOP:cleanFiles-->
-[url={file.cleanUrl}][color={cleanUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] (Clean Steam Files)[/b][/color][/url]
-[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
-<!--/LOOP:cleanFiles-->
-<!--IF:crackedExists-->
-[color={sectionTitleColor}]Cracked:[/color]
-<!--LOOP:crackedFiles-->
-[url={file.crackedUrl}][color={crackedUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType})[/b][/color][/url]
-[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
-<!--/LOOP:crackedFiles-->
-<!--/IF:crackedExists-->
-[color={sectionTitleColor}]Patch notes:[/color]
-<!--LOOP:patchNotes-->
-[size=88][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.fullDate} [Build {file.buildId}][/i][/color][/size]
-{file.patchNoteUrl}
-<!--/LOOP:patchNotes-->
-</template>
-
-    <!-- Modals for Login, Register, Sync, etc. -->
     <div id="loginModal" class="auth-modal">
-      <div class="auth-modal-content">
-        <span class="close-auth-modal" data-modal-id="loginModal">&times;</span>
-        <h2>Login</h2>
-        <form id="loginForm">
-          <div class="input-group">
-            <label for="loginUsername">Username:</label>
-            <input type="text" id="loginUsername" required>
-          </div>
-          <div class="input-group">
-            <label for="loginPassword">Password:</label>
-            <input type="password" id="loginPassword" required>
-          </div>
-          <button type="submit">Login</button>
-          <button type="button" class="close-auth-modal-button" data-modal-id="loginModal">Cancel</button>
-          <div id="loginError" class="error-message"></div>
-        </form>
-      </div>
+        <div class="auth-modal-content"><span class="close-auth-modal" data-modal-id="loginModal">&times;</span>
+            <h2>Login</h2>
+            <form id="loginForm">
+                <div class="input-group"><label>Username:</label><input type="text" id="loginUsername" required></div>
+                <div class="input-group"><label>Password:</label><input type="password" id="loginPassword" required>
+                </div><button type="submit">Login</button><button type="button" class="close-auth-modal-button"
+                    data-modal-id="loginModal">Cancel</button>
+                <div id="loginError" class="error-message"></div>
+            </form>
+        </div>
     </div>
-
     <div id="registerModal" class="auth-modal">
-      <div class="auth-modal-content">
-        <span class="close-auth-modal" data-modal-id="registerModal">&times;</span>
-        <h2>Register</h2>
-        <form id="registerForm">
-          <div class="input-group">
-            <label for="registerUsername">Username:</label>
-            <input type="text" id="registerUsername" required>
-          </div>
-          <div class="input-group">
-            <label for="registerPassword">Password:</label>
-            <input type="password" id="registerPassword" required minlength="4">
-          </div>
-          <div class="input-group">
-            <label for="registerConfirmPassword">Confirm Password:</label>
-            <input type="password" id="registerConfirmPassword" required minlength="4">
-          </div>
-          <button type="submit">Register</button>
-          <button type="button" class="close-auth-modal-button" data-modal-id="registerModal">Cancel</button>
-          <div id="registerError" class="error-message"></div>
-        </form>
-      </div>
+        <div class="auth-modal-content"><span class="close-auth-modal" data-modal-id="registerModal">&times;</span>
+            <h2>Register</h2>
+            <form id="registerForm">
+                <div class="input-group"><label>Username:</label><input type="text" id="registerUsername" required>
+                </div>
+                <div class="input-group"><label>Password:</label><input type="password" id="registerPassword" required
+                        minlength="4"></div>
+                <div class="input-group"><label>Confirm:</label><input type="password" id="registerConfirmPassword"
+                        required minlength="4"></div><button type="submit">Register</button><button type="button"
+                    class="close-auth-modal-button" data-modal-id="registerModal">Cancel</button>
+                <div id="registerError" class="error-message"></div>
+            </form>
+        </div>
     </div>
-
     <div id="changePasswordModal" class="auth-modal">
-        <div class="auth-modal-content">
-          <span class="close-auth-modal" data-modal-id="changePasswordModal">&times;</span>
-          <h2>Change Password</h2>
-          <form id="changePasswordForm">
-            <div class="input-group">
-              <label for="currentPassword">Current Password:</label>
-              <input type="password" id="currentPassword" required>
-            </div>
-            <div class="input-group">
-              <label for="newPassword">New Password:</label>
-              <input type="password" id="newPassword" required minlength="4">
-            </div>
-            <div class="input-group">
-              <label for="confirmNewPassword">Confirm New Password:</label>
-              <input type="password" id="confirmNewPassword" required minlength="4">
-            </div>
-            <button type="submit">Update Password</button>
-            <button type="button" class="close-auth-modal-button" data-modal-id="changePasswordModal">Cancel</button>
-            <div id="changePasswordError" class="error-message"></div>
-            <div id="changePasswordSuccess" class="error-message" style="color: #28a745;"></div>
-          </form>
+        <div class="auth-modal-content"><span class="close-auth-modal"
+                data-modal-id="changePasswordModal">&times;</span>
+            <h2>Change Password</h2>
+            <form id="changePasswordForm">
+                <div class="input-group"><label>Current:</label><input type="password" id="currentPassword" required>
+                </div>
+                <div class="input-group"><label>New:</label><input type="password" id="newPassword" required
+                        minlength="4"></div>
+                <div class="input-group"><label>Confirm:</label><input type="password" id="confirmNewPassword" required
+                        minlength="4"></div><button type="submit">Update</button><button type="button"
+                    class="close-auth-modal-button" data-modal-id="changePasswordModal">Cancel</button>
+                <div id="changePasswordError" class="error-message"></div>
+                <div id="changePasswordSuccess" class="error-message" style="color: #28a745;"></div>
+            </form>
         </div>
     </div>
-
     <div id="syncModal" class="sync-modal">
-      <div class="sync-modal-content">
-        <span class="close-sync-modal" data-modal-id="syncModal">&times;</span>
-        <h2>Local File Sync</h2>
-        <p style="font-size: 0.9em; color: #ccc; margin-bottom: 15px;">Export your current data to a file, or import data from a previously exported file. This only affects local browser storage.</p>
-        <div class="input-group">
-          <button id="exportData" class="btn-sync">Export All Data to File</button>
+        <div class="sync-modal-content"><span class="close-sync-modal" data-modal-id="syncModal">&times;</span>
+            <h2>Local File Sync</h2>
+            <div class="input-group"><button id="exportData" class="btn-sync">Export</button></div>
+            <div class="input-group"><label>Import:</label><input type="file" id="importData" accept=".json"
+                    style="color:#ccc;"></div>
+            <hr style="border-color:#444;margin:20px 0;">
+            <div class="input-group"><button id="importOldData" class="btn-sync"
+                    style="background-color:#f0ad4e!important;border-color:#eea236!important;">Import Old Local
+                    Data</button></div>
+            <div id="syncStatus" style="min-height:1em;margin-top:15px;"></div><button type="button"
+                class="close-sync-modal-button" data-modal-id="syncModal">Close</button>
         </div>
-        <div class="input-group">
-            <label for="importData">Import Data from File:</label>
-            <input type="file" id="importData" accept=".json" style="color:#ccc;">
-        </div>
-        <hr style="border-color: #444; margin: 20px 0;">
-        <div class="input-group">
-            <button id="importOldData" class="btn-sync" style="background-color: #f0ad4e !important; border-color: #eea236 !important;">Import Old Local Data</button>
-            <p style="font-size: 0.8em; color: #aaa; margin-top: 8px;">Use this if you have data from before the login system was added.</p>
-        </div>
-        <div id="syncStatus" style="min-height: 1em; margin-top: 15px;"></div>
-        <button type="button" class="close-sync-modal-button" data-modal-id="syncModal">Close</button>
-      </div>
     </div>
-
     <div id="syncChoiceModal" class="auth-modal sync-choice-modal">
         <div class="auth-modal-content">
             <h2>Data Sync Conflict</h2>
-            <p style="text-align: center; color: #ccc;">Your local data is different from your server data. Choose which version you want to keep.</p>
             <div class="comparison-container">
                 <div class="data-column">
-                    <h3>Local Data<br>(This Browser)</h3>
-                    <p><strong>Last Update:</strong> <span id="localLastUpdate">N/A</span></p>
+                    <h3>Local</h3>
+                    <p><strong>Updated:</strong> <span id="localLastUpdate">N/A</span></p>
                     <p><strong>Entries:</strong> <span id="localEntryCount">N/A</span></p>
                 </div>
                 <div class="data-column">
-                    <h3>Server Data<br>(Your Account)</h3>
-                    <p><strong>Last Update:</strong> <span id="serverLastUpdate">N/A</span></p>
+                    <h3>Server</h3>
+                    <p><strong>Updated:</strong> <span id="serverLastUpdate">N/A</span></p>
                     <p><strong>Entries:</strong> <span id="serverEntryCount">N/A</span></p>
                 </div>
             </div>
-            <div class="sync-choice-actions">
-                <button id="useLocalDataBtn" class="btn-upload">Use Local Data (Upload)</button>
-                <button id="useServerDataBtn" class="btn-download">Use Server Data (Download)</button>
-            </div>
+            <div class="sync-choice-actions"><button id="useLocalDataBtn" class="btn-upload">Use Local</button><button
+                    id="useServerDataBtn" class="btn-download">Use Server</button></div>
         </div>
     </div>
-    
     <div id="settingsModal" class="modal">
-      <div class="modal-content">
-        <span class="close-modal" data-modal-id="settingsModal">&times;</span>
-        <h2>Settings</h2>
-        <p>No configurable settings are available for this page.</p>
-        <div style="margin-top: 20px;">
-            <button id="changePasswordButton" style="display: none;">Change Password</button>
-            <button type="button" class="close-modal-button" data-modal-id="settingsModal">Close</button>
+        <div class="modal-content"><span class="close-modal" data-modal-id="settingsModal">&times;</span>
+            <h2>Settings</h2>
+            <div style="margin-top:20px;"><button id="changePasswordButton" style="display:none;">Change
+                    Password</button><button type="button" class="close-modal-button"
+                    data-modal-id="settingsModal">Close</button></div>
         </div>
-      </div>
     </div>
-
-    <!-- Link to your JavaScript file -->
     <script src="bbcode_editor.js"></script>
 </body>
+
 </html>
