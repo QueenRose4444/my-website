@@ -1,130 +1,118 @@
-// template.js - Handles login, data sync (local & backend) with Multi-Session Refresh Tokens
+// Experiments_template.js - Updated to use AuthManager
 
 /*************************************
- * APPLICATION & ENVIRONMENT CONFIGURATION
+ * APPLICATION CONFIGURATION
  *************************************/
 // -- SET YOUR APPLICATION NAME HERE --
 // This MUST be unique for each application to keep data separate.
-const APP_NAME = 'template'; // e.g., 'note-app', 'game-scores', etc.
+const APP_NAME = 'experiments-template'; 
 
 // SET THE ENVIRONMENT HERE: 'live' or 'wip'
-const ENVIRONMENT = 'wip'; // 'live' or 'wip'
+const ENVIRONMENT = 'wip'; 
 
-// --- Configuration settings for each environment ---
-const envConfigs = {
-    live: {
-        storagePrefix: `${APP_NAME}_live_`,
-        backendUrl: 'https://main-backend-live.rosiesite.workers.dev'
-    },
-    wip: {
-        storagePrefix: `${APP_NAME}_wip_`,
-        backendUrl: 'https://main-backend-wip.rosiesite.workers.dev'
-    }
-};
-
-// --- Active configuration based on the environment set above ---
-const activeConfig = envConfigs[ENVIRONMENT];
-
-
-/*************************************
- * LOGGING CONFIGURATION
- *************************************/
+// Logging helper
 const LOGGING_ENABLED = ENVIRONMENT === 'wip';
-
 function syncLog(...args) {
     if (LOGGING_ENABLED) {
-        console.log('[SYNC_LOG]', ...args);
+        console.log('[EXP_LOG]', ...args);
     }
 }
 
-
 /*************************************
- * CONSTANTS
+ * APPLICATION DATA MODEL
  *************************************/
-const storagePrefix = activeConfig.storagePrefix;
-const BACKEND_URL = activeConfig.backendUrl;
-const LOGIN_ENDPOINT = `${BACKEND_URL}/api/auth/login`;
-const REGISTER_ENDPOINT = `${BACKEND_URL}/api/auth/register`;
-const REFRESH_ENDPOINT = `${BACKEND_URL}/api/auth/refresh`;
-const LOGOUT_ENDPOINT = `${BACKEND_URL}/api/auth/logout`;
-const USER_DATA_ENDPOINT = `${BACKEND_URL}/api/data/${APP_NAME}`;
-const CHANGE_PASSWORD_ENDPOINT = `${BACKEND_URL}/api/auth/change-password`;
+// Define your app's data structure here
+// This is what gets saved locally and synced to the server
+let userNotes = []; // Example data
+let appPreferences = {}; // Example data
 
-
-/*************************************
- * Global State & Settings
- *************************************/
-// CUSTOMIZE YOUR APP'S DATA MODEL HERE
-// This is what will be saved locally and synced to the server.
-let userNotes = []; // Example: an array of note objects
-let appPreferences = {}; // Example: an object for user preferences
-
-// Default settings if none are loaded from local storage or server
+// Default settings
 const defaultPreferences = {
     theme: "dark",
     fontSize: "medium",
 };
 
-// --- Auth State ---
-let currentUser = null;
-let authToken = localStorage.getItem(`${storagePrefix}authToken`);
-let refreshToken = localStorage.getItem(`${storagePrefix}refreshToken`);
-let isRefreshingToken = false;
-let refreshSubscribers = [];
+// Storage key prefix (includes environment to prevent clashes)
+const STORAGE_PREFIX = `${APP_NAME}_${ENVIRONMENT}_`;
 
 
-/***********************
- * DOM Element References
- ***********************/
+/*************************************
+ * AUTHENTICATION SETUP
+ *************************************/
+// Initialize the global AuthManager
+const authManager = new AuthManager(APP_NAME, ENVIRONMENT);
+
+
+/*************************************
+ * DOM ELEMENT REFERENCES
+ *************************************/
 function getElements() {
     return {
+        // Auth UI
+        userStatus: document.getElementById("userStatus"),
+        loginButton: document.getElementById("loginButton"),
+        logoutButton: document.getElementById("logoutButton"),
+        registerButton: document.getElementById("registerButton"),
         settingsButton: document.getElementById("settingsButton"),
         localSyncButton: document.getElementById("localSyncButton"),
-        settingsModal: document.getElementById("settingsModal"),
+        
+        // Modals
         loginModal: document.getElementById("loginModal"),
         registerModal: document.getElementById("registerModal"),
         changePasswordModal: document.getElementById("changePasswordModal"),
+        settingsModal: document.getElementById("settingsModal"),
         syncModal: document.getElementById("syncModal"),
         syncChoiceModal: document.getElementById("syncChoiceModal"),
-        loginButton: document.getElementById("loginButton"),
-        registerButton: document.getElementById("registerButton"),
-        logoutButton: document.getElementById("logoutButton"),
-        userStatus: document.getElementById("userStatus"),
+        
+        // Forms
         loginForm: document.getElementById("loginForm"),
         registerForm: document.getElementById("registerForm"),
-        loginUsernameInput: document.getElementById("loginUsername"),
-        loginPasswordInput: document.getElementById("loginPassword"),
-        loginError: document.getElementById("loginError"),
-        registerUsernameInput: document.getElementById("registerUsername"),
-        registerPasswordInput: document.getElementById("registerPassword"),
-        registerConfirmPasswordInput: document.getElementById("registerConfirmPassword"),
-        registerError: document.getElementById("registerError"),
-        changePasswordButton: document.getElementById("changePasswordButton"),
         changePasswordForm: document.getElementById("changePasswordForm"),
-        currentPasswordInput: document.getElementById("currentPassword"),
-        newPasswordInput: document.getElementById("newPassword"),
-        confirmNewPasswordInput: document.getElementById("confirmNewPassword"),
+        
+        // Inputs
+        loginUsername: document.getElementById("loginUsername"),
+        loginPassword: document.getElementById("loginPassword"),
+        registerUsername: document.getElementById("registerUsername"),
+        registerPassword: document.getElementById("registerPassword"),
+        registerConfirmPassword: document.getElementById("registerConfirmPassword"),
+        currentPassword: document.getElementById("currentPassword"),
+        newPassword: document.getElementById("newPassword"),
+        confirmNewPassword: document.getElementById("confirmNewPassword"),
+        
+        // Status/Errors
+        loginError: document.getElementById("loginError"),
+        registerError: document.getElementById("registerError"),
         changePasswordError: document.getElementById("changePasswordError"),
         changePasswordSuccess: document.getElementById("changePasswordSuccess"),
+        syncStatus: document.getElementById("syncStatus"),
+        
+        // Settings/Sync actions
+        changePasswordButton: document.getElementById("changePasswordButton"),
         exportDataButton: document.getElementById("exportData"),
         importDataInput: document.getElementById("importData"),
-        syncStatus: document.getElementById("syncStatus"),
+        
+        // Sync Choice Modal elements
+        localLastUpdate: document.getElementById("localLastUpdate"),
+        localEntryCount: document.getElementById("localEntryCount"),
+        serverLastUpdate: document.getElementById("serverLastUpdate"),
+        serverEntryCount: document.getElementById("serverEntryCount"),
+        useLocalDataBtn: document.getElementById("useLocalDataBtn"),
+        useServerDataBtn: document.getElementById("useServerDataBtn"),
     };
 }
 
+
 /************************************
- * Data Loading / Saving Logic
+ * LOCAL DATA MANAGEMENT
  ************************************/
 function loadLocalData() {
-    syncLog("Loading all data from localStorage...");
+    syncLog("Loading local data...");
     try {
-        // CUSTOMIZE: Load your app's data from local storage
-        const storedNotes = JSON.parse(localStorage.getItem(`${storagePrefix}userNotes`) || "[]");
+        const storedNotes = JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}userNotes`) || "[]");
         userNotes = storedNotes.map(note => ({ ...note, createdAt: new Date(note.createdAt) }));
 
-        const storedPrefs = JSON.parse(localStorage.getItem(`${storagePrefix}appPreferences`) || "{}");
+        const storedPrefs = JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}appPreferences`) || "{}");
         appPreferences = { ...defaultPreferences, ...storedPrefs };
-
     } catch (e) {
         console.error("Error loading local data:", e);
         userNotes = [];
@@ -133,11 +121,10 @@ function loadLocalData() {
 }
 
 function saveLocalData() {
-    syncLog("Saving all data to localStorage...");
+    syncLog("Saving local data...");
     try {
-        // CUSTOMIZE: Save your app's data to local storage
-        localStorage.setItem(`${storagePrefix}userNotes`, JSON.stringify(userNotes));
-        localStorage.setItem(`${storagePrefix}appPreferences`, JSON.stringify(appPreferences));
+        localStorage.setItem(`${STORAGE_PREFIX}userNotes`, JSON.stringify(userNotes));
+        localStorage.setItem(`${STORAGE_PREFIX}appPreferences`, JSON.stringify(appPreferences));
     } catch (e) {
         console.error("Error saving local data:", e);
     }
@@ -145,86 +132,27 @@ function saveLocalData() {
 
 
 /************************************
- * Auth & Backend Data Logic
+ * SERVER DATA SYNC
  ************************************/
-function decodeJwtPayload(token) {
-    try {
-        const base64Url = token.split('.')[1];
-        if (!base64Url) return null;
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
-        return JSON.parse(jsonPayload);
-    } catch (e) {
-        console.error("Failed to decode JWT:", e);
+async function fetchBackendData() {
+    if (!authManager.isLoggedIn()) {
+        syncLog("Not logged in, skipping fetch.");
         return null;
     }
-}
 
-function isTokenExpired(token) {
-    if (!token) return true;
-    const payload = decodeJwtPayload(token);
-    return payload ? Date.now() >= payload.exp * 1000 : true;
-}
-
-async function attemptRefreshToken() {
-    if (!refreshToken) return false;
-    if (isRefreshingToken) {
-        return new Promise(resolve => refreshSubscribers.push(resolve));
-    }
-    isRefreshingToken = true;
-    let success = false;
     try {
-        const response = await fetch(REFRESH_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken })
+        const response = await authManager.fetchWithAuth(authManager.endpoints.data, {
+            method: 'GET'
         });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Refresh failed');
-        authToken = data.accessToken;
-        localStorage.setItem(`${storagePrefix}authToken`, authToken);
-        currentUser = decodeJwtPayload(authToken);
-        success = true;
-    } catch (error) {
-        await logoutUser("Your session has expired. Please log in again.");
-        success = false;
-    } finally {
-        isRefreshingToken = false;
-        refreshSubscribers.forEach(cb => cb(success));
-        refreshSubscribers = [];
-    }
-    return success;
-}
 
-async function fetchWithAuth(url, options = {}) {
-    if (!authToken || isTokenExpired(authToken)) {
-        const refreshed = await attemptRefreshToken();
-        if (!refreshed) throw new Error("Authentication failed; session expired.");
-    }
-
-    options.headers = { ...options.headers, 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' };
-    let response = await fetch(url, options);
-
-    if (response.status === 401) {
-        const refreshed = await attemptRefreshToken();
-        if (refreshed) {
-            options.headers['Authorization'] = `Bearer ${authToken}`;
-            response = await fetch(url, options);
-        } else {
-             throw new Error("Authentication failed after retry.");
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to fetch data');
         }
-    }
-    return response;
-}
 
-async function fetchBackendData() {
-    if (!authToken && !refreshToken) return null;
-    try {
-        const response = await fetchWithAuth(USER_DATA_ENDPOINT, { method: 'GET' });
-        if (!response.ok) throw new Error((await response.json()).error || 'Failed to fetch');
         const data = await response.json();
-
-        // CUSTOMIZE: Parse your app's data from the server response
+        
+        // Process dates coming from server
         data.userNotes = (data.userNotes || []).map(note => ({ ...note, createdAt: new Date(note.createdAt) }));
         data.appPreferences = { ...defaultPreferences, ...(data.appPreferences || {}) };
         
@@ -236,21 +164,24 @@ async function fetchBackendData() {
 }
 
 async function saveBackendData() {
-    if (!currentUser || !authToken) return false;
+    if (!authManager.isLoggedIn()) return false;
     
-    // CUSTOMIZE: This is the object that gets sent to the server.
     const dataToSave = {
         userNotes,
         appPreferences
     };
 
-    syncLog("Saving data to backend:", dataToSave);
     try {
-        const response = await fetchWithAuth(USER_DATA_ENDPOINT, {
+        const response = await authManager.fetchWithAuth(authManager.endpoints.data, {
             method: 'POST',
             body: JSON.stringify(dataToSave)
         });
-        if (!response.ok) throw new Error((await response.json()).error || 'Failed to save');
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to save');
+        }
+
         syncLog("Backend save successful.");
         return true;
     } catch (error) {
@@ -260,62 +191,18 @@ async function saveBackendData() {
     }
 }
 
-function saveData() {
-    saveLocalData();
-    if (currentUser && authToken) {
-        saveBackendData();
-    }
-    updateDisplay();
-}
-
 /************************************
- * Date/Time Formatting
+ * DATA COMPARISON & SYNC LOGIC
  ************************************/
-function formatDate(date) {
-    if (!(date instanceof Date) || isNaN(date)) return "N/A";
-    const d = String(date.getDate()).padStart(2, "0");
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const y = date.getFullYear();
-    return `${d}/${m}/${y}`;
-}
-
-function formatTime(date) {
-    if (!(date instanceof Date) || isNaN(date)) return "N/A";
-    return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
-}
-
-/*******************************
- * Update & Display Functions
- *******************************/
-function updateDisplay() {
-    // CUSTOMIZE: This function should refresh your app's UI with the current data.
-    console.log("updateDisplay called. App state refreshed.");
-    console.log("Current notes:", userNotes);
-    console.log("Current preferences:", appPreferences);
-}
-
-/********************************
- * Authentication UI & Actions
- ********************************/
-function updateUIForLoginState() {
-    const elements = getElements();
-    if (!elements.loginButton) return;
-
-    const isLoggedIn = !!refreshToken;
-    elements.loginButton.style.display = isLoggedIn ? 'none' : 'inline-block';
-    elements.registerButton.style.display = isLoggedIn ? 'none' : 'inline-block';
-    elements.logoutButton.style.display = isLoggedIn ? 'inline-block' : 'none';
-    elements.userStatus.textContent = isLoggedIn ? `Logged in: ${currentUser?.username || 'User'}` : 'Not logged in (Local)';
-    elements.userStatus.style.color = isLoggedIn ? '#4bc0c0' : '#ccc';
-    if(elements.changePasswordButton) elements.changePasswordButton.style.display = isLoggedIn ? 'inline-block' : 'none';
-}
-
 function getCanonicalString(dataSet) {
     if (!dataSet) return null;
     const dataCopy = JSON.parse(JSON.stringify(dataSet));
 
-    // CUSTOMIZE: Create a comparable string of your app's data for accurate diffing.
-    const processedNotes = (dataCopy.userNotes || []).map(n => ({ ...n, createdAt: new Date(n.createdAt).getTime() })).sort((a, b) => a.createdAt - b.createdAt);
+    // CUSTOMIZE: Ensure arrays are sorted and data is consistent for string comparison
+    const processedNotes = (dataCopy.userNotes || [])
+        .map(n => ({ ...n, createdAt: new Date(n.createdAt).getTime() }))
+        .sort((a, b) => a.createdAt - b.createdAt);
+        
     const preferencesToCompare = { ...defaultPreferences, ...(dataCopy.appPreferences || {}) };
     
     const finalObject = {
@@ -328,7 +215,6 @@ function getCanonicalString(dataSet) {
 function generateDataSummary(dataSet) {
     if (!dataSet) return { lastUpdate: 'N/A', entryCount: '0 entries' };
     
-    // CUSTOMIZE: Generate a human-readable summary for the sync choice modal.
     const noteCount = dataSet.userNotes?.length || 0;
     const allEntries = [...(dataSet.userNotes || [])]
         .map(e => new Date(e.createdAt))
@@ -343,181 +229,127 @@ function generateDataSummary(dataSet) {
 }
 
 function showSyncChoiceModal(localSummary, serverSummary, serverData) {
-    const modal = document.getElementById('syncChoiceModal');
-    if (!modal) return;
+    const elements = getElements();
+    
+    // Format dates for display
+    const formatDate = (d) => d ? d.toLocaleString() : 'N/A';
 
-    document.getElementById('localLastUpdate').textContent = localSummary.lastUpdate ? `${formatDate(localSummary.lastUpdate)} ${formatTime(localSummary.lastUpdate)}` : 'No entries';
-    document.getElementById('localEntryCount').textContent = localSummary.entryCount;
+    elements.localLastUpdate.textContent = localSummary.lastUpdate ? formatDate(localSummary.lastUpdate) : 'No entries';
+    elements.localEntryCount.textContent = localSummary.entryCount;
 
-    document.getElementById('serverLastUpdate').textContent = serverSummary.lastUpdate ? `${formatDate(serverSummary.lastUpdate)} ${formatTime(serverSummary.lastUpdate)}` : 'No entries';
-    document.getElementById('serverEntryCount').textContent = serverSummary.entryCount;
+    elements.serverLastUpdate.textContent = serverSummary.lastUpdate ? formatDate(serverSummary.lastUpdate) : 'No entries';
+    elements.serverEntryCount.textContent = serverSummary.entryCount;
 
-    const useLocalBtn = document.getElementById('useLocalDataBtn');
-    const useServerBtn = document.getElementById('useServerDataBtn');
-
+    // Define handlers
     const uploadHandler = async () => {
-        syncLog("User chose to USE LOCAL data. Uploading to server...");
+        syncLog("User chose LOCAL data.");
         await saveBackendData();
-        modal.style.display = 'none';
+        elements.syncChoiceModal.style.display = 'none';
     };
 
     const downloadHandler = () => {
-        syncLog("User chose to USE SERVER data. Overwriting local data...");
-        // CUSTOMIZE: Overwrite local state with your app's server data
+        syncLog("User chose SERVER data.");
         userNotes = serverData.userNotes;
         appPreferences = serverData.appPreferences;
         saveLocalData();
         updateDisplay();
-        modal.style.display = 'none';
+        elements.syncChoiceModal.style.display = 'none';
     };
     
-    useLocalBtn.replaceWith(useLocalBtn.cloneNode(true));
-    useServerBtn.replaceWith(useServerBtn.cloneNode(true));
+    // Clear old listeners by cloning
+    const newUploadBtn = elements.useLocalDataBtn.cloneNode(true);
+    const newDownloadBtn = elements.useServerDataBtn.cloneNode(true);
+    elements.useLocalDataBtn.replaceWith(newUploadBtn);
+    elements.useServerDataBtn.replaceWith(newDownloadBtn);
     
-    document.getElementById('useLocalDataBtn').addEventListener('click', uploadHandler);
-    document.getElementById('useServerDataBtn').addEventListener('click', downloadHandler);
+    newUploadBtn.addEventListener('click', uploadHandler);
+    newDownloadBtn.addEventListener('click', downloadHandler);
 
-    modal.style.display = 'block';
+    elements.syncChoiceModal.style.display = 'block';
 }
 
-async function handleLogin(event) {
-    event.preventDefault();
-    const elements = getElements();
-    elements.loginError.textContent = '';
-    const username = elements.loginUsernameInput.value.trim();
-    const password = elements.loginPasswordInput.value;
-    try {
-        const response = await fetch(LOGIN_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
-        
-        authToken = data.accessToken;
-        refreshToken = data.refreshToken;
-        localStorage.setItem(`${storagePrefix}authToken`, authToken);
-        localStorage.setItem(`${storagePrefix}refreshToken`, refreshToken);
-        currentUser = decodeJwtPayload(authToken);
-        
-        elements.loginModal.style.display = 'none';
-        
-        syncLog('Login successful. Starting data sync check.');
-        const serverData = await fetchBackendData();
-        const localData = { userNotes, appPreferences }; // CUSTOMIZE
-        
-        const hasLocalData = (localData.userNotes?.length || 0) > 0; // CUSTOMIZE
-        const hasServerData = serverData && ((serverData.userNotes?.length || 0) > 0); // CUSTOMIZE
-        
-        if (hasLocalData && !hasServerData) {
-            syncLog("Local data exists, but no server data. Prompting to upload.");
-            if (confirm("No data found on server. Upload your local data to this account?")) {
-                await saveBackendData();
-            }
-        } else if (hasServerData) {
-            const localString = getCanonicalString(localData);
-            const serverString = getCanonicalString(serverData);
-            
-            if (localString !== serverString) {
-                syncLog('Data mismatch DETECTED. Showing sync choice modal.');
-                const localSummary = generateDataSummary(localData);
-                const serverSummary = generateDataSummary(serverData);
-                showSyncChoiceModal(localSummary, serverSummary, serverData);
-            } else {
-                syncLog('Data is IN SYNC. No action needed.');
-                // CUSTOMIZE
-                userNotes = serverData.userNotes;
-                appPreferences = serverData.appPreferences;
-            }
-        } else if (hasServerData && !hasLocalData) {
-             syncLog("No local data, but server data exists. Downloading server data.");
-             // CUSTOMIZE
-             userNotes = serverData.userNotes;
-             appPreferences = serverData.appPreferences;
-        } else {
-            syncLog("No data locally or on the server. Nothing to sync.");
+async function performDataSync() {
+    if (!authManager.isLoggedIn()) return;
+
+    syncLog("Checking for data sync...");
+    const serverData = await fetchBackendData();
+    const localData = { userNotes, appPreferences };
+
+    const hasLocalData = (localData.userNotes?.length || 0) > 0;
+    const hasServerData = serverData && ((serverData.userNotes?.length || 0) > 0);
+
+    if (hasLocalData && !hasServerData) {
+        if (confirm("No data found on server. Upload your local data?")) {
+            await saveBackendData();
         }
+    } else if (hasServerData) {
+        const localString = getCanonicalString(localData);
+        const serverString = getCanonicalString(serverData);
 
+        if (localString !== serverString) {
+            syncLog("Data mismatch. Prompting user.");
+            const localSummary = generateDataSummary(localData);
+            const serverSummary = generateDataSummary(serverData);
+            showSyncChoiceModal(localSummary, serverSummary, serverData);
+        } else {
+            syncLog("Data is synced.");
+            userNotes = serverData.userNotes;
+            appPreferences = serverData.appPreferences;
+            saveLocalData();
+            updateDisplay();
+        }
+    } else if (hasServerData && !hasLocalData) {
+        syncLog("Downloading server data...");
+        userNotes = serverData.userNotes;
+        appPreferences = serverData.appPreferences;
         saveLocalData();
-        updateUIForLoginState();
         updateDisplay();
-        
-    } catch (error) {
-        elements.loginError.textContent = error.message;
     }
 }
 
-async function handleRegister(event) {
-    event.preventDefault();
+
+/*******************************
+ * UI Update
+ *******************************/
+function updateDisplay() {
+    console.log("UI Updated. Notes:", userNotes);
+    // Add your UI rendering logic here
+}
+
+function updateUIForLoginState() {
     const elements = getElements();
-    elements.registerError.textContent = '';
-    const username = elements.registerUsernameInput.value.trim();
-    const password = elements.registerPasswordInput.value;
-    if (password !== elements.registerConfirmPasswordInput.value) {
-        elements.registerError.textContent = 'Passwords do not match.'; return;
-    }
-    try {
-        const response = await fetch(REGISTER_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
-        alert("Registration successful! Please log in.");
-        elements.registerModal.style.display = 'none';
-        elements.loginModal.style.display = 'block';
-        elements.loginUsernameInput.value = username;
-    } catch (error) {
-        elements.registerError.textContent = error.message;
+    if (!elements.loginButton) return;
+
+    const isLoggedIn = authManager.isLoggedIn();
+    const user = authManager.currentUser;
+
+    elements.loginButton.style.display = isLoggedIn ? 'none' : 'inline-block';
+    elements.registerButton.style.display = isLoggedIn ? 'none' : 'inline-block';
+    elements.logoutButton.style.display = isLoggedIn ? 'inline-block' : 'none';
+    
+    elements.userStatus.textContent = isLoggedIn ? `Logged in: ${user?.username}` : 'Not logged in (Local)';
+    elements.userStatus.style.color = isLoggedIn ? '#4bc0c0' : '#ccc';
+    
+    if(elements.changePasswordButton) {
+        elements.changePasswordButton.style.display = isLoggedIn ? 'inline-block' : 'none';
     }
 }
 
-async function logoutUser(logoutMessage = null) {
-    const tokenToInvalidate = refreshToken;
-    authToken = null; refreshToken = null; currentUser = null;
-    localStorage.removeItem(`${storagePrefix}authToken`);
-    localStorage.removeItem(`${storagePrefix}refreshToken`);
-    if (logoutMessage) alert(logoutMessage);
-    if (tokenToInvalidate) {
-        try {
-            await fetch(LOGOUT_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: tokenToInvalidate }) });
-        } catch (error) { console.warn("Backend logout failed:", error); }
-    }
-    loadLocalData();
-    updateUIForLoginState();
-    updateDisplay();
-}
-
-async function handleChangePassword(event) {
-    event.preventDefault();
-    const elements = getElements();
-    elements.changePasswordError.textContent = '';
-    elements.changePasswordSuccess.textContent = '';
-    const currentPassword = elements.currentPasswordInput.value;
-    const newPassword = elements.newPasswordInput.value;
-    if (newPassword !== elements.confirmNewPasswordInput.value) {
-        elements.changePasswordError.textContent = 'New passwords do not match.';
-        return;
-    }
-    try {
-        const response = await fetchWithAuth(CHANGE_PASSWORD_ENDPOINT, { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
-        elements.changePasswordSuccess.textContent = data.message;
-        setTimeout(() => logoutUser("Password changed. Please log in again."), 3000);
-    } catch (error) {
-        elements.changePasswordError.textContent = `Error: ${error.message}`;
-    }
-}
 
 /********************************
- * Local File Sync Logic
+ * Helper Functions (File IO)
  ********************************/
 function showSyncStatus(message, type = "info") {
-    const el = document.getElementById("syncStatus");
-    if(el) { el.textContent = message; el.className = `sync-status-${type}`; setTimeout(() => {el.textContent=''; el.className='';}, 5000); }
+    const el = getElements().syncStatus;
+    if(el) { 
+        el.textContent = message; 
+        el.className = `sync-status-${type}`; 
+        setTimeout(() => {el.textContent=''; el.className='';}, 5000); 
+    }
 }
 
 function exportDataToFile() {
-    // CUSTOMIZE
-    const dataToExport = { 
-        userNotes, 
-        appPreferences
-    };
+    const dataToExport = { userNotes, appPreferences };
     const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -535,19 +367,19 @@ function importDataFromFile(event) {
     reader.onload = async (e) => {
         try {
             const data = JSON.parse(e.target.result);
-            if (confirm("Import will overwrite current data in this browser. Proceed?")) {
-                // CUSTOMIZE: Check for your app's data properties.
+            if (confirm("Import will overwrite current local data. Proceed?")) {
                 if (data.appPreferences) {
                     userNotes = data.userNotes || [];
                     appPreferences = { ...defaultPreferences, ...data.appPreferences };
+                    saveLocalData();
+                    updateDisplay();
+                    showSyncStatus("Import successful!", "success");
+                    
+                    if(authManager.isLoggedIn() && confirm("Upload imported data to server?")) {
+                         await saveBackendData();
+                    }
                 } else {
                     throw new Error("Invalid file format");
-                }
-                saveLocalData();
-                updateDisplay();
-                showSyncStatus("Import successful!", "success");
-                if(currentUser && confirm("Save imported data to your account? This will overwrite your current server data.")) {
-                     await saveBackendData();
                 }
             }
         } catch (error) {
@@ -557,93 +389,138 @@ function importDataFromFile(event) {
     reader.readAsText(file);
 }
 
+
 /********************************
- * Event Listeners Setup
+ * Event Listeners & Auth Hooks
  ********************************/
 function setupEventListeners() {
     const elements = getElements();
     if (!elements.loginButton) return;
 
+    // Button clicks
     elements.loginButton.addEventListener('click', () => elements.loginModal.style.display = 'block');
     elements.registerButton.addEventListener('click', () => elements.registerModal.style.display = 'block');
-    elements.logoutButton.addEventListener('click', () => logoutUser());
-    elements.loginForm.addEventListener('submit', handleLogin);
-    elements.registerForm.addEventListener('submit', handleRegister);
+    elements.logoutButton.addEventListener('click', () => authManager.logout());
     
+    // Auth Forms using AuthManager
+    elements.loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        elements.loginError.textContent = '';
+        try {
+            await authManager.login(elements.loginUsername.value.trim(), elements.loginPassword.value);
+            // 'auth:login' event will trigger the UI update and sync
+        } catch (err) {
+            elements.loginError.textContent = err.message;
+        }
+    });
+
+    elements.registerForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        elements.registerError.textContent = '';
+        const user = elements.registerUsername.value.trim();
+        const pass = elements.registerPassword.value;
+        const confirm = elements.registerConfirmPassword.value;
+        
+        if (pass !== confirm) {
+            elements.registerError.textContent = 'Passwords do not match.';
+            return;
+        }
+
+        try {
+            await authManager.register(user, pass);
+            alert("Registration successful! Please log in.");
+            elements.registerModal.style.display = 'none';
+            elements.loginModal.style.display = 'block';
+            elements.loginUsername.value = user;
+        } catch (err) {
+            elements.registerError.textContent = err.message;
+        }
+    });
+
+    // Password Change
+    if (elements.changePasswordForm) {
+        elements.changePasswordForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            elements.changePasswordError.textContent = '';
+            elements.changePasswordSuccess.textContent = '';
+            const cur = elements.currentPassword.value;
+            const newP = elements.newPassword.value;
+            const conf = elements.confirmNewPassword.value;
+
+            if (newP !== conf) {
+                elements.changePasswordError.textContent = "New passwords do not match.";
+                return;
+            }
+            try {
+                await authManager.changePassword(cur, newP);
+                // 'auth:password-changed' event will handle cleanup
+            } catch (err) {
+                elements.changePasswordError.textContent = err.message;
+            }
+        });
+    }
+
+    // Modal Toggles
     elements.settingsButton.addEventListener("click", () => {
         if (elements.changePasswordButton) {
-            elements.changePasswordButton.style.display = authToken ? 'inline-block' : 'none';
+            elements.changePasswordButton.style.display = authManager.isLoggedIn() ? 'inline-block' : 'none';
         }
         elements.settingsModal.style.display = "block";
     });
-
+    
     if (elements.changePasswordButton) {
         elements.changePasswordButton.addEventListener('click', () => elements.changePasswordModal.style.display = 'block');
     }
-    if (elements.changePasswordForm) {
-        elements.changePasswordForm.addEventListener('submit', handleChangePassword);
-    }
-    
+
+    // Sync
     elements.localSyncButton.addEventListener('click', () => elements.syncModal.style.display = 'block');
     elements.exportDataButton.addEventListener('click', exportDataToFile);
     elements.importDataInput.addEventListener('change', importDataFromFile);
 
-    document.body.addEventListener('click', function(e) {
+    // Close Modals
+    document.body.addEventListener('click', (e) => {
         const modal = e.target.closest('.modal, .auth-modal, .sync-modal');
         if (!modal || modal.id === 'syncChoiceModal') return;
-        
-        const isCloseControl = e.target.matches('.close-modal, .close-auth-modal, .close-sync-modal, .close-modal-button, .close-auth-modal-button, .close-sync-modal-button');
-        
-        if (isCloseControl || e.target === modal) {
-            modal.style.display = 'none';
-        }
+        const isClose = e.target.matches('.close-modal, .close-auth-modal, .close-sync-modal, .close-modal-button, .close-auth-modal-button, .close-sync-modal-button');
+        if (isClose || e.target === modal) modal.style.display = 'none';
     });
 }
+
+// --- AUTHMANAGER EVENT HOOKS ---
+window.addEventListener('auth:login', async () => {
+    syncLog("Event: Login");
+    getElements().loginModal.style.display = 'none';
+    updateUIForLoginState();
+    await performDataSync();
+});
+
+window.addEventListener('auth:logout', () => {
+    syncLog("Event: Logout");
+    updateUIForLoginState();
+    updateDisplay(); // clear sensitive data from UI if needed
+});
+
+window.addEventListener('auth:session-restored', async () => {
+    syncLog("Event: Session Restored");
+    updateUIForLoginState();
+    await performDataSync();
+});
+
+window.addEventListener('auth:password-changed', (e) => {
+    getElements().changePasswordSuccess.textContent = e.detail.message;
+    setTimeout(() => authManager.logout("Password changed. Please log in again."), 2000);
+});
+
 
 /**********************
  * Initial Page Load
  **********************/
-async function syncOnLoad() {
-    if (!refreshToken) return;
-
-    syncLog("Performing automatic sync on page load...");
-    try {
-        const serverData = await fetchBackendData();
-        if (!serverData) {
-            syncLog("Could not fetch server data for sync. Using existing local data.");
-            return;
-        }
-        
-        // CUSTOMIZE
-        userNotes = serverData.userNotes;
-        appPreferences = serverData.appPreferences;
-
-        syncLog("Sync successful. Local data has been overwritten from server.");
-        saveLocalData();
-        updateDisplay();
-
-    } catch (error) {
-        console.error("An error occurred during automatic sync-on-load:", error);
-    }
-}
-
 document.addEventListener("DOMContentLoaded", async () => {
     loadLocalData();
     setupEventListeners();
-    authToken = localStorage.getItem(`${storagePrefix}authToken`);
-    refreshToken = localStorage.getItem(`${storagePrefix}refreshToken`);
-
-    if (refreshToken) {
-        if (isTokenExpired(authToken)) {
-            await attemptRefreshToken();
-        } else {
-            currentUser = decodeJwtPayload(authToken);
-        }
-        
-        if (currentUser) {
-            await syncOnLoad();
-        }
-    }
+    
+    // AuthManager handles the initialization of tokens and user state
+    await authManager.initialize();
     
     updateUIForLoginState();
     updateDisplay();

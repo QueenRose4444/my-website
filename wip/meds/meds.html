@@ -6,145 +6,6 @@
     <title>Med & Weight Tracker</title>
     <link rel="stylesheet" href="meds.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <style>
-        /* Basic styles for modals */
-        .auth-modal, .sync-modal { /* Apply to both types */
-            display: none; position: fixed; z-index: 1001; left: 0; top: 0; width: 100%; height: 100%;
-            overflow: auto; background-color: rgba(0,0,0,0.8);
-        }
-        .auth-modal-content, .sync-modal-content { /* Apply to both types */
-            background-color: #1e1e1e; color: #eee; margin: 10% auto; padding: 25px; border: 1px solid #555;
-            width: 90%; max-width: 400px; border-radius: 8px; position: relative;
-        }
-        /* Specific styles if needed */
-        .auth-modal-content h2, .sync-modal-content h2 { text-align: center; margin-bottom: 20px; }
-        .auth-modal-content label, .sync-modal-content label { display: block; margin-bottom: 5px; color: #ccc; }
-        .auth-modal-content input[type="text"],
-        .auth-modal-content input[type="password"],
-        .auth-modal-content input[type="number"], /* Added for number inputs */
-        .sync-modal-content input[type="file"] {
-            width: 100%; padding: 10px; margin-bottom: 15px; background-color: #333; color: white;
-            border: 1px solid #555; border-radius: 4px; box-sizing: border-box;
-        }
-        .auth-modal-content button, .sync-modal-content button { margin-right: 10px; margin-top: 10px; }
-        .auth-modal-content .error-message, .sync-modal-content #syncStatus { margin-top: 10px; min-height: 1em; font-size: 0.9em; }
-        .auth-modal-content .error-message { color: #dc3545; }
-        .close-auth-modal, .close-sync-modal { /* Apply to both types */
-             position: absolute; top: 10px; right: 15px; color: #aaa;
-             font-size: 1.8em; font-weight: bold; cursor: pointer; line-height: 1;
-        }
-        .close-auth-modal:hover, .close-auth-modal:focus,
-        .close-sync-modal:hover, .close-sync-modal:focus { color: #fff; text-decoration: none; }
-
-        #settingsModal .modal-content .input-group { margin-bottom: 15px; }
-        #settingsModal .modal-content .input-group select,
-        #settingsModal .modal-content .input-group input[type="number"],
-        #settingsModal .modal-content .input-group input[type="checkbox"] {
-            width: 100%; padding: 8px; background-color: #333; color: white;
-            border: 1px solid #555; border-radius: 4px; box-sizing: border-box;
-        }
-         #settingsModal .close-modal { /* Settings close button styling */
-             position: absolute; top: 10px; right: 15px; color: #aaa;
-             font-size: 1.8em; font-weight: bold; cursor: pointer; line-height: 1;
-         }
-         #settingsModal .close-modal:hover, #settingsModal .close-modal:focus { color: #fff; text-decoration: none; }
-         #shotHistoryModal .modal-content button#closeModal { margin-top: 15px; }
-         .btn-sync { background-color: #28a745 !important; } /* Style for sync buttons */
-         #syncStatus.success { color: #28a745; }
-         #syncStatus.error { color: #dc3545; }
-
-        /* --- START: Styles for multi-input fields --- */
-        .multi-input-container > div {
-            display: flex;
-            gap: 10px;
-        }
-        .multi-input-container .multi-input {
-            flex: 1;
-            /* The base input styles handle the rest */
-        }
-        /* --- END: Styles for multi-input fields --- */
-
-        /* Other base styles */
-        body { font-family: sans-serif; background-color: #121212; color: #eee; margin: 0; }
-        .container { max-width: 1200px; margin: 20px auto; padding: 0 15px; }
-        .controls, .graph-controls, .box-container, .graph-container { margin-bottom: 20px; }
-
-        /* Styles for view mode toggle buttons */
-        .view-mode-controls {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .view-mode-controls button {
-            padding: 10px 15px;
-            margin: 0 5px;
-            background-color: #333;
-            color: #eee;
-            border: 1px solid #555;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .view-mode-controls button.active {
-            background-color: #4bc0c0;
-            color: #121212;
-            border-color: #4bc0c0;
-        }
-
-        /* Section-specific h2 styling */
-        .med-tracker-section h2, .weight-tracker-section h2 {
-            text-align: center;
-            color: #4bc0c0;
-            margin-bottom: 15px;
-            font-size: 1.5em;
-        }
-        .hidden-section {
-            display: none !important;
-        }
-
-        /* --- START: Styles for Sync Choice Modal --- */
-        .sync-choice-modal .modal-content {
-            max-width: 700px;
-        }
-        .comparison-container {
-            display: flex; /* Use flexbox for layout */
-            justify-content: space-between;
-            gap: 20px;
-            margin: 20px 0;
-        }
-        .data-column {
-            flex: 1; /* Make columns flexible and equal width */
-            border: 1px solid #444;
-            border-radius: 6px;
-            padding: 15px;
-            background-color: #2a2a2a;
-        }
-        .data-column h3 {
-            margin-top: 0;
-            color: #4bc0c0;
-            text-align: center;
-            min-height: 40px; /* Give titles space to prevent layout shift */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .data-column p {
-            margin: 8px 0;
-            font-size: 0.9em;
-            word-wrap: break-word;
-        }
-        .data-column p strong {
-            color: #ccc;
-        }
-        .sync-choice-actions {
-            text-align: center;
-            margin-top: 25px;
-        }
-        .sync-choice-actions button {
-            margin: 5px;
-        }
-        .btn-upload { background-color: #5cb85c; }
-        .btn-download { background-color: #337ab7; }
-        /* --- END: Styles for Sync Choice Modal --- */
-    </style>
 </head>
 <body>
   <header class="top-bar">
@@ -433,7 +294,11 @@
 
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script> 
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  
+  <!-- THE NEW AUTH SCRIPT (Root Path) -->
+  <script src="/auth.js"></script>
+  
   <script src="meds.js"></script>
 
     <footer>
@@ -444,4 +309,3 @@
 
 </body>
 </html>
-
