@@ -36,8 +36,8 @@ function renameHtmlFiles(dir) {
         
         if (stats.isDirectory()) {
             renameHtmlFiles(fullPath);
-        } else if (file.endsWith('.html') && file !== 'index.html' && file !== 'templates.html') {
-            // We check if it's an HTML file, NOT index.html, and NOT templates.html
+        } else if (file.endsWith('.html') && file !== 'index.html' && file !== 'templates.html' && file !== 'google964648a23408580a.html') {
+            // We check if it's an HTML file, NOT index.html, and NOT templates.html, and not google964648a23408580a.html
             const newPath = path.join(dir, 'index.html');
             fs.renameSync(fullPath, newPath);
             console.log(`Renamed: ${fullPath} -> ${newPath}`);
