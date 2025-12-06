@@ -1,55 +1,34 @@
-// meds.js - Handles medication and weight tracking, login, data sync (local & backend) with Multi-Session Refresh Tokens
+// meds.js - Handles medication and weight tracking using the new AuthManager system.
 
 /*************************************
- * APPLICATION & ENVIRONMENT CONFIGURATION
+ * APPLICATION CONFIGURATION
  *************************************/
 // -- SET YOUR APPLICATION NAME HERE --
 // This MUST be unique for each application to keep data separate.
-const APP_NAME = 'med-tracker'; // This identifies the data "bucket" on the server.
+const APP_NAME = 'med-tracker'; 
 
 // SET THE ENVIRONMENT HERE: 'live' or 'wip'
-const ENVIRONMENT = 'wip'; // 'live' or 'wip'
+const ENVIRONMENT = 'wip'; 
 
-// --- Configuration settings for each environment ---
-const envConfigs = {
-    live: {
-        storagePrefix: `${APP_NAME}_live_`,
-        backendUrl: 'https://main-backend-live.rosiesite.workers.dev'
-    },
-    wip: {
-        storagePrefix: `${APP_NAME}_wip_`,
-        backendUrl: 'https://main-backend-wip.rosiesite.workers.dev'
-    }
-};
-
-// --- Active configuration based on the environment set above ---
-const activeConfig = envConfigs[ENVIRONMENT];
-
-
-/*************************************
- * LOGGING CONFIGURATION
- *************************************/
+// Logging helper
 const LOGGING_ENABLED = ENVIRONMENT === 'wip';
-
 function syncLog(...args) {
     if (LOGGING_ENABLED) {
         console.log('[SYNC_LOG]', ...args);
     }
 }
 
+/*************************************
+ * AUTHENTICATION SETUP
+ *************************************/
+// Initialize the global AuthManager (Handles tokens, login, sync automatically)
+const authManager = new AuthManager(APP_NAME, ENVIRONMENT);
+// Auth tokens are now managed entirely inside authManager.
 
 /*************************************
  * CONSTANTS
  *************************************/
-const storagePrefix = activeConfig.storagePrefix;
-const BACKEND_URL = activeConfig.backendUrl;
-const LOGIN_ENDPOINT = `${BACKEND_URL}/api/auth/login`;
-const REGISTER_ENDPOINT = `${BACKEND_URL}/api/auth/register`;
-const REFRESH_ENDPOINT = `${BACKEND_URL}/api/auth/refresh`;
-const LOGOUT_ENDPOINT = `${BACKEND_URL}/api/auth/logout`;
-// UPDATED: This now points to the new, dynamic data endpoint.
-const USER_DATA_ENDPOINT = `${BACKEND_URL}/api/data/${APP_NAME}`;
-const CHANGE_PASSWORD_ENDPOINT = `${BACKEND_URL}/api/auth/change-password`;
+const storagePrefix = `${APP_NAME}_${ENVIRONMENT}_`; // Using consistent prefix logic
 
 // Unit Conversion Constants
 const POUNDS_PER_KG = 2.20462;
@@ -65,11 +44,6 @@ let shotHistory = [];
 let weightHistory = [];
 let userSettings = {};
 let tempSettings = {};
-let currentUser = null;
-let authToken = localStorage.getItem(`${storagePrefix}authToken`);
-let refreshToken = localStorage.getItem(`${storagePrefix}refreshToken`);
-let isRefreshingToken = false;
-let refreshSubscribers = [];
 
 const defaultSettings = {
     dateFormat: "dd/mm/yyyy",
@@ -310,90 +284,21 @@ function saveLocalData() {
 
 
 /************************************
- * Auth & Backend Data Logic
+ * Backend Data Sync (via AuthManager)
  ************************************/
-function decodeJwtPayload(token) {
-    try {
-        const base64Url = token.split('.')[1];
-        if (!base64Url) throw new Error("Invalid JWT structure");
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
-        return JSON.parse(jsonPayload);
-    } catch (e) {
-        console.error("Failed to decode JWT:", e);
-        return null;
-    }
-}
-
-function isTokenExpired(token) {
-    if (!token) return true;
-    try {
-        const payload = decodeJwtPayload(token);
-        const expiresAt = payload.exp * 1000;
-        return Date.now() >= (expiresAt - 10000);
-    } catch (e) {
-        return true;
-    }
-}
-
-async function attemptRefreshToken() {
-    if (!refreshToken) return false;
-    if (isRefreshingToken) {
-        return new Promise(resolve => refreshSubscribers.push(resolve));
-    }
-    isRefreshingToken = true;
-    let success = false;
-    try {
-        const response = await fetch(REFRESH_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Refresh failed');
-        authToken = data.accessToken;
-        localStorage.setItem(`${storagePrefix}authToken`, authToken);
-        currentUser = decodeJwtPayload(authToken);
-        success = true;
-    } catch (error) {
-        await logoutUser("Your session has expired. Please log in again.");
-        success = false;
-    } finally {
-        isRefreshingToken = false;
-        refreshSubscribers.forEach(cb => cb(success));
-        refreshSubscribers = [];
-        return success;
-    }
-}
-
-async function fetchWithAuth(url, options = {}) {
-    if (!authToken || isTokenExpired(authToken)) {
-        const refreshed = await attemptRefreshToken();
-        if (!refreshed) throw new Error("Authentication failed; session expired.");
-    }
-
-    options.headers = { ...options.headers, 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' };
-    let response = await fetch(url, options);
-
-    if (response.status === 401) {
-        const refreshed = await attemptRefreshToken();
-        if (refreshed) {
-            options.headers['Authorization'] = `Bearer ${authToken}`;
-            response = await fetch(url, options);
-        } else {
-             throw new Error("Authentication failed after retry.");
-        }
-    }
-    return response;
-}
 
 async function fetchBackendData() {
-    if (!authToken && !refreshToken) return null;
+    if (!authManager.isLoggedIn()) {
+        syncLog("Not logged in, skipping backend fetch.");
+        return null;
+    }
+
     try {
-        const response = await fetchWithAuth(USER_DATA_ENDPOINT, { method: 'GET' });
+        const response = await authManager.fetchWithAuth(authManager.endpoints.data, { method: 'GET' });
         if (!response.ok) throw new Error((await response.json()).error || 'Failed to fetch');
         const data = await response.json();
 
+        // Process dates coming from server
         data.shotHistory = (data.shotHistory || []).map(s => ({ ...s, dateTime: new Date(s.dateTime) })).filter(s => !isNaN(s.dateTime));
         data.weightHistory = (data.weightHistory || []).map(e => ({ ...e, dateTime: new Date(e.dateTime), weightKg: parseFloat(e.weightKg) })).filter(e => !isNaN(e.dateTime) && e.weightKg != null);
         data.settings = { ...defaultSettings, ...(data.settings || {}) };
@@ -406,7 +311,7 @@ async function fetchBackendData() {
 }
 
 async function saveBackendData() {
-    if (!currentUser || !authToken) return false;
+    if (!authManager.isLoggedIn()) return false;
     
     const dataToSave = {
         shotHistory: shotHistory,
@@ -415,7 +320,7 @@ async function saveBackendData() {
     };
     syncLog("Saving data to backend:", dataToSave);
     try {
-        const response = await fetchWithAuth(USER_DATA_ENDPOINT, {
+        const response = await authManager.fetchWithAuth(authManager.endpoints.data, {
             method: 'POST',
             body: JSON.stringify(dataToSave)
         });
@@ -431,7 +336,7 @@ async function saveBackendData() {
 
 function saveData() {
     saveLocalData();
-    if (currentUser && authToken) {
+    if (authManager.isLoggedIn()) {
         saveBackendData();
     }
     updateDisplay();
@@ -854,16 +759,6 @@ function calculateMedicationLevels(history, graphView) {
     return { labels, values: concentrationData, timestamps };
 }
 
-/**
- * [FIXED] Calculates weight chart data, handling large gaps by interpolating points.
- * This prevents the chart from showing "all time" when a ranged view is selected
- * and the data has a large gap at the beginning of the range. It creates
- * simulated points for the start of the view and for the first of each month
- * within the gap to ensure the view remains focused on the selected time period.
- * @param {Array} history The user's weight history.
- * @param {string} graphView The selected view range (e.g., '3months', '6months').
- * @returns {object} Data formatted for Chart.js.
- */
 function calculateWeightChartData(history, graphView) {
     const emptyReturn = { labels: [], values: [], timestamps: [], scaleMin: undefined, scaleMax: undefined };
     if (!history || history.length === 0) return emptyReturn;
@@ -1122,9 +1017,6 @@ function calculateWeightStats() {
     }
 }
 
-/**
- * [NEW] Calculates and displays the weight loss over the currently selected graph time period.
- */
 function calculateAndDisplayPeriodLoss() {
     const elements = getElements();
     const graphView = elements.weightGraphViewSelect.value;
@@ -1136,7 +1028,6 @@ function calculateAndDisplayPeriodLoss() {
         return;
     }
 
-    // Determine date range based on the selected view
     const now = new Date();
     const endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
     let startDate;
@@ -1153,20 +1044,17 @@ function calculateAndDisplayPeriodLoss() {
 
     const sortedHistory = [...weightHistory].sort((a, b) => a.dateTime - b.dateTime);
 
-    // Find the data points that bound our view for an accurate calculation
     const lastBefore = sortedHistory.filter(e => e.dateTime < startDate).pop();
     const firstInOrAfter = sortedHistory.find(e => e.dateTime >= startDate);
     const lastIn = sortedHistory.filter(e => e.dateTime <= endDate).pop();
 
-    if (!lastIn) { // No data within the period at all, so hide the stat
+    if (!lastIn) {
         container.style.display = 'none';
         return;
     }
 
     let startWeightKg;
-    // Determine the starting weight for the period, interpolating if necessary for accuracy
     if (lastBefore && firstInOrAfter) {
-        // We have points on both sides of the start date, so we can calculate the trend
         const timeDiff = firstInOrAfter.dateTime.getTime() - lastBefore.dateTime.getTime();
         const weightDiff = firstInOrAfter.weightKg - lastBefore.weightKg;
         if (timeDiff > 0) {
@@ -1174,21 +1062,17 @@ function calculateAndDisplayPeriodLoss() {
             const startOffset = startDate.getTime() - lastBefore.dateTime.getTime();
             startWeightKg = lastBefore.weightKg + (weightPerMs * startOffset);
         } else {
-            // This case handles if two points are at the exact same time
             startWeightKg = firstInOrAfter.weightKg;
         }
     } else if (firstInOrAfter) {
-        // No data before the period, so the first point *in* the period is our start
         startWeightKg = firstInOrAfter.weightKg;
     } else {
-        // No data in or after the period, so we can't calculate loss
         container.style.display = 'none';
         return;
     }
 
     const endWeightKg = lastIn.weightKg;
 
-    // Don't show if the start and end weights are the same
     if (startWeightKg === endWeightKg) {
         container.style.display = 'none';
         return;
@@ -1196,7 +1080,6 @@ function calculateAndDisplayPeriodLoss() {
 
     const lossKg = startWeightKg - endWeightKg;
     
-    // Format and display the result
     statEl.textContent = formatWeightDisplay(lossKg, userSettings.weightUnit);
     container.style.display = 'flex';
 }
@@ -1218,7 +1101,6 @@ function updateShotLocationUI() {
     const els = getElements();
     const { shotLocationTrackingEnabled, shotLocationAbbreviations, shotLocations = [], shotLocationDisplay } = userSettings;
     
-    // Hide all location elements initially
     els.shotLocationGroup.style.display = 'none';
     els.lastShotLocationLine.style.display = 'none';
     els.nextShotLocationLine.style.display = 'none';
@@ -1227,7 +1109,6 @@ function updateShotLocationUI() {
     if (shotLocationTrackingEnabled) {
         els.shotLocationGroup.style.display = 'flex';
 
-        // Populate dropdown
         els.shotLocationSelect.innerHTML = '';
         shotLocations.forEach(loc => {
             const text = shotLocationAbbreviations ? getAbbreviation(loc) : loc;
@@ -1237,10 +1118,8 @@ function updateShotLocationUI() {
             els.shotLocationSelect.appendChild(option);
         });
 
-        // Set info icon tooltip text (vertical list)
         const tooltipText = shotLocations.map(loc => `${getAbbreviation(loc)}: ${loc}`).join('\n');
         
-        // Find last and suggest next
         const sortedShots = [...shotHistory].sort((a, b) => b.dateTime - a.dateTime);
         const lastShotWithLocation = sortedShots.find(s => s.location);
         let nextLocation;
@@ -1315,7 +1194,7 @@ function updateMostRecentShotDisplay() {
             if (el) el.textContent = id === 'currentMedicationLevel' ? "Level: 0.000mg" : "N/A";
         });
     }
-     updateShotLocationUI(); // Update location display
+     updateShotLocationUI(); 
 }
 
 function updatePenStatusDisplay() {
@@ -1406,7 +1285,7 @@ function updateDisplay() {
     updatePenStatusDisplay();
 
     calculateWeightStats();
-    calculateAndDisplayPeriodLoss(); // [NEW] Call the function to update the period loss stat
+    calculateAndDisplayPeriodLoss();
     const weightChartData = calculateWeightChartData(weightHistory, elements.weightGraphViewSelect.value);
     createWeightChart(weightChartData);
     updateWeightEntryUI();
@@ -1670,9 +1549,8 @@ function populateSettingsModal() {
     els.abbreviationInfoIcon.title = tooltipText;
 }
 
-// Info Icon Tooltip System - Works on both desktop and mobile
+// Info Icon Tooltip System
 function initializeInfoIconTooltips() {
-    // Create a single tooltip element that we'll reuse
     let tooltipElement = document.getElementById('info-tooltip');
     let overlayElement = document.getElementById('tooltip-overlay');
     
@@ -1693,7 +1571,6 @@ function initializeInfoIconTooltips() {
     let currentIcon = null;
     let hideTimeout = null;
 
-    // Function to show tooltip
     function showTooltip(icon) {
         clearTimeout(hideTimeout);
         currentIcon = icon;
@@ -1702,23 +1579,18 @@ function initializeInfoIconTooltips() {
         if (!text) return;
         
         tooltipElement.textContent = text;
-        
-        // Position the tooltip
         const rect = icon.getBoundingClientRect();
         const tooltipRect = tooltipElement.getBoundingClientRect();
         
-        // Calculate position (centered below the icon)
         let left = rect.left + (rect.width / 2);
-        let top = rect.bottom + 8; // 8px gap below icon
+        let top = rect.bottom + 8;
         
-        // Adjust if tooltip goes off screen horizontally
         if (left + tooltipRect.width / 2 > window.innerWidth - 10) {
             left = window.innerWidth - tooltipRect.width / 2 - 10;
         } else if (left - tooltipRect.width / 2 < 10) {
             left = tooltipRect.width / 2 + 10;
         }
         
-        // Adjust if tooltip goes off screen vertically (show above instead)
         if (top + tooltipRect.height > window.innerHeight - 10) {
             top = rect.top - tooltipRect.height - 8;
             tooltipElement.style.setProperty('--arrow-direction', 'up');
@@ -1734,17 +1606,14 @@ function initializeInfoIconTooltips() {
         overlayElement.classList.add('show');
     }
 
-    // Function to hide tooltip
     function hideTooltip() {
         tooltipElement.classList.remove('show');
         overlayElement.classList.remove('show');
         currentIcon = null;
     }
 
-    // Handle all info icons
     document.body.addEventListener('mouseenter', (e) => {
         if (e.target.classList.contains('info-icon')) {
-            // Only show on hover for desktop (not for touch devices)
             if (!('ontouchstart' in window)) {
                 showTooltip(e.target);
             }
@@ -1759,26 +1628,21 @@ function initializeInfoIconTooltips() {
         }
     }, true);
 
-    // Handle click/tap for all devices
     document.body.addEventListener('click', (e) => {
         if (e.target.classList.contains('info-icon')) {
             e.preventDefault();
             e.stopPropagation();
             
             if (currentIcon === e.target) {
-                // Clicking the same icon again closes it
                 hideTooltip();
             } else {
-                // Show tooltip for this icon
                 showTooltip(e.target);
             }
         }
     });
 
-    // Close tooltip when clicking overlay or anywhere else
     overlayElement.addEventListener('click', hideTooltip);
     
-    // Also close on scroll (better mobile experience)
     let scrollTimeout;
     window.addEventListener('scroll', () => {
         if (tooltipElement.classList.contains('show')) {
@@ -1787,10 +1651,6 @@ function initializeInfoIconTooltips() {
         }
     }, true);
 }
-
-// Call this function in your DOMContentLoaded event
-// Add this to the existing DOMContentLoaded listener in meds.js:
-// initializeInfoIconTooltips();
 
 function saveSettings() {
     const elements = getElements();
@@ -1881,22 +1741,18 @@ function populateLocationOrderList() {
  ********************************/
 function updateUIForLoginState() {
     const elements = getElements();
-    const isLoggedIn = !!refreshToken;
+    const isLoggedIn = authManager.isLoggedIn();
+    
     elements.loginButton.style.display = isLoggedIn ? 'none' : 'inline-block';
     elements.registerButton.style.display = isLoggedIn ? 'none' : 'inline-block';
     elements.logoutButton.style.display = isLoggedIn ? 'inline-block' : 'none';
-    elements.userStatus.textContent = isLoggedIn ? `Logged in: ${currentUser?.username || 'User'}` : 'Not logged in (Local)';
+    elements.userStatus.textContent = isLoggedIn ? `Logged in: ${authManager.currentUser?.username || 'User'}` : 'Not logged in (Local)';
     elements.userStatus.style.color = isLoggedIn ? '#4bc0c0' : '#ccc';
     if(elements.changePasswordButton) elements.changePasswordButton.style.display = isLoggedIn ? 'inline-block' : 'none';
 }
 
 function getCanonicalString(dataSet) {
-    syncLog('getCanonicalString called with:', JSON.parse(JSON.stringify(dataSet)));
-    if (!dataSet) {
-        syncLog(' -> dataSet is null, returning null.');
-        return null;
-    }
-
+    if (!dataSet) return null;
     const dataCopy = JSON.parse(JSON.stringify(dataSet));
 
     const processedShots = (dataCopy.shotHistory || [])
@@ -1905,6 +1761,7 @@ function getCanonicalString(dataSet) {
     const processedWeights = (dataCopy.weightHistory || [])
         .map(w => ({ dateTime: new Date(w.dateTime).getTime(), weightKg: Number(parseFloat(w.weightKg).toFixed(4)) }))
         .sort((a, b) => a.dateTime - b.dateTime);
+    
     const settingsToCompare = {};
     const settingsKeys = Object.keys(defaultSettings).sort();
     for (const key of settingsKeys) {
@@ -1922,9 +1779,7 @@ function getCanonicalString(dataSet) {
         }
     }
     const finalObject = { settings: settingsToCompare, shotHistory: processedShots, weightHistory: processedWeights };
-    const finalString = JSON.stringify(finalObject);
-    syncLog(' -> Canonical string generated:', finalString);
-    return finalString;
+    return JSON.stringify(finalObject);
 }
 
 function generateDataSummary(dataSet) {
@@ -1965,14 +1820,22 @@ function showSyncChoiceModal(localSummary, serverSummary, serverData) {
     document.getElementById('serverEntryCount').textContent = `${serverSummary.shotCount} shots, ${serverSummary.weightCount} weights`;
     document.getElementById('serverLastShot').textContent = formatShotDisplay(serverSummary.lastShot);
     document.getElementById('serverLastWeight').textContent = formatWeightDisplay(serverSummary.lastWeight);
+    
     const useLocalBtn = document.getElementById('useLocalDataBtn');
     const useServerBtn = document.getElementById('useServerDataBtn');
-    const uploadHandler = async () => {
+    
+    // Replace nodes to clear old listeners
+    const newUseLocal = useLocalBtn.cloneNode(true);
+    const newUseServer = useServerBtn.cloneNode(true);
+    useLocalBtn.replaceWith(newUseLocal);
+    useServerBtn.replaceWith(newUseServer);
+    
+    newUseLocal.addEventListener('click', async () => {
         syncLog("User chose to USE LOCAL data. Uploading to server...");
         await saveBackendData();
         modal.style.display = 'none';
-    };
-    const downloadHandler = () => {
+    });
+    newUseServer.addEventListener('click', () => {
         syncLog("User chose to USE SERVER data. Overwriting local data...");
         shotHistory = serverData.shotHistory;
         weightHistory = serverData.weightHistory;
@@ -1980,129 +1843,53 @@ function showSyncChoiceModal(localSummary, serverSummary, serverData) {
         saveLocalData();
         updateDisplay();
         modal.style.display = 'none';
-    };
-    useLocalBtn.replaceWith(useLocalBtn.cloneNode(true));
-    useServerBtn.replaceWith(useServerBtn.cloneNode(true));
-    document.getElementById('useLocalDataBtn').addEventListener('click', uploadHandler);
-    document.getElementById('useServerDataBtn').addEventListener('click', downloadHandler);
+    });
+    
     modal.style.display = 'block';
 }
 
-async function handleLogin(event) {
-    event.preventDefault();
-    const elements = getElements();
-    elements.loginError.textContent = '';
-    const username = elements.loginUsernameInput.value.trim();
-    const password = elements.loginPasswordInput.value;
-    try {
-        const response = await fetch(LOGIN_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
-        authToken = data.accessToken;
-        refreshToken = data.refreshToken;
-        localStorage.setItem(`${storagePrefix}authToken`, authToken);
-        localStorage.setItem(`${storagePrefix}refreshToken`, refreshToken);
-        currentUser = decodeJwtPayload(authToken);
-        elements.loginModal.style.display = 'none';
-        syncLog('Login successful. Starting data sync check.');
-        const serverData = await fetchBackendData();
-        const localData = { shotHistory, weightHistory, settings: userSettings };
-        const hasLocalData = localData.shotHistory.length > 0 || localData.weightHistory.length > 0 || Object.keys(localData.settings).length > Object.keys(defaultSettings).length;
-        const hasServerData = serverData && (serverData.shotHistory.length > 0 || serverData.weightHistory.length > 0 || Object.keys(serverData.settings).length > Object.keys(defaultSettings).length);
-        if (hasLocalData && !hasServerData) {
-            syncLog("Local data exists, but no server data. Prompting to upload.");
-            if (confirm("No data found on server. Upload your local data to this account?")) {
-                await saveBackendData();
-            }
-        } else if (hasServerData) {
-            const localString = getCanonicalString(localData);
-            const serverString = getCanonicalString(serverData);
-            if (localString !== serverString) {
-                syncLog('Data mismatch DETECTED. Showing sync choice modal.');
-                const localSummary = generateDataSummary(localData);
-                const serverSummary = generateDataSummary(serverData);
-                showSyncChoiceModal(localSummary, serverSummary, serverData);
-            } else {
-                syncLog('Data is IN SYNC. No action needed.');
-                shotHistory = serverData.shotHistory;
-                weightHistory = serverData.weightHistory;
-                userSettings = serverData.settings;
-            }
-        } else if (hasServerData && !hasLocalData) {
-             syncLog("No local data, but server data exists. Downloading server data.");
-             shotHistory = serverData.shotHistory;
-             weightHistory = serverData.weightHistory;
-             userSettings = serverData.settings;
-        } else {
-            syncLog("No data locally or on the server. Nothing to sync.");
+async function performDataSync() {
+    if (!authManager.isLoggedIn()) return;
+
+    syncLog('Login successful. Starting data sync check.');
+    const serverData = await fetchBackendData();
+    const localData = { shotHistory, weightHistory, settings: userSettings };
+    const hasLocalData = localData.shotHistory.length > 0 || localData.weightHistory.length > 0 || Object.keys(localData.settings).length > Object.keys(defaultSettings).length;
+    const hasServerData = serverData && (serverData.shotHistory.length > 0 || serverData.weightHistory.length > 0 || Object.keys(serverData.settings).length > Object.keys(defaultSettings).length);
+    
+    if (hasLocalData && !hasServerData) {
+        syncLog("Local data exists, but no server data. Prompting to upload.");
+        if (confirm("No data found on server. Upload your local data to this account?")) {
+            await saveBackendData();
         }
-        saveLocalData();
-        updateUIForLoginState();
-        updateDisplay();
-    } catch (error) {
-        elements.loginError.textContent = error.message;
+    } else if (hasServerData) {
+        const localString = getCanonicalString(localData);
+        const serverString = getCanonicalString(serverData);
+        if (localString !== serverString) {
+            syncLog('Data mismatch DETECTED. Showing sync choice modal.');
+            const localSummary = generateDataSummary(localData);
+            const serverSummary = generateDataSummary(serverData);
+            showSyncChoiceModal(localSummary, serverSummary, serverData);
+        } else {
+            syncLog('Data is IN SYNC. No action needed.');
+            shotHistory = serverData.shotHistory;
+            weightHistory = serverData.weightHistory;
+            userSettings = serverData.settings;
+            saveLocalData();
+            updateDisplay();
+        }
+    } else if (hasServerData && !hasLocalData) {
+            syncLog("No local data, but server data exists. Downloading server data.");
+            shotHistory = serverData.shotHistory;
+            weightHistory = serverData.weightHistory;
+            userSettings = serverData.settings;
+            saveLocalData();
+            updateDisplay();
+    } else {
+        syncLog("No data locally or on the server. Nothing to sync.");
     }
 }
 
-async function handleRegister(event) {
-    event.preventDefault();
-    const elements = getElements();
-    elements.registerError.textContent = '';
-    const username = elements.registerUsernameInput.value.trim();
-    const password = elements.registerPasswordInput.value;
-    if (password !== elements.registerConfirmPasswordInput.value) {
-        elements.registerError.textContent = 'Passwords do not match.'; return;
-    }
-    try {
-        const response = await fetch(REGISTER_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
-        alert("Registration successful! Please log in.");
-        elements.registerModal.style.display = 'none';
-        elements.loginModal.style.display = 'block';
-        elements.loginUsernameInput.value = username;
-    } catch (error) {
-        elements.registerError.textContent = error.message;
-    }
-}
-
-async function logoutUser(logoutMessage = null) {
-    const tokenToInvalidate = refreshToken;
-    authToken = null; refreshToken = null; currentUser = null;
-    localStorage.removeItem(`${storagePrefix}authToken`);
-    localStorage.removeItem(`${storagePrefix}refreshToken`);
-    if (logoutMessage) alert(logoutMessage);
-    if (tokenToInvalidate) {
-        try {
-            await fetch(LOGOUT_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: tokenToInvalidate }) });
-        } catch (error) { console.warn("Backend logout failed:", error); }
-    }
-    loadLocalData();
-    updateUIForLoginState();
-    updateDisplay();
-}
-
-async function handleChangePassword(event) {
-    event.preventDefault();
-    const elements = getElements();
-    elements.changePasswordError.textContent = '';
-    elements.changePasswordSuccess.textContent = '';
-    const currentPassword = elements.currentPasswordInput.value;
-    const newPassword = elements.newPasswordInput.value;
-    if (newPassword !== elements.confirmNewPasswordInput.value) {
-        elements.changePasswordError.textContent = 'New passwords do not match.';
-        return;
-    }
-    try {
-        const response = await fetchWithAuth(CHANGE_PASSWORD_ENDPOINT, { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
-        elements.changePasswordSuccess.textContent = data.message;
-        setTimeout(() => logoutUser("Password changed. Please log in again."), 3000);
-    } catch (error) {
-        elements.changePasswordError.textContent = `Error: ${error.message}`;
-    }
-}
 
 /********************************
  * Local File Sync Logic
@@ -2147,7 +1934,7 @@ function importDataFromFile(event) {
                 saveLocalData();
                 updateDisplay();
                 showSyncStatus("Import successful!", "success");
-                if(currentUser && confirm("Save imported data to your account? This will overwrite your current server data.")) {
+                if(authManager.isLoggedIn() && confirm("Save imported data to your account? This will overwrite your current server data.")) {
                      await saveBackendData();
                 }
             }
@@ -2253,16 +2040,66 @@ function setupEventListeners() {
         saveData();
     });
 
+    // Auth Buttons (Open Modals)
     elements.loginButton.addEventListener('click', () => elements.loginModal.style.display = 'block');
     elements.registerButton.addEventListener('click', () => elements.registerModal.style.display = 'block');
-    elements.logoutButton.addEventListener('click', () => logoutUser());
-    elements.loginForm.addEventListener('submit', handleLogin);
-    elements.registerForm.addEventListener('submit', handleRegister);
+    elements.logoutButton.addEventListener('click', () => authManager.logout());
+
+    // Login Form Submission
+    elements.loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        elements.loginError.textContent = '';
+        try {
+            await authManager.login(elements.loginUsernameInput.value.trim(), elements.loginPasswordInput.value);
+            // Wait for event listener to handle UI update and sync
+        } catch (error) {
+            elements.loginError.textContent = error.message;
+        }
+    });
+
+    // Register Form Submission
+    elements.registerForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        elements.registerError.textContent = '';
+        const user = elements.registerUsernameInput.value.trim();
+        const pass = elements.registerPasswordInput.value;
+        if (pass !== elements.registerConfirmPasswordInput.value) {
+            elements.registerError.textContent = 'Passwords do not match.'; return;
+        }
+        try {
+            await authManager.register(user, pass);
+            alert("Registration successful! Please log in.");
+            elements.registerModal.style.display = 'none';
+            elements.loginModal.style.display = 'block';
+            elements.loginUsernameInput.value = user;
+        } catch (error) {
+            elements.registerError.textContent = error.message;
+        }
+    });
     
+    // Change Password Form
+    elements.changePasswordForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        elements.changePasswordError.textContent = '';
+        elements.changePasswordSuccess.textContent = '';
+        const cur = elements.currentPasswordInput.value;
+        const newP = elements.newPasswordInput.value;
+        if (newP !== elements.confirmNewPasswordInput.value) {
+            elements.changePasswordError.textContent = 'New passwords do not match.'; return;
+        }
+        try {
+            const data = await authManager.changePassword(cur, newP);
+            elements.changePasswordSuccess.textContent = data.message;
+            // The event listener will handle the logout after delay
+        } catch (error) {
+            elements.changePasswordError.textContent = `Error: ${error.message}`;
+        }
+    });
+
     elements.settingsButton.addEventListener("click", () => {
         tempSettings = JSON.parse(JSON.stringify(userSettings));
         populateSettingsModal();
-        elements.changePasswordButton.style.display = authToken ? 'inline-block' : 'none';
+        elements.changePasswordButton.style.display = authManager.isLoggedIn() ? 'inline-block' : 'none';
         elements.settingsModal.style.display = "block";
     });
 
@@ -2378,7 +2215,6 @@ function setupEventListeners() {
 
     elements.saveSettingsButton.addEventListener("click", saveSettings);
     elements.changePasswordButton.addEventListener('click', () => elements.changePasswordModal.style.display = 'block');
-    elements.changePasswordForm.addEventListener('submit', handleChangePassword);
     
     elements.localSyncButton.addEventListener('click', () => elements.syncModal.style.display = 'block');
     elements.exportDataButton.addEventListener('click', exportDataToFile);
@@ -2400,58 +2236,46 @@ function setupEventListeners() {
     });
 }
 
+// --- AUTHMANAGER EVENT HOOKS ---
+window.addEventListener('auth:login', async (e) => {
+    syncLog("Event: Login");
+    getElements().loginModal.style.display = 'none';
+    updateUIForLoginState();
+    await performDataSync();
+});
+
+window.addEventListener('auth:logout', (e) => {
+    syncLog("Event: Logout");
+    if (e.detail.message) alert(e.detail.message);
+    loadLocalData(); // Revert to local state or clear sensitive data
+    updateUIForLoginState();
+    updateDisplay();
+});
+
+window.addEventListener('auth:session-restored', async (e) => {
+    syncLog("Event: Session Restored");
+    updateUIForLoginState();
+    await performDataSync();
+});
+
+window.addEventListener('auth:password-changed', (e) => {
+    getElements().changePasswordSuccess.textContent = e.detail.message;
+    setTimeout(() => authManager.logout("Password changed. Please log in again."), 3000);
+});
+
 /**********************
  * Initial Page Load
  **********************/
-async function syncOnLoad() {
-    if (!refreshToken) return;
-
-    syncLog("Performing automatic sync on page load (server wins)...");
-    try {
-        const serverData = await fetchBackendData();
-        syncLog('syncOnLoad: Fetched server data:', serverData ? JSON.parse(JSON.stringify(serverData)) : 'No server data');
-        
-        if (!serverData) {
-            syncLog("syncOnLoad: Could not fetch server data for sync. Using existing local data.");
-            return;
-        }
-        
-        shotHistory = serverData.shotHistory;
-        weightHistory = serverData.weightHistory;
-        userSettings = serverData.settings;
-
-        syncLog("syncOnLoad: Sync successful. Local data has been overwritten from server.");
-
-        saveLocalData();
-        updateDisplay();
-
-    } catch (error) {
-        console.error("An error occurred during automatic sync-on-load:", error);
-    }
-}
-
 document.addEventListener("DOMContentLoaded", async () => {
     loadLocalData(); 
     initializeFlatpickr();
     setupEventListeners();
-    authToken = localStorage.getItem(`${storagePrefix}authToken`);
-    refreshToken = localStorage.getItem(`${storagePrefix}refreshToken`);
-
-    if (refreshToken) {
-        if (isTokenExpired(authToken)) {
-            await attemptRefreshToken();
-        } else {
-            currentUser = decodeJwtPayload(authToken);
-        }
-        
-        if (currentUser) {
-            await syncOnLoad();
-        }
-    }
+    
+    // AuthManager handles initialization
+    await authManager.initialize();
     
     updateUIForLoginState();
     updateDisplay();
     updateDoseToLastUsed();
     initializeInfoIconTooltips();
 });
-

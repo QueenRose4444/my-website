@@ -5,13 +5,13 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Template with Sync</title>
-    <!-- Link to the template CSS file -->
-    <link rel="stylesheet" href="template.css">
+    <title>Experiments Template</title>
+    <!-- Link to the Experiments specific CSS -->
+    <link rel="stylesheet" href="Experiments_template.css">
 </head>
 <body>
 
-    <!-- Top Navigation Bar -->
+    <!-- Top Navigation Bar (Experiments Layout) -->
     <header class="top-bar">
         <nav class="nav-container">
             <div class="nav-left">
@@ -20,11 +20,11 @@
                 <li><a href="../../meds/">Meds</a></li>
                 <li><a href="">WIP-PAGE</a></li>
                 <li><a href="../">Experiments</a></li>
-                <li><a href="#" class="active-link">Page_Name</a></li>
+                <li><a href="#" class="active-link">Template</a></li>
             </ul>
             </div>
             <div class="nav-center">
-              <!-- GitHub logo removed as requested -->
+              <!-- Center content if needed -->
             </div>
             <div class="nav-right">
               <div class="user-account">
@@ -40,10 +40,10 @@
     </header>
 
     <main class="container">
-        <h1>Your Main Content</h1>
-        <p>This is where the main content of your page will go. The login and sync functionality is now available through the buttons in the top-right corner.</p>
+        <h1>Experiments Template</h1>
+        <p>This template uses the shared AuthManager.</p>
+        <p>Your experiment content goes here.</p>
     </main>
-
 
     <!-- Modals for Login, Register, Sync, etc. -->
     <div id="loginModal" class="auth-modal">
@@ -167,8 +167,10 @@
       </div>
     </div>
 
-    <!-- Your custom script, renamed to template.js -->
-    <script src="template.js"></script>
+    <!-- The global AuthManager module (Root Path) -->
+    <script src="/auth.js"></script>
+    <!-- Your experiment-specific script -->
+    <script src="Experiments_template.js"></script>
 
 </body>
 </html>
