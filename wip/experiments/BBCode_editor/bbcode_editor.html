@@ -1,1087 +1,359 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+    <link rel="icon" type="image/png" href="/images/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/images/favicon.svg" />
+    <link rel="shortcut icon" href="/images/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="RoseStuffs" />
+    <link rel="manifest" href="/images/site.webmanifest" />
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced BBCode Editor</title>
+    <title>Game Info Formatter</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        /* Using TailwindCSS for most styling, but keeping some core structures from your original CSS */
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #111827; /* Tailwind gray-900 */
-            color: #d1d5db; /* Tailwind gray-300 */
-        }
-
-        /* Modal styles adapted for Tailwind */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 50;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.8);
-        }
-
-        .modal-content {
-            background-color: #1f2937; /* Tailwind gray-800 */
-            margin: 5% auto;
-            padding: 2rem;
-            border: 1px solid #4b5563; /* Tailwind gray-600 */
-            width: 90%;
-            max-width: 500px;
-            border-radius: 0.5rem;
-            position: relative;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-        }
-
-        /* Custom scrollbar for better aesthetics */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #1f2937; /* gray-800 */
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #4b5563; /* gray-600 */
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #6b7280; /* gray-500 */
-        }
-
-        /* Style for the template part pills */
-        .part-pill {
-            cursor: pointer;
-            transition: all 0.2s ease-in-out;
-        }
-        .part-pill:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-        }
-
-        /* Simple animation for modals */
-        .modal-content {
-            animation: fadeIn 0.3s ease-in-out;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.95); }
-            to { opacity: 1; transform: scale(1); }
-        }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="bbcode_editor.css">
 </head>
-<body class="text-gray-300">
 
-    <!-- Top Navigation Bar -->
-    <header class="bg-gray-800 shadow-md sticky top-0 z-40">
-        <nav class="container mx-auto px-6 py-3 flex justify-between items-center">
-            <div class="flex items-center space-x-6">
-                <h1 class="text-xl font-bold text-white">BBCode Editor</h1>
+<body>
+    <header class="top-bar">
+        <nav class="nav-container">
+            <div class="nav-left">
+                <ul class="nav-links">
+                    <li><a href="../../home/">Home</a></li>
+                    <li><a href="../../meds/">Meds</a></li>
+                    <li><a href="../">Experiments</a></li>
+                    <li><a href="">WIP-PAGE</a></li>
+                    <li><a href="" class="active-link">bbcode editor</a></li>
+                </ul>
             </div>
-            <div class="flex items-center space-x-4">
-                <span id="userStatus" class="text-sm">Loading...</span>
-                <button id="loginButton" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded-md text-white text-sm">Login</button>
-                <button id="registerButton" class="px-3 py-1 bg-green-600 hover:bg-green-700 rounded-md text-white text-sm">Register</button>
-                <button id="logoutButton" class="hidden px-3 py-1 bg-red-600 hover:bg-red-700 rounded-md text-white text-sm">Logout</button>
-                <button id="localSyncButton" class="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded-md text-white text-sm">Sync</button>
+            <div class="nav-center"></div>
+            <div class="nav-right">
+                <div class="user-account">
+                    <span id="userStatus" style="color: #ccc; align-self: center; margin-right: 15px;">Loading...</span>
+                    <button id="loginButton" style="display: none;">Login</button>
+                    <button id="registerButton" style="display: none;">Register</button>
+                    <button id="logoutButton" style="display: none;">Logout</button>
+                    <button id="localSyncButton">Local Sync</button>
+                    <button id="settingsButton">Settings</button>
+                </div>
             </div>
         </nav>
     </header>
 
-    <!-- Main Content -->
-    <main class="container mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-        <!-- Left Column: Template Management & Editor -->
-        <div class="flex flex-col space-y-6">
-            <!-- Template Selection -->
-            <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
-                <h2 class="text-lg font-semibold text-white mb-3 border-b border-gray-700 pb-2">Template Management</h2>
-                <div class="flex items-center space-x-2">
-                    <select id="templateSelector" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"></select>
-                    <button id="newTemplateBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-white whitespace-nowrap">New</button>
-                    <button id="deleteTemplateBtn" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md text-white">Delete</button>
+    <main id="app" class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 p-4 md:p-8">
+        <div class="space-y-6">
+            <header class="text-center">
+                <h1 class="text-3xl font-bold text-white">Game Info Formatter</h1>
+                <p class="text-gray-400 mt-2">Upload or paste game data to format it with custom templates.</p>
+            </header>
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                <h2 class="text-xl font-semibold text-white mb-4">1. Add Game Data</h2>
+                <div id="file-drop-zone" class="file-drop-zone p-6 text-center rounded-lg cursor-pointer">
+                    <p class="text-gray-400">Drag & drop .txt files here, or click to select</p>
+                    <input type="file" id="file-input" multiple accept=".txt" class="hidden">
                 </div>
+                <div class="mt-4 text-center text-gray-400">or paste content below</div>
+                <textarea id="text-input"
+                    class="w-full h-32 mt-2 p-3 bg-gray-900 border border-gray-700 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    placeholder="Paste raw game info here..."></textarea>
+                <button id="process-text-btn"
+                    class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition-colors">Process
+                    Pasted Text</button>
             </div>
+            <div id="customization-panel" class="bg-gray-800 p-6 rounded-lg shadow-lg hidden">
+                <h2 class="text-xl font-semibold text-white mb-4">2. Customize Output</h2>
+                <div class="mb-4">
+                    <label for="game-selector" class="block text-sm font-medium text-gray-300 mb-1">Select Game to
+                        Edit:</label>
+                    <select id="game-selector"
+                        class="w-full bg-gray-900 border border-gray-700 rounded-md p-2 focus:ring-2 focus:ring-blue-500"></select>
+                </div>
+                <div id="game-version-container" class="mb-4"></div>
+                <div class="flex border-b border-gray-700 mb-4">
+                    <button id="simple-mode-btn" class="tab-button active py-2 px-4 font-semibold">Builder</button>
+                    <button id="advanced-mode-btn" class="tab-button py-2 px-4 font-semibold">Template</button>
+                </div>
+                <div id="simple-mode-controls" class="space-y-4">
+                    <!-- Collapse Controls -->
+                    <div class="flex justify-end gap-2 mb-2">
+                        <button id="expand-all-btn" class="text-xs text-gray-400 hover:text-white">Expand All</button>
+                        <span class="text-gray-600">|</span>
+                        <button id="collapse-all-btn" class="text-xs text-gray-400 hover:text-white">Collapse
+                            All</button>
+                    </div>
 
-            <!-- Template Maker -->
-            <div id="templateMaker" class="bg-gray-800 p-4 rounded-lg shadow-lg hidden">
-                <h2 class="text-lg font-semibold text-white mb-3 border-b border-gray-700 pb-2">Template Maker</h2>
-                <div class="space-y-4">
-                    <div>
-                        <label for="templateName" class="block text-sm font-medium mb-1">Template Name</label>
-                        <input type="text" id="templateName" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm" placeholder="e.g., Character Profile">
+                    <!-- Main Group -->
+                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
+                        <div
+                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
+                            <h3 class="text-md font-bold text-white">Main Group (SteamDB)</h3>
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="p-4 border-t border-gray-700 module-content">
+                            <div id="main-group-container"></div>
+                        </div>
                     </div>
-                    <div>
-                        <label for="rawInputExample" class="block text-sm font-medium mb-1">Raw Input Example</label>
-                        <textarea id="rawInputExample" rows="3" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm" placeholder="(clean){name: jerry}[branch: 4]"></textarea>
+
+                    <!-- Additional Groups -->
+                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
+                        <div
+                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
+                            <h3 class="text-md font-bold text-white">Additional URL Groups</h3>
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="p-4 border-t border-gray-700 module-content">
+                            <div class="flex gap-2 mb-4">
+                                <select id="preset-selector"
+                                    class="bg-gray-800 border border-gray-600 text-xs rounded p-1 flex-grow text-white"></select>
+                                <button id="load-preset-btn"
+                                    class="bg-purple-600 hover:bg-purple-700 px-3 py-1 text-xs rounded text-white font-bold">Load</button>
+                                <button id="save-preset-btn"
+                                    class="bg-gray-600 hover:bg-gray-500 px-3 py-1 text-xs rounded text-white font-bold">Save
+                                    New</button>
+                            </div>
+                            <div id="custom-groups-container"></div>
+                            <button id="add-custom-group-btn"
+                                class="w-full py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded mt-2 shadow-sm transition-colors">+
+                                Add Group</button>
+                        </div>
                     </div>
-                    <div>
-                        <button id="generatePartsBtn" class="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-white">Define Parts from Example</button>
+
+                    <!-- Crack Settings -->
+                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
+                        <div
+                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
+                            <h3 class="text-md font-bold text-white">Crack Settings</h3>
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="p-4 border-t border-gray-700 module-content">
+                            <div id="crack-toggles-container"></div>
+                        </div>
                     </div>
-                    <div id="partsContainer" class="space-y-3"></div>
-                    <div>
-                        <label for="outputFormat" class="block text-sm font-medium mb-1">Output Format</label>
-                         <div id="partPills" class="flex flex-wrap gap-2 mb-2"></div>
-                        <textarea id="outputFormat" rows="4" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm" placeholder="jerry [branch:4](clean)"></textarea>
+
+                    <!-- Updates -->
+                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
+                        <div
+                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
+                            <h3 class="text-md font-bold text-white">Update Files</h3>
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="p-4 border-t border-gray-700 module-content">
+                            <div id="updates-container"></div>
+                            <button id="add-update-btn"
+                                class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded mt-2 shadow-sm transition-colors">+
+                                Add Update Section</button>
+                        </div>
                     </div>
-                    <div>
-                        <input type="checkbox" id="saveDataCheckbox" class="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-blue-500">
-                        <label for="saveDataCheckbox" class="ml-2 text-sm">Save user data with this template on reload</label>
+
+                    <!-- Patch Notes -->
+                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
+                        <div
+                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
+                            <h3 class="text-md font-bold text-white">Patch Notes</h3>
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="p-4 border-t border-gray-700 module-content">
+                            <div id="patchnotes-options" class="space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <label class="text-xs text-gray-400 font-bold">Mini Title (e.g., Hotfix
+                                        Patch!)</label>
+                                    <input type="text" id="patchnotes-title-input" data-setting="patchNotesTitle"
+                                        class="bg-gray-800 border border-gray-600 text-xs p-1 rounded w-1/2">
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="patchnotes-mode-toggle" data-setting="patchNotesMode"
+                                        class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                    <label for="patchnotes-mode-toggle" class="text-xs text-gray-300">Single Patch Note
+                                        Link (Merged)</label>
+                                </div>
+                                <div id="patchnotes-url-container"></div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="flex space-x-2">
-                        <button id="saveTemplateBtn" class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md text-white">Save Template</button>
-                        <button id="cancelTemplateBtn" class="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md text-white">Cancel</button>
+
+                    <!-- Colors -->
+                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
+                        <div
+                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
+                            <h3 class="text-md font-bold text-white">Colors</h3>
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="p-4 border-t border-gray-700 module-content">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div><label class="text-xs text-gray-400 block mb-1">Section Title</label><input
+                                        type="color" id="section-title-color"
+                                        class="w-full h-8 bg-gray-800 rounded cursor-pointer"></div>
+                                <div><label class="text-xs text-gray-400 block mb-1">Clean URLs</label><input
+                                        type="color" id="clean-url-color"
+                                        class="w-full h-8 bg-gray-800 rounded cursor-pointer"></div>
+                                <div><label class="text-xs text-gray-400 block mb-1">Cracked URLs</label><input
+                                        type="color" id="cracked-url-color"
+                                        class="w-full h-8 bg-gray-800 rounded cursor-pointer"></div>
+                                <div class="flex items-center justify-center">
+                                    <div class="flex items-center"><input type="checkbox" id="use-same-url-color"
+                                            class="mr-2 h-4 w-4"><label for="use-same-url-color"
+                                            class="text-xs text-gray-400">Match Clean</label></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-
-            <!-- Editor Section -->
-            <div id="editorSection" class="bg-gray-800 p-4 rounded-lg shadow-lg">
-                <h2 id="editorTitle" class="text-lg font-semibold text-white mb-3 border-b border-gray-700 pb-2">Editor</h2>
-                <div id="editorUI" class="space-y-4">
-                    <p class="text-gray-400">Select or create a template to begin.</p>
+                <div id="advanced-mode-controls" class="hidden space-y-4">
+                    <div>
+                        <label for="template-editor" class="block text-sm font-medium text-gray-300 mb-2">Full BBCode
+                            Template</label>
+                        <p class="text-xs text-gray-400 mb-2">Edit the full template below.</p>
+                        <textarea id="template-editor"
+                            class="w-full h-96 p-3 bg-gray-900 border border-gray-700 rounded-md font-mono text-xs focus:ring-2 focus:ring-blue-500 text-green-400"></textarea>
+                        <button id="reset-template-btn"
+                            class="mt-2 text-sm text-blue-400 hover:text-blue-300 underline">Reset to Default</button>
+                    </div>
                 </div>
             </div>
         </div>
-
-        <!-- Right Column: Preview & Output -->
-        <div class="bg-gray-800 p-4 rounded-lg shadow-lg flex flex-col h-[calc(100vh-100px)]">
-            <div class="flex border-b border-gray-700 mb-3">
-                <button id="previewTab" class="px-4 py-2 text-sm font-medium border-b-2 border-blue-500 text-white">Preview</button>
-                <button id="bbcodeTab" class="px-4 py-2 text-sm font-medium text-gray-400">BBCode</button>
-            </div>
-            <div id="previewContent" class="flex-grow overflow-y-auto p-2 bg-gray-900 rounded-md"></div>
-            <div id="bbcodeContent" class="hidden flex-grow">
-                <textarea id="bbcodeOutput" readonly class="w-full h-full bg-gray-900 rounded-md p-2 text-sm font-mono resize-none border-none"></textarea>
-            </div>
-            <div class="mt-4 flex space-x-2">
-                <button id="copyBBCodeBtn" class="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md text-white text-sm">Copy BBCode</button>
-                <button id="exportTxtBtn" class="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md text-white text-sm">Export as .txt</button>
+        <div class="space-y-6">
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg h-full flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold text-white">3. Result</h2>
+                    <button id="copy-btn-top"
+                        class="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed text-sm"
+                        disabled>Copy Code</button>
+                </div>
+                <div class="flex border-b border-gray-700 mb-4">
+                    <button id="preview-tab-btn" class="tab-button active py-2 px-4 font-semibold">Preview</button>
+                    <button id="code-tab-btn" class="tab-button py-2 px-4 font-semibold">BBCode</button>
+                </div>
+                <div id="preview-pane"
+                    class="flex-grow preview-body overflow-auto border border-gray-700 rounded p-4 bg-black">
+                    <p class="text-gray-500">Preview will appear here...</p>
+                </div>
+                <div id="code-pane" class="hidden flex-grow"><textarea id="output-code" readonly
+                        class="w-full h-full p-3 bg-gray-900 border border-gray-700 rounded-md font-mono text-xs resize-none text-gray-300"></textarea>
+                </div>
+                <div class="mt-4 flex gap-4">
+                    <button id="copy-btn-bottom"
+                        class="flex-grow bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+                        disabled>Copy BBCode</button>
+                    <button id="download-btn"
+                        class="flex-grow bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+                        disabled>Download .txt</button>
+                </div>
             </div>
         </div>
     </main>
 
-    <!-- Modals -->
-    <div id="loginModal" class="modal">
-      <div class="modal-content">
-        <span class="close-modal absolute top-4 right-4 text-2xl cursor-pointer" data-modal-id="loginModal">&times;</span>
-        <h2 class="text-2xl font-bold text-center mb-4 text-white">Login</h2>
-        <form id="loginForm" class="space-y-4">
-          <div>
-            <label for="loginUsername" class="block mb-1">Username:</label>
-            <input type="text" id="loginUsername" required class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2">
-          </div>
-          <div>
-            <label for="loginPassword" class="block mb-1">Password:</label>
-            <input type="password" id="loginPassword" required class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2">
-          </div>
-          <div class="flex space-x-2">
-            <button type="submit" class="w-full py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-white">Login</button>
-            <button type="button" class="close-modal-button w-full py-2 bg-gray-600 hover:bg-gray-700 rounded-md text-white" data-modal-id="loginModal">Cancel</button>
-          </div>
-          <div id="loginError" class="text-red-500 text-sm text-center h-4"></div>
-        </form>
-      </div>
-    </div>
-
-    <div id="registerModal" class="modal">
-      <div class="modal-content">
-        <span class="close-modal absolute top-4 right-4 text-2xl cursor-pointer" data-modal-id="registerModal">&times;</span>
-        <h2 class="text-2xl font-bold text-center mb-4 text-white">Register</h2>
-        <form id="registerForm" class="space-y-4">
-          <div>
-            <label for="registerUsername" class="block mb-1">Username:</label>
-            <input type="text" id="registerUsername" required class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2">
-          </div>
-          <div>
-            <label for="registerPassword" class="block mb-1">Password:</label>
-            <input type="password" id="registerPassword" required minlength="4" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2">
-          </div>
-          <div>
-            <label for="registerConfirmPassword" class="block mb-1">Confirm Password:</label>
-            <input type="password" id="registerConfirmPassword" required minlength="4" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2">
-          </div>
-          <div class="flex space-x-2">
-            <button type="submit" class="w-full py-2 bg-green-600 hover:bg-green-700 rounded-md text-white">Register</button>
-            <button type="button" class="close-modal-button w-full py-2 bg-gray-600 hover:bg-gray-700 rounded-md text-white" data-modal-id="registerModal">Cancel</button>
-          </div>
-          <div id="registerError" class="text-red-500 text-sm text-center h-4"></div>
-        </form>
-      </div>
-    </div>
-
-    <div id="syncModal" class="modal">
-      <div class="modal-content">
-        <span class="close-modal absolute top-4 right-4 text-2xl cursor-pointer" data-modal-id="syncModal">&times;</span>
-        <h2 class="text-2xl font-bold text-center mb-4 text-white">Local & Cloud Sync</h2>
-        <p class="text-sm text-gray-400 mb-4 text-center">Import/Export templates locally, or sync with your account.</p>
-        <div class="space-y-4">
-            <button id="exportData" class="w-full py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-white">Export All Templates to File</button>
-            <div>
-                <label for="importData" class="block text-center w-full py-2 bg-green-600 hover:bg-green-700 rounded-md text-white cursor-pointer">
-                    Import Templates from File
-                    <input type="file" id="importData" accept=".json" class="hidden">
-                </label>
-            </div>
-            <div id="syncStatus" class="text-center h-4"></div>
-            <button type="button" class="close-modal-button w-full py-2 bg-gray-600 hover:bg-gray-700 rounded-md text-white" data-modal-id="syncModal">Close</button>
-        </div>
-      </div>
-    </div>
-    
-    <div id="syncChoiceModal" class="modal">
-        <div class="modal-content max-w-2xl">
-            <h2 class="text-2xl font-bold text-center mb-4 text-white">Data Sync Conflict</h2>
-            <p class="text-center text-gray-400 mb-6">Your local templates are different from your server templates. Choose which version to keep.</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-center">
-                <div class="bg-gray-700 p-4 rounded-lg">
-                    <h3 class="font-bold text-lg mb-2 text-white">Local Data (This Browser)</h3>
-                    <p><strong>Last Update:</strong> <span id="localLastUpdate">N/A</span></p>
-                    <p><strong>Templates:</strong> <span id="localEntryCount">N/A</span></p>
-                </div>
-                <div class="bg-gray-700 p-4 rounded-lg">
-                    <h3 class="font-bold text-lg mb-2 text-white">Server Data (Your Account)</h3>
-                    <p><strong>Last Update:</strong> <span id="serverLastUpdate">N/A</span></p>
-                    <p><strong>Templates:</strong> <span id="serverEntryCount">N/A</span></p>
-                </div>
-            </div>
-            <div class="mt-6 flex flex-col md:flex-row gap-4">
-                <button id="useLocalDataBtn" class="w-full py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-white">Use Local Data (Upload)</button>
-                <button id="useServerDataBtn" class="w-full py-2 bg-green-600 hover:bg-green-700 rounded-md text-white">Use Server Data (Download)</button>
-            </div>
+    <div id="loginModal" class="auth-modal">
+        <div class="auth-modal-content"><span class="close-auth-modal" data-modal-id="loginModal">&times;</span>
+            <h2>Login</h2>
+            <form id="loginForm">
+                <div class="input-group"><label>Username:</label><input type="text" id="loginUsername" required></div>
+                <div class="input-group"><label>Password:</label><input type="password" id="loginPassword" required>
+                </div><button type="submit">Login</button><button type="button" class="close-auth-modal-button"
+                    data-modal-id="loginModal">Cancel</button>
+                <div id="loginError" class="error-message"></div>
+            </form>
         </div>
     </div>
-
-
-<script>
-// --- START OF INTEGRATED JAVASCRIPT ---
-
-/*************************************
- * APPLICATION & ENVIRONMENT CONFIGURATION
- *************************************/
-const APP_NAME = 'bbcode_editor';
-const ENVIRONMENT = 'wip'; // 'live' or 'wip'
-
-const envConfigs = {
-    live: { storagePrefix: `${APP_NAME}_live_`, backendUrl: 'https://meds-login_api.rosestuffs.org' },
-    wip: { storagePrefix: `${APP_NAME}_wip_`, backendUrl: 'https://meds-login_api-wip.rosestuffs.org' }
-};
-const activeConfig = envConfigs[ENVIRONMENT];
-const LOGGING_ENABLED = ENVIRONMENT === 'wip';
-function syncLog(...args) { if (LOGGING_ENABLED) console.log('[SYNC_LOG]', ...args); }
-
-/*************************************
- * CONSTANTS & GLOBAL STATE
- *************************************/
-const storagePrefix = activeConfig.storagePrefix;
-const BACKEND_URL = activeConfig.backendUrl;
-const LOGIN_ENDPOINT = `${BACKEND_URL}/api/auth/login`;
-const REGISTER_ENDPOINT = `${BACKEND_URL}/api/auth/register`;
-const REFRESH_ENDPOINT = `${BACKEND_URL}/api/auth/refresh`;
-const LOGOUT_ENDPOINT = `${BACKEND_URL}/api/auth/logout`;
-const USER_DATA_ENDPOINT = `${BACKEND_URL}/api/data/${APP_NAME}`;
-
-// --- App-specific State ---
-let templates = [];
-let activeTemplateId = null;
-let currentTemplateData = {}; // Holds user input for the current template
-
-// --- Auth State ---
-let currentUser = null;
-let authToken = localStorage.getItem(`${storagePrefix}authToken`);
-let refreshToken = localStorage.getItem(`${storagePrefix}refreshToken`);
-let isRefreshingToken = false;
-let refreshSubscribers = [];
-
-/***********************
- * DOM Element References
- ***********************/
-function getElements() {
-    return {
-        // Auth & Sync
-        loginButton: document.getElementById("loginButton"),
-        registerButton: document.getElementById("registerButton"),
-        logoutButton: document.getElementById("logoutButton"),
-        userStatus: document.getElementById("userStatus"),
-        loginModal: document.getElementById("loginModal"),
-        registerModal: document.getElementById("registerModal"),
-        syncModal: document.getElementById("syncModal"),
-        syncChoiceModal: document.getElementById("syncChoiceModal"),
-        loginForm: document.getElementById("loginForm"),
-        registerForm: document.getElementById("registerForm"),
-        loginUsernameInput: document.getElementById("loginUsername"),
-        loginPasswordInput: document.getElementById("loginPassword"),
-        loginError: document.getElementById("loginError"),
-        registerUsernameInput: document.getElementById("registerUsername"),
-        registerPasswordInput: document.getElementById("registerPassword"),
-        registerConfirmPasswordInput: document.getElementById("registerConfirmPassword"),
-        registerError: document.getElementById("registerError"),
-        localSyncButton: document.getElementById("localSyncButton"),
-        exportDataButton: document.getElementById("exportData"),
-        importDataInput: document.getElementById("importData"),
-        syncStatus: document.getElementById("syncStatus"),
-        // App UI
-        templateSelector: document.getElementById('templateSelector'),
-        newTemplateBtn: document.getElementById('newTemplateBtn'),
-        deleteTemplateBtn: document.getElementById('deleteTemplateBtn'),
-        templateMaker: document.getElementById('templateMaker'),
-        templateName: document.getElementById('templateName'),
-        rawInputExample: document.getElementById('rawInputExample'),
-        generatePartsBtn: document.getElementById('generatePartsBtn'),
-        partsContainer: document.getElementById('partsContainer'),
-        partPills: document.getElementById('partPills'),
-        outputFormat: document.getElementById('outputFormat'),
-        saveDataCheckbox: document.getElementById('saveDataCheckbox'),
-        saveTemplateBtn: document.getElementById('saveTemplateBtn'),
-        cancelTemplateBtn: document.getElementById('cancelTemplateBtn'),
-        editorSection: document.getElementById('editorSection'),
-        editorTitle: document.getElementById('editorTitle'),
-        editorUI: document.getElementById('editorUI'),
-        previewTab: document.getElementById('previewTab'),
-        bbcodeTab: document.getElementById('bbcodeTab'),
-        previewContent: document.getElementById('previewContent'),
-        bbcodeContent: document.getElementById('bbcodeContent'),
-        bbcodeOutput: document.getElementById('bbcodeOutput'),
-        copyBBCodeBtn: document.getElementById('copyBBCodeBtn'),
-        exportTxtBtn: document.getElementById('exportTxtBtn'),
-    };
-}
-
-
-/************************************
- * Data Loading / Saving Logic
- ************************************/
-function loadLocalData() {
-    syncLog("Loading all data from localStorage...");
-    try {
-        templates = JSON.parse(localStorage.getItem(`${storagePrefix}templates`) || "[]");
-        currentTemplateData = JSON.parse(localStorage.getItem(`${storagePrefix}currentTemplateData`) || "{}");
-        activeTemplateId = JSON.parse(localStorage.getItem(`${storagePrefix}activeTemplateId`) || "null");
-    } catch (e) {
-        console.error("Error loading local data:", e);
-        templates = [];
-        currentTemplateData = {};
-        activeTemplateId = null;
-    }
-}
-
-function saveLocalData() {
-    syncLog("Saving all data to localStorage...");
-    try {
-        localStorage.setItem(`${storagePrefix}templates`, JSON.stringify(templates));
-        const activeTemplate = templates.find(t => t.id === activeTemplateId);
-        if (activeTemplate && activeTemplate.saveData) {
-            localStorage.setItem(`${storagePrefix}currentTemplateData`, JSON.stringify(currentTemplateData));
-        } else {
-            localStorage.removeItem(`${storagePrefix}currentTemplateData`);
-        }
-        localStorage.setItem(`${storagePrefix}activeTemplateId`, JSON.stringify(activeTemplateId));
-    } catch (e) {
-        console.error("Error saving local data:", e);
-    }
-}
-
-/************************************
- * Auth & Backend Data Logic
- ************************************/
-// This section is largely the same as your provided template.js
-function decodeJwtPayload(token) { try { const base64Url = token.split('.')[1]; if (!base64Url) return null; const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/'); const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')); return JSON.parse(jsonPayload); } catch (e) { console.error("Failed to decode JWT:", e); return null; } }
-function isTokenExpired(token) { if (!token) return true; const payload = decodeJwtPayload(token); return payload ? Date.now() >= payload.exp * 1000 : true; }
-async function attemptRefreshToken() { if (!refreshToken) return false; if (isRefreshingToken) { return new Promise(resolve => refreshSubscribers.push(resolve)); } isRefreshingToken = true; let success = false; try { const response = await fetch(REFRESH_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Refresh failed'); authToken = data.accessToken; localStorage.setItem(`${storagePrefix}authToken`, authToken); currentUser = decodeJwtPayload(authToken); success = true; } catch (error) { await logoutUser("Your session has expired. Please log in again."); success = false; } finally { isRefreshingToken = false; refreshSubscribers.forEach(cb => cb(success)); refreshSubscribers = []; } return success; }
-async function fetchWithAuth(url, options = {}) { if (!authToken || isTokenExpired(authToken)) { const refreshed = await attemptRefreshToken(); if (!refreshed) throw new Error("Authentication failed; session expired."); } options.headers = { ...options.headers, 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' }; let response = await fetch(url, options); if (response.status === 401) { const refreshed = await attemptRefreshToken(); if (refreshed) { options.headers['Authorization'] = `Bearer ${authToken}`; response = await fetch(url, options); } else { throw new Error("Authentication failed after retry."); } } return response; }
-
-async function fetchBackendData() {
-    if (!authToken && !refreshToken) return null;
-    try {
-        const response = await fetchWithAuth(USER_DATA_ENDPOINT, { method: 'GET' });
-        if (!response.ok) throw new Error((await response.json()).error || 'Failed to fetch');
-        const data = await response.json();
-        // CUSTOMIZED: Parse app data
-        data.templates = data.templates || [];
-        return data;
-    } catch (error) {
-        console.error("Failed to fetch backend data:", error);
-        return null;
-    }
-}
-
-async function saveBackendData() {
-    if (!currentUser || !authToken) return false;
-    // CUSTOMIZED: Data to save
-    const dataToSave = { templates };
-    syncLog("Saving data to backend:", dataToSave);
-    try {
-        const response = await fetchWithAuth(USER_DATA_ENDPOINT, { method: 'POST', body: JSON.stringify(dataToSave) });
-        if (!response.ok) throw new Error((await response.json()).error || 'Failed to save');
-        syncLog("Backend save successful.");
-        return true;
-    } catch (error) {
-        console.error("Failed to save backend data:", error);
-        alert(`Failed to save data to server: ${error.message}`);
-        return false;
-    }
-}
-
-function saveData() {
-    saveLocalData();
-    if (currentUser && authToken) {
-        saveBackendData();
-    }
-    updateDisplay();
-}
-
-/************************************
- * BBCode Editor Core Logic
- ************************************/
-
-function updateDisplay() {
-    const { templateSelector } = getElements();
-    
-    // Populate template selector
-    templateSelector.innerHTML = '<option value="">-- Select a Template --</option>';
-    templates.forEach(t => {
-        const option = document.createElement('option');
-        option.value = t.id;
-        option.textContent = t.name;
-        if (t.id === activeTemplateId) {
-            option.selected = true;
-        }
-        templateSelector.appendChild(option);
-    });
-
-    // Render the editor for the active template
-    renderEditor();
-    updateOutput();
-}
-
-function renderEditor() {
-    const { editorUI, editorTitle, templateMaker } = getElements();
-    const template = templates.find(t => t.id === activeTemplateId);
-
-    templateMaker.classList.add('hidden');
-
-    if (!template) {
-        editorTitle.textContent = 'Editor';
-        editorUI.innerHTML = '<p class="text-gray-400">Select or create a template to begin.</p>';
-        return;
-    }
-
-    editorTitle.textContent = `Editor: ${template.name}`;
-    let html = '';
-
-    // Main input area
-    html += `
-        <div>
-            <label for="mainInput" class="block text-sm font-medium mb-1">Raw BBCode Input</label>
-            <textarea id="mainInput" rows="6" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm" placeholder="Paste your raw data here..."></textarea>
-        </div>
-    `;
-
-    // Dropdown for multiple entries
-    html += `<div id="entrySelectorContainer" class="hidden">
-        <label for="entrySelector" class="block text-sm font-medium mb-1">Select Entry</label>
-        <select id="entrySelector" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2"></select>
-    </div>`;
-
-    // Dynamically created fields
-    html += '<div id="dynamicFields" class="space-y-3">';
-    template.parts.forEach(part => {
-        if (part.isEditable) {
-            html += `
-                <div>
-                    <label for="field-${part.name}" class="block text-sm font-medium mb-1">${part.name}</label>
-                    <input type="text" id="field-${part.name}" data-part-name="${part.name}" class="dynamic-field w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm">
+    <div id="registerModal" class="auth-modal">
+        <div class="auth-modal-content"><span class="close-auth-modal" data-modal-id="registerModal">&times;</span>
+            <h2>Register</h2>
+            <form id="registerForm">
+                <div class="input-group"><label>Username:</label><input type="text" id="registerUsername" required>
                 </div>
-            `;
-        }
-    });
-     html += '</div>';
-
-    editorUI.innerHTML = html;
-
-    // Restore data if available
-    if (currentTemplateData[template.id]) {
-        document.getElementById('mainInput').value = currentTemplateData[template.id].mainInput || '';
-        document.querySelectorAll('.dynamic-field').forEach(field => {
-            const partName = field.dataset.partName;
-            field.value = currentTemplateData[template.id][partName] || '';
-        });
-    }
-
-    // Process initial input
-    processMainInput();
-}
-
-
-function processMainInput() {
-    const mainInput = document.getElementById('mainInput');
-    if (!mainInput) return;
-
-    const template = templates.find(t => t.id === activeTemplateId);
-    if (!template) return;
-
-    const rawText = mainInput.value;
-    const entries = rawText.split('\n').filter(line => line.trim() !== '');
-    
-    const entrySelectorContainer = document.getElementById('entrySelectorContainer');
-    const entrySelector = document.getElementById('entrySelector');
-
-    if (entries.length > 1 && template.dropdownLabel) {
-        entrySelectorContainer.classList.remove('hidden');
-        entrySelector.innerHTML = '';
-        entries.forEach((entry, index) => {
-            const parsed = parseTextWithTemplate(entry, template);
-            const label = parsed[template.dropdownLabel] || `Entry ${index + 1}`;
-            const option = document.createElement('option');
-            option.value = index;
-            option.textContent = label;
-            entrySelector.appendChild(option);
-        });
-        // Select the first entry by default
-        selectEntry(0);
-    } else {
-        entrySelectorContainer.classList.add('hidden');
-        const parsed = parseTextWithTemplate(entries[0] || '', template);
-        updateDynamicFields(parsed);
-    }
-}
-
-function selectEntry(index) {
-    const mainInput = document.getElementById('mainInput');
-    const template = templates.find(t => t.id === activeTemplateId);
-    if (!mainInput || !template) return;
-
-    const rawText = mainInput.value;
-    const entries = rawText.split('\n').filter(line => line.trim() !== '');
-    const selectedEntryText = entries[index] || '';
-    
-    const parsed = parseTextWithTemplate(selectedEntryText, template);
-    updateDynamicFields(parsed);
-}
-
-
-function parseTextWithTemplate(text, template) {
-    if (!text || !template) return {};
-    const data = {};
-    template.parts.forEach(part => {
-        try {
-            // Use a non-greedy match to handle nested structures better
-            const regex = new RegExp(`${escapeRegex(part.start)}(.*?)${escapeRegex(part.end)}`);
-            const match = text.match(regex);
-            if (match && match[1]) {
-                data[part.name] = match[1];
-            } else {
-                data[part.name] = '';
-            }
-        } catch (e) {
-            console.error(`Regex error for part ${part.name}:`, e);
-            data[part.name] = '';
-        }
-    });
-    return data;
-}
-
-function updateDynamicFields(parsedData) {
-    document.querySelectorAll('.dynamic-field').forEach(field => {
-        const partName = field.dataset.partName;
-        field.value = parsedData[partName] || '';
-    });
-    updateOutput();
-}
-
-
-function updateOutput() {
-    const template = templates.find(t => t.id === activeTemplateId);
-    if (!template) {
-        getElements().previewContent.innerHTML = '';
-        getElements().bbcodeOutput.value = '';
-        return;
-    }
-
-    // Collect data from all dynamic fields
-    const currentData = {};
-    document.querySelectorAll('.dynamic-field').forEach(field => {
-        currentData[field.dataset.partName] = field.value;
-    });
-    
-    // Also parse the currently selected entry to get non-editable field data
-    const mainInput = document.getElementById('mainInput');
-    const entrySelector = document.getElementById('entrySelector');
-    let parsedData = {};
-
-    if (mainInput) {
-        const entries = mainInput.value.split('\n').filter(line => line.trim() !== '');
-        let selectedText = entries[0] || '';
-        if (entries.length > 1 && template.dropdownLabel) {
-            selectedText = entries[entrySelector.value] || '';
-        }
-        parsedData = parseTextWithTemplate(selectedText, template);
-    }
-
-    // Merge parsed data with user-edited data
-    const finalData = { ...parsedData, ...currentData };
-
-    // Generate output
-    let bbcode = template.outputFormat;
-    let preview = template.outputFormat;
-
-    template.parts.forEach(part => {
-        const value = finalData[part.name] || '';
-        const color = part.color || '#ffffff';
-        
-        // Replace placeholders in bbcode and preview
-        bbcode = bbcode.replace(new RegExp(`{${part.name}}`, 'g'), value);
-        bbcode = bbcode.replace(new RegExp(`{${part.name}_color}`, 'g'), color);
-
-        const coloredValue = `<span style="color:${color}">${value}</span>`;
-        preview = preview.replace(new RegExp(`{${part.name}}`, 'g'), coloredValue);
-        // Handle color tags in preview
-        preview = preview.replace(new RegExp(`\\[color=${escapeRegex(`{${part.name}_color}`)}\\](.*?)\\[/color\\]`, 'g'), (match, content) => {
-            // This is tricky. Let's re-replace the inner content.
-            const finalContent = content.replace(new RegExp(escapeRegex(coloredValue), 'g'), coloredValue);
-            return `<span style="color:${color}">${finalContent}</span>`;
-        });
-    });
-
-    // A more robust regex to find any [color=...] tags and convert them for the preview
-    preview = preview.replace(/\[color=([^\]]+)\](.*?)\[\/color\]/gi, '<span style="color:$1">$2</span>');
-    preview = preview.replace(/\n/g, '<br>');
-
-
-    getElements().previewContent.innerHTML = preview;
-    getElements().bbcodeOutput.value = bbcode;
-    
-    // Save current state
-    if (template.saveData) {
-        const mainInputValue = document.getElementById('mainInput')?.value || '';
-        currentTemplateData[template.id] = { mainInput: mainInputValue, ...currentData };
-    }
-}
-
-
-function escapeRegex(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/************************************
- * Template Maker Logic
- ************************************/
-function openTemplateMaker(template = null) {
-    const { templateMaker, templateName, rawInputExample, outputFormat, partsContainer, partPills, saveDataCheckbox } = getElements();
-    templateMaker.classList.remove('hidden');
-    
-    if (template) {
-        templateName.value = template.name;
-        rawInputExample.value = template.rawInputExample;
-        outputFormat.value = template.outputFormat;
-        saveDataCheckbox.checked = template.saveData;
-        getElements().saveTemplateBtn.dataset.templateId = template.id;
-        renderPartsUI(template.parts);
-    } else {
-        templateName.value = '';
-        rawInputExample.value = '';
-        outputFormat.value = '';
-        saveDataCheckbox.checked = false;
-        delete getElements().saveTemplateBtn.dataset.templateId;
-        partsContainer.innerHTML = '';
-        partPills.innerHTML = '';
-    }
-}
-
-function generatePartsFromExample() {
-    const text = getElements().rawInputExample.value;
-    const parts = [];
-    
-    // Regex to find patterns like {key: value}, [key: value], (value)
-    const regex = /(\w+:\s*.*?)(?=[}\]])|(\w+)(?=\))|(?<=\()(\w+)(?=\))|(?<=\{)(.*?)(?=\})|(?<=\[)(.*?)(?=\])/g;
-    const complexRegex = /([(\[{])([^:\]})]+):([^\]})]+)([)\]}])/g;
-
-    let match;
-    const foundParts = new Set();
-
-    // Simple parser for (word)
-    const simpleParts = text.match(/\(([^)]+)\)/g);
-    if(simpleParts) {
-        simpleParts.forEach(p => {
-            const name = p.slice(1,-1);
-            if (!foundParts.has(name)) {
-                 parts.push({ name, start: '(', end: ')', color: '#ffffff', isEditable: false });
-                 foundParts.add(name);
-            }
-        });
-    }
-
-    // Complex parser for {name: jerry} or [branch: 4]
-    while((match = complexRegex.exec(text)) !== null) {
-        const name = match[2].trim();
-        if (!foundParts.has(name)) {
-            parts.push({
-                name,
-                start: `${match[1]}${match[2]}:`,
-                end: match[4],
-                color: '#ffffff',
-                isEditable: false
-            });
-            foundParts.add(name);
-        }
-    }
-    
-    renderPartsUI(parts);
-}
-
-function renderPartsUI(parts) {
-    const { partsContainer, partPills } = getElements();
-    partsContainer.innerHTML = '';
-    partPills.innerHTML = '';
-    
-    parts.forEach((part, index) => {
-        const partDiv = document.createElement('div');
-        partDiv.className = 'grid grid-cols-1 md:grid-cols-4 gap-2 items-center bg-gray-700 p-2 rounded-md';
-        partDiv.dataset.index = index;
-        
-        partDiv.innerHTML = `
-            <input type="text" value="${part.name}" class="part-name bg-gray-600 p-1 rounded-md text-sm" placeholder="Part Name">
-            <input type="text" value="${part.start}" class="part-start bg-gray-600 p-1 rounded-md text-sm" placeholder="Start Delimiter">
-            <input type="text" value="${part.end}" class="part-end bg-gray-600 p-1 rounded-md text-sm" placeholder="End Delimiter">
-            <div class="flex items-center space-x-2">
-                <input type="color" value="${part.color}" class="part-color h-8 w-8 bg-gray-600 rounded-md cursor-pointer">
-                <label class="text-xs flex items-center"><input type="checkbox" ${part.isEditable ? 'checked' : ''} class="part-editable rounded bg-gray-600 text-blue-500 mr-1"> Editable</label>
-                <label class="text-xs flex items-center"><input type="radio" name="dropdownLabel" ${part.isDropdownLabel ? 'checked' : ''} class="part-dropdown rounded-full bg-gray-600 text-blue-500 mr-1"> Label</label>
-                <button class="remove-part-btn text-red-400 hover:text-red-600 text-lg">&times;</button>
+                <div class="input-group"><label>Password:</label><input type="password" id="registerPassword" required
+                        minlength="4"></div>
+                <div class="input-group"><label>Confirm:</label><input type="password" id="registerConfirmPassword"
+                        required minlength="4"></div><button type="submit">Register</button><button type="button"
+                    class="close-auth-modal-button" data-modal-id="registerModal">Cancel</button>
+                <div id="registerError" class="error-message"></div>
+            </form>
+        </div>
+    </div>
+    <div id="changePasswordModal" class="auth-modal">
+        <div class="auth-modal-content"><span class="close-auth-modal"
+                data-modal-id="changePasswordModal">&times;</span>
+            <h2>Change Password</h2>
+            <form id="changePasswordForm">
+                <div class="input-group"><label>Current:</label><input type="password" id="currentPassword" required>
+                </div>
+                <div class="input-group"><label>New:</label><input type="password" id="newPassword" required
+                        minlength="4"></div>
+                <div class="input-group"><label>Confirm:</label><input type="password" id="confirmNewPassword" required
+                        minlength="4"></div><button type="submit">Update</button><button type="button"
+                    class="close-auth-modal-button" data-modal-id="changePasswordModal">Cancel</button>
+                <div id="changePasswordError" class="error-message"></div>
+                <div id="changePasswordSuccess" class="error-message" style="color: #28a745;"></div>
+            </form>
+        </div>
+    </div>
+    <div id="syncModal" class="sync-modal">
+        <div class="sync-modal-content"><span class="close-sync-modal" data-modal-id="syncModal">&times;</span>
+            <h2>Local File Sync</h2>
+            <div class="input-group"><button id="exportData" class="btn-sync">Export</button></div>
+            <div class="input-group"><label>Import:</label><input type="file" id="importData" accept=".json"
+                    style="color:#ccc;"></div>
+            <hr style="border-color:#444;margin:20px 0;">
+            <div class="input-group"><button id="importOldData" class="btn-sync"
+                    style="background-color:#f0ad4e!important;border-color:#eea236!important;">Import Old Local
+                    Data</button></div>
+            <div id="syncStatus" style="min-height:1em;margin-top:15px;"></div><button type="button"
+                class="close-sync-modal-button" data-modal-id="syncModal">Close</button>
+        </div>
+    </div>
+    <div id="syncChoiceModal" class="auth-modal sync-choice-modal">
+        <div class="auth-modal-content">
+            <h2>Data Sync Conflict</h2>
+            <div class="comparison-container">
+                <div class="data-column">
+                    <h3>Local</h3>
+                    <p><strong>Updated:</strong> <span id="localLastUpdate">N/A</span></p>
+                    <p><strong>Entries:</strong> <span id="localEntryCount">N/A</span></p>
+                </div>
+                <div class="data-column">
+                    <h3>Server</h3>
+                    <p><strong>Updated:</strong> <span id="serverLastUpdate">N/A</span></p>
+                    <p><strong>Entries:</strong> <span id="serverEntryCount">N/A</span></p>
+                </div>
             </div>
-        `;
-        partsContainer.appendChild(partDiv);
-
-        // Add pill
-        const pill = document.createElement('button');
-        pill.className = 'part-pill px-2 py-1 text-xs rounded-full text-white';
-        pill.style.backgroundColor = part.color;
-        pill.textContent = part.name;
-        pill.onclick = () => {
-            getElements().outputFormat.value += `{${part.name}}`;
-        };
-        partPills.appendChild(pill);
-    });
-}
-
-
-function saveTemplate() {
-    const { templateName, rawInputExample, outputFormat, saveDataCheckbox, saveTemplateBtn } = getElements();
-    const id = saveTemplateBtn.dataset.templateId || `template_${Date.now()}`;
-    
-    const parts = [];
-    document.querySelectorAll('#partsContainer > div').forEach(div => {
-        parts.push({
-            name: div.querySelector('.part-name').value,
-            start: div.querySelector('.part-start').value,
-            end: div.querySelector('.part-end').value,
-            color: div.querySelector('.part-color').value,
-            isEditable: div.querySelector('.part-editable').checked,
-        });
-    });
-
-    const dropdownLabelRadio = document.querySelector('input[name="dropdownLabel"]:checked');
-    const dropdownLabel = dropdownLabelRadio ? dropdownLabelRadio.closest('.grid').querySelector('.part-name').value : null;
-
-    const newTemplate = {
-        id,
-        name: templateName.value,
-        rawInputExample: rawInputExample.value,
-        outputFormat: outputFormat.value,
-        saveData: saveDataCheckbox.checked,
-        parts,
-        dropdownLabel,
-        lastUpdated: new Date().toISOString()
-    };
-
-    const existingIndex = templates.findIndex(t => t.id === id);
-    if (existingIndex > -1) {
-        templates[existingIndex] = newTemplate;
-    } else {
-        templates.push(newTemplate);
-    }
-    
-    activeTemplateId = id;
-    getElements().templateMaker.classList.add('hidden');
-    saveData();
-}
-
-function deleteTemplate() {
-    if (!activeTemplateId) {
-        alert("Please select a template to delete.");
-        return;
-    }
-    if (confirm("Are you sure you want to delete this template? This cannot be undone.")) {
-        templates = templates.filter(t => t.id !== activeTemplateId);
-        activeTemplateId = null;
-        saveData();
-    }
-}
-
-
-/********************************
- * Authentication UI & Actions
- ********************************/
-function updateUIForLoginState() {
-    const elements = getElements();
-    const isLoggedIn = !!refreshToken;
-    elements.loginButton.classList.toggle('hidden', isLoggedIn);
-    elements.registerButton.classList.toggle('hidden', isLoggedIn);
-    elements.logoutButton.classList.toggle('hidden', !isLoggedIn);
-    elements.userStatus.textContent = isLoggedIn ? `Logged in: ${currentUser?.username || 'User'}` : 'Not logged in (Local)';
-}
-
-function getCanonicalString(dataSet) {
-    if (!dataSet) return null;
-    const dataCopy = JSON.parse(JSON.stringify(dataSet));
-    // CUSTOMIZE: Create a comparable string of your app's data for accurate diffing.
-    const sortedTemplates = (dataCopy.templates || []).sort((a, b) => a.name.localeCompare(b.name));
-    return JSON.stringify({ templates: sortedTemplates });
-}
-
-function generateDataSummary(dataSet) {
-    if (!dataSet) return { lastUpdate: 'N/A', entryCount: '0 templates' };
-    // CUSTOMIZE: Generate a human-readable summary for the sync choice modal.
-    const templateCount = dataSet.templates?.length || 0;
-    const lastUpdate = (dataSet.templates || [])
-        .map(t => new Date(t.lastUpdated || 0))
-        .sort((a,b) => b - a)[0];
-    return {
-        lastUpdate: lastUpdate ? lastUpdate.toLocaleString() : 'N/A',
-        entryCount: `${templateCount} templates`,
-    };
-}
-
-function showSyncChoiceModal(localSummary, serverSummary, serverData) {
-    const modal = document.getElementById('syncChoiceModal');
-    if (!modal) return;
-    document.getElementById('localLastUpdate').textContent = localSummary.lastUpdate;
-    document.getElementById('localEntryCount').textContent = localSummary.entryCount;
-    document.getElementById('serverLastUpdate').textContent = serverSummary.lastUpdate;
-    document.getElementById('serverEntryCount').textContent = serverSummary.entryCount;
-
-    const useLocalBtn = document.getElementById('useLocalDataBtn');
-    const useServerBtn = document.getElementById('useServerDataBtn');
-
-    const uploadHandler = async () => {
-        syncLog("User chose to USE LOCAL data. Uploading to server...");
-        await saveBackendData();
-        modal.style.display = 'none';
-    };
-    const downloadHandler = () => {
-        syncLog("User chose to USE SERVER data. Overwriting local data...");
-        // CUSTOMIZE
-        templates = serverData.templates;
-        saveLocalData();
-        updateDisplay();
-        modal.style.display = 'none';
-    };
-    useLocalBtn.replaceWith(useLocalBtn.cloneNode(true));
-    useServerBtn.replaceWith(useServerBtn.cloneNode(true));
-    document.getElementById('useLocalDataBtn').addEventListener('click', uploadHandler);
-    document.getElementById('useServerDataBtn').addEventListener('click', downloadHandler);
-    modal.style.display = 'block';
-}
-
-async function handleLogin(event) {
-    event.preventDefault();
-    const elements = getElements();
-    elements.loginError.textContent = '';
-    const username = elements.loginUsernameInput.value.trim();
-    const password = elements.loginPasswordInput.value;
-    try {
-        const response = await fetch(LOGIN_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
-        authToken = data.accessToken; refreshToken = data.refreshToken;
-        localStorage.setItem(`${storagePrefix}authToken`, authToken); localStorage.setItem(`${storagePrefix}refreshToken`, refreshToken);
-        currentUser = decodeJwtPayload(authToken);
-        elements.loginModal.style.display = 'none';
-        syncLog('Login successful. Starting data sync check.');
-        const serverData = await fetchBackendData();
-        const localData = { templates }; // CUSTOMIZE
-        const hasLocalData = localData.templates?.length > 0;
-        const hasServerData = serverData && serverData.templates?.length > 0;
-        if (hasLocalData && !hasServerData) {
-            if (confirm("No data found on server. Upload your local templates to this account?")) { await saveBackendData(); }
-        } else if (hasServerData) {
-            const localString = getCanonicalString(localData);
-            const serverString = getCanonicalString(serverData);
-            if (localString !== serverString) {
-                syncLog('Data mismatch DETECTED. Showing sync choice modal.');
-                const localSummary = generateDataSummary(localData);
-                const serverSummary = generateDataSummary(serverData);
-                showSyncChoiceModal(localSummary, serverSummary, serverData);
-            } else {
-                syncLog('Data is IN SYNC. No action needed.');
-                templates = serverData.templates; // CUSTOMIZE
-            }
-        } else if (hasServerData && !hasLocalData) {
-             syncLog("No local data, but server data exists. Downloading server data.");
-             templates = serverData.templates; // CUSTOMIZE
-        } else {
-            syncLog("No data locally or on the server. Nothing to sync.");
-        }
-        saveLocalData();
-        updateUIForLoginState();
-        updateDisplay();
-    } catch (error) {
-        elements.loginError.textContent = error.message;
-    }
-}
-
-async function handleRegister(event) {
-    event.preventDefault();
-    const elements = getElements();
-    elements.registerError.textContent = '';
-    const username = elements.registerUsernameInput.value.trim();
-    const password = elements.registerPasswordInput.value;
-    if (password !== elements.registerConfirmPasswordInput.value) { elements.registerError.textContent = 'Passwords do not match.'; return; }
-    try {
-        const response = await fetch(REGISTER_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
-        alert("Registration successful! Please log in.");
-        elements.registerModal.style.display = 'none';
-        elements.loginModal.style.display = 'block';
-        elements.loginUsernameInput.value = username;
-    } catch (error) {
-        elements.registerError.textContent = error.message;
-    }
-}
-
-async function logoutUser(logoutMessage = null) {
-    const tokenToInvalidate = refreshToken;
-    authToken = null; refreshToken = null; currentUser = null;
-    localStorage.removeItem(`${storagePrefix}authToken`);
-    localStorage.removeItem(`${storagePrefix}refreshToken`);
-    if (logoutMessage) alert(logoutMessage);
-    if (tokenToInvalidate) { try { await fetch(LOGOUT_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: tokenToInvalidate }) }); } catch (error) { console.warn("Backend logout failed:", error); } }
-    loadLocalData();
-    updateUIForLoginState();
-    updateDisplay();
-}
-
-/********************************
- * Local File Sync & Event Listeners
- ********************************/
-function showSyncStatus(message, type = "info") { const el = document.getElementById("syncStatus"); if(el) { el.textContent = message; el.className = `text-sm text-center h-4 ${type === 'success' ? 'text-green-400' : 'text-red-400'}`; setTimeout(() => {el.textContent=''; el.className='text-center h-4';}, 5000); } }
-function exportDataToFile() { const dataToExport = { templates }; const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `${APP_NAME}-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url); showSyncStatus("Templates exported!", "success"); }
-function importDataFromFile(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = async (e) => { try { const data = JSON.parse(e.target.result); if (confirm("Import will overwrite current templates in this browser. Proceed?")) { if (data.templates) { templates = data.templates; } else { throw new Error("Invalid file format"); } saveData(); showSyncStatus("Import successful!", "success"); if(currentUser && confirm("Save imported templates to your account? This will overwrite your current server data.")) { await saveBackendData(); } } } catch (error) { showSyncStatus(`Import failed: ${error.message}`, "error"); } }; reader.readAsText(file); }
-
-function setupEventListeners() {
-    const elements = getElements();
-    
-    // Auth & Sync
-    elements.loginButton.addEventListener('click', () => elements.loginModal.style.display = 'block');
-    elements.registerButton.addEventListener('click', () => elements.registerModal.style.display = 'block');
-    elements.logoutButton.addEventListener('click', () => logoutUser());
-    elements.loginForm.addEventListener('submit', handleLogin);
-    elements.registerForm.addEventListener('submit', handleRegister);
-    elements.localSyncButton.addEventListener('click', () => elements.syncModal.style.display = 'block');
-    elements.exportDataButton.addEventListener('click', exportDataToFile);
-    elements.importDataInput.addEventListener('change', importDataFromFile);
-
-    // Modals
-    document.querySelectorAll('.close-modal, .close-modal-button').forEach(el => {
-        el.addEventListener('click', (e) => {
-            const modalId = e.currentTarget.dataset.modalId;
-            document.getElementById(modalId).style.display = 'none';
-        });
-    });
-
-    // App UI
-    elements.templateSelector.addEventListener('change', (e) => {
-        activeTemplateId = e.target.value;
-        localStorage.setItem(`${storagePrefix}activeTemplateId`, JSON.stringify(activeTemplateId));
-        renderEditor();
-        updateOutput();
-    });
-
-    elements.newTemplateBtn.addEventListener('click', () => openTemplateMaker());
-    elements.deleteTemplateBtn.addEventListener('click', deleteTemplate);
-
-    // Template Maker
-    elements.generatePartsBtn.addEventListener('click', generatePartsFromExample);
-    elements.saveTemplateBtn.addEventListener('click', saveTemplate);
-    elements.cancelTemplateBtn.addEventListener('click', () => elements.templateMaker.classList.add('hidden'));
-    elements.partsContainer.addEventListener('click', e => {
-        if (e.target.classList.contains('remove-part-btn')) {
-            e.target.closest('.grid').remove();
-        }
-    });
-
-    // Editor
-    elements.editorUI.addEventListener('input', e => {
-        if (e.target.id === 'mainInput' || e.target.classList.contains('dynamic-field')) {
-            updateOutput();
-            saveLocalData();
-        }
-    });
-    elements.editorUI.addEventListener('change', e => {
-        if (e.target.id === 'entrySelector') {
-            selectEntry(e.target.value);
-        }
-    });
-
-
-    // Tabs
-    elements.previewTab.addEventListener('click', () => {
-        elements.previewTab.classList.add('border-blue-500', 'text-white');
-        elements.previewTab.classList.remove('text-gray-400');
-        elements.bbcodeTab.classList.remove('border-blue-500', 'text-white');
-        elements.bbcodeTab.classList.add('text-gray-400');
-        elements.previewContent.classList.remove('hidden');
-        elements.bbcodeContent.classList.add('hidden');
-    });
-    elements.bbcodeTab.addEventListener('click', () => {
-        elements.bbcodeTab.classList.add('border-blue-500', 'text-white');
-        elements.bbcodeTab.classList.remove('text-gray-400');
-        elements.previewTab.classList.remove('border-blue-500', 'text-white');
-        elements.previewTab.classList.add('text-gray-400');
-        elements.bbcodeContent.classList.remove('hidden');
-        elements.previewContent.classList.add('hidden');
-    });
-
-    // Output buttons
-    elements.copyBBCodeBtn.addEventListener('click', () => {
-        elements.bbcodeOutput.select();
-        document.execCommand('copy');
-        alert("BBCode copied to clipboard!");
-    });
-    elements.exportTxtBtn.addEventListener('click', () => {
-        const blob = new Blob([elements.bbcodeOutput.value], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const templateName = templates.find(t=>t.id === activeTemplateId)?.name || 'bbcode';
-        a.download = `${templateName.replace(/\s/g, '_')}_output.txt`;
-        a.click();
-        URL.revokeObjectURL(url);
-    });
-}
-
-/**********************
- * Initial Page Load
- **********************/
-async function syncOnLoad() { if (!refreshToken) return; syncLog("Performing automatic sync on page load..."); try { const serverData = await fetchBackendData(); if (!serverData) { syncLog("Could not fetch server data for sync. Using existing local data."); return; } templates = serverData.templates; syncLog("Sync successful. Local data has been overwritten from server."); saveLocalData(); updateDisplay(); } catch (error) { console.error("An error occurred during automatic sync-on-load:", error); } }
-document.addEventListener("DOMContentLoaded", async () => {
-    loadLocalData();
-    setupEventListeners();
-    authToken = localStorage.getItem(`${storagePrefix}authToken`);
-    refreshToken = localStorage.getItem(`${storagePrefix}refreshToken`);
-    if (refreshToken) {
-        if (isTokenExpired(authToken)) { await attemptRefreshToken(); } else { currentUser = decodeJwtPayload(authToken); }
-        if (currentUser) { await syncOnLoad(); }
-    }
-    updateUIForLoginState();
-    updateDisplay();
-});
-
-</script>
+            <div class="sync-choice-actions"><button id="useLocalDataBtn" class="btn-upload">Use Local</button><button
+                    id="useServerDataBtn" class="btn-download">Use Server</button></div>
+        </div>
+    </div>
+    <div id="settingsModal" class="modal">
+        <div class="modal-content"><span class="close-modal" data-modal-id="settingsModal">&times;</span>
+            <h2>Settings</h2>
+            <div style="margin-top:20px;"><button id="changePasswordButton" style="display:none;">Change
+                    Password</button><button type="button" class="close-modal-button"
+                    data-modal-id="settingsModal">Close</button></div>
+        </div>
+    </div>
+    <script src="bbcode_editor.js"></script>
 </body>
+
 </html>
