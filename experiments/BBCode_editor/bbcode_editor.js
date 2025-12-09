@@ -945,16 +945,24 @@ window.savePreset = () => { const t = prompt("Name:"); if (!t) return; const f =
 
 // UPDATED ACTIONS FOR NEW STRUCTURE
 window.addUpdate = () => {
+    const game = state.games[state.activeGameIndex];
+    const updateTitle = 'Update X to Y';
+    const defName = generateUpdateFilename(game.originalTitle, updateTitle);
+    
     state.games[state.activeGameIndex].updates.push({
-        title: 'Update X to Y',
-        sections: [{ miniTitle: 'Proton Drive', links: [{ name: 'Update File', url: '' }] }]
+        title: updateTitle,
+        sections: [{ miniTitle: 'Proton Drive', links: [{ name: defName, url: '' }] }]
     });
     updateUIForActiveGame(); saveData();
 };
 window.removeUpdate = (i) => { if (confirm('Delete update?')) { state.games[state.activeGameIndex].updates.splice(i, 1); updateUIForActiveGame(); saveData(); } };
 
 window.addUpdateSection = (uIndex) => {
-    state.games[state.activeGameIndex].updates[uIndex].sections.push({ miniTitle: 'New Provider', links: [{ name: 'File Name', url: '' }] });
+    const game = state.games[state.activeGameIndex];
+    const update = game.updates[uIndex];
+    const defName = generateUpdateFilename(game.originalTitle, update.title);
+    
+    state.games[state.activeGameIndex].updates[uIndex].sections.push({ miniTitle: 'New Provider', links: [{ name: defName, url: '' }] });
     updateUIForActiveGame(); saveData();
 };
 window.removeUpdateSection = (uIndex, sIndex) => {
@@ -964,7 +972,11 @@ window.removeUpdateSection = (uIndex, sIndex) => {
     }
 };
 window.addSectionLink = (uIndex, sIndex) => {
-    state.games[state.activeGameIndex].updates[uIndex].sections[sIndex].links.push({ name: 'Part X', url: '' });
+    const game = state.games[state.activeGameIndex];
+    const update = game.updates[uIndex];
+    const defName = generateUpdateFilename(game.originalTitle, update.title);
+
+    state.games[state.activeGameIndex].updates[uIndex].sections[sIndex].links.push({ name: defName, url: '' });
     updateUIForActiveGame(); saveData();
 };
 window.removeSectionLink = (uIndex, sIndex, lIndex) => {
@@ -972,16 +984,26 @@ window.removeSectionLink = (uIndex, sIndex, lIndex) => {
     updateUIForActiveGame(); saveData();
 };
 
+// Helper for generating standardized filenames
+const generateUpdateFilename = (gameTitle, updateTitle) => {
+    const g = gameTitle.replace(/[^\w\s.-]/g, '').trim().replace(/\s+/g, '.');
+    const u = (updateTitle || 'Update').replace(/[^\w\s.-]/g, '').trim().replace(/\s+/g, '_');
+    return `${g}.${u}`;
+};
+
 window.copyUpdateFileName = (uIndex, sIndex, lIndex) => {
-    const game = state.games[state.activeGameIndex];
-    const update = game.updates[uIndex];
+    // 1. Try to get value from Input Field
+    const input = document.querySelector(`input[data-update-index="${uIndex}"][data-section-index="${sIndex}"][data-link-index="${lIndex}"][data-prop="linkName"]`);
+    let str = '';
 
-    const cleanGameTitle = game.originalTitle.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '.');
-    
-    let updateTitle = update.title || 'Update';
-    const cleanUpdateTitle = updateTitle.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '.');
-
-    const str = `${cleanGameTitle}.${cleanUpdateTitle}`;
+    if (input && input.value.trim()) {
+        str = input.value.trim();
+    } else {
+        // Fallback: Generate if empty (though logic below ensures it's pre-filled)
+        const game = state.games[state.activeGameIndex];
+        const update = game.updates[uIndex];
+        str = generateUpdateFilename(game.originalTitle, update.title);
+    }
 
     navigator.clipboard.writeText(str).then(() => {
         const btn = document.getElementById(`copy-update-btn-${uIndex}-${sIndex}-${lIndex}`);
@@ -998,7 +1020,7 @@ window.copyCrackFileName = (fileIndex) => {
     const game = state.games[state.activeGameIndex];
     const file = game.files[fileIndex];
     // Convert Title Space to Dots
-    const title = game.originalTitle.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '.');
+    const title = game.originalTitle.replace(/[^\w\s.-]/g, '').trim().replace(/\s+/g, '.');
     const platform = file.platform.toLowerCase();
 
     // Clean up Crack Type (e.g. "Cracked: Detanup01..." -> "Cracked-Detanup01...")
