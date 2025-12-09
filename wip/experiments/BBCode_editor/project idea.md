@@ -1,79 +1,162 @@
-# Project Refactor Prompt: Generic BBCode Engine & Form Builder
+# Project: Universal BBCode Template Engine (Refactor)
 
-**Location**
-All work to be done in: `/wip/experiments/BBCode_editor`
+## Overview
+Refactor the existing, single-purpose BBCode editor (`/wip/experiments/BBCode_editor`) into a **Universal Template Builder**.
 
-**High-Level Goal**
-Refactor the current hard-coded `bbcode_editor.js` into a **Generic Template Engine**.
-The goal is to create a "Tool Builder." The application will load with **zero** hard-coded logic. Instead, it will read user-defined "Templates" to generate the UI and processing rules dynamically.
+Currently, the application has hardcoded logic for specific games. The goal is to decouple this logic entirely. The system must allow users to define parsers, form fields, and output templates via a JSON configuration.
 
----
-
-### 1. UI Constraints & Styling
-* **The Top Bar:** The existing top navigation bar (Home, Meds, Experiments, Account, etc.) **must remain exactly as it is**. Do not modify its HTML or CSS class structure.
-* **Main Layout:** You have full creative freedom to redesign the main content area (below the top bar) to accommodate the new "Builder" and "Editor" interfaces. It should look modern and clean.
+**Core Objective:** The new system must be able to replicate the current "Steam Game Formatter" entirely via a JSON template, while allowing users to create, export, and share new templates (e.g., Movie Database, Recipe Formatter) easily.
 
 ---
 
-### 2. Architecture: The Template Library System
-
-We are moving from a single-purpose tool to a **Library of Tools**.
-
-**A. Template Storage (The Library)**
-* Users can create and save **multiple** distinct templates on their account (or LocalStorage).
-* **Metadata:** Each saved template must track:
-    * `name` (Unique ID)
-    * `createdDate`
-    * `lastEditedDate`
-    * `lastUsedDate`
-* **Switching:** The UI must provide a dropdown or menu to switch between loaded templates (e.g., switch from "Steam Game Formatter" to "Movie Info Formatter").
-* **Name Conflicts:** If a user imports or creates a template with a name that already exists, prompt the user to rename it (e.g., "Steam Formatter (Copy)").
-
-**B. The Data Structure Separation**
-We must distinguish between the **Tool** and the **Work**.
-
-1.  **The Template Object:** (The "Tool")
-    * Contains: Layout, Regex Rules, Widgets, Output Logic.
-    * *Managed via:* The Template Library.
-2.  **The User Data Object:** (The "Work")
-    * Contains: The specific values entered for a specific session (e.g., "Game: Half-Life 3", "Version: 1.0").
-    * *Managed via:* A separate "Record/Collection" dropdown *within* the active template.
+## 1. Technical Constraints
+* **Location:** `/wip/experiments/BBCode_editor`
+* **Stack:** Vanilla JavaScript (ES6+), TailwindCSS (CDN), LocalStorage.
+* **Forbidden:** Do NOT use React, Vue, or build steps. Keep it lightweight and raw.
+* **UI Preservation:** The `<header class="top-bar">` and its CSS must remain **untouched**.
+* **Auth:** Preserve existing `firebase/auth` logic (login/register/sync).
 
 ---
 
-### 3. Core Features
+## 2. Data Architecture
 
-#### A. The "Smart" Parser (User-Defined Logic)
-* **Input:** A raw text dump area.
-* **Logic Builder:** A UI where the user creates extraction rules.
-    * *Example:* User creates a rule: "Find text after 'Version:'" -> Save to variable `{version}`.
+### A. The Template Structure (The "Tool")
+This defines *how* data is parsed and formatted. Users can export this single object to share the tool with friends.
 
-#### B. The Visual Form Builder (Drag-and-Drop)
-* A GUI interface where the user builds the input form for their template.
-* **Widgets:** Text Input, Color Picker, Checkbox, Dropdown, Repeater/List.
-* **Binding:** Each widget binds to a variable.
+```javascript
+{
+  id: "steam_formatter_v1",
+  name: "Steam Game Formatter",
+  description: "Parses NFO text into BBCode",
+  version: "1.0.0",
+  // 1. PARSER CONFIG
+  parser: {
+    rules: [
+      { id: "ver", pattern: "Version: (.*)", target: "gameVersion" }
+    ]
+  },
+  // 2. FORM CONFIG
+  formFields: [
+    { type: "text", var: "gameTitle", label: "Title" },
+    { 
+      type: "checkbox", 
+      var: "hasCrack", 
+      label: "Include Crack?",
+      // CONDITIONAL VISIBILITY
+      showsFields: ["crackType", "crackUrl"] 
+    },
+    // NESTED REPEATER (Critical for current app parity)
+    { 
+      type: "repeater", 
+      var: "updates", 
+      label: "Updates", 
+      children: [
+        { type: "text", var: "updTitle" },
+        { 
+          type: "repeater", // Level 2 nesting
+          var: "links", 
+          children: [{ type: "text", var: "url" }] 
+        }
+      ] 
+    }
+  ],
+  // 3. OUTPUT CONFIG
+  outputTemplate: "[b]{gameTitle}[/b]\n[url={crackUrl}]Crack[/url]"
+}
+````
 
-#### C. The Logic Engine
-* Users can define conditional output logic.
-* *Example:* "IF `{crack_type}` contains 'Goldberg', THEN show `{crack_instructions}`."
+### B. The Session Data (The "Save File")
 
----
+This allows users to have multiple "projects" open at once.
 
-### 4. User Flow (The "Empty State" & Library)
+```javascript
+{
+  activeTemplateId: "steam_formatter_v1",
+  records: [
+    { id: 1, name: "Half-Life 3", data: { gameTitle: "Half-Life 3", ... } },
+    { id: 2, name: "Portal 3", data: { gameTitle: "Portal 3", ... } }
+  ]
+}
+```
 
-When the user loads the page:
-1.  **Initialize Library:** Check LocalStorage/Account for a list of saved templates.
-2.  **If Templates Exist:**
-    * Load the one with the most recent `lastUsedDate`.
-    * Show the "Template Switcher" in the UI to allow changing tools.
-3.  **If Library is Empty:**
-    * Show a clean "Welcome" screen.
-    * **Actions:** "Create New Template" OR "Import Template File (.json)".
+-----
 
----
+## 3\. Core Features & Requirements
 
-### 5. Deliverables
+### A. The "Legacy" Benchmark (CRITICAL)
 
-1.  **Data Structure Design:** Please propose the JSON structure for the `TemplateLibrary`, `Template`, and `SessionData` objects.
-2.  **State Management:** Explain how we will handle switching templates without losing unsaved data in the current session.
-3.  **Proof of Concept:** Implement the **Template Library Manager** (Create, List, Switch, Delete) and the "Empty State" screen.
+You must create a default JSON template (`default_templates/steam_formatter.json`) that replicates the **exact** functionality of the current hardcoded app.
+
+  * **Must include:** All current fields (Clean/Crack URLs, Custom Groups, Updates, Patch Notes).
+  * **Must handle:** The complex nested structures (Groups -\> Files -\> Links).
+  * **Outcome:** If I load this template and paste the same raw text as before, the BBCode output must be identical.
+
+### B. Smart Parser & Regex Builder
+
+Users shouldn't need to write raw Regex if they don't want to.
+
+  * **Visual Builder:** "Find text between [START] and [END]".
+  * **Live Preview:** Highlight matches in real-time as the user types the rule.
+  * **Variable Mapping:** Extracted text auto-fills the corresponding Form Field.
+
+### C. Import / Export System
+
+The system must distinguish between sharing a *tool* and backing up *work*.
+
+1.  **Export Template (.json):** Exports *only* the definition (Rules + Form + Output). Used for sharing with others.
+2.  **Export Backup (.json):** Exports ALL templates + ALL saved records. Used for migration/safety.
+3.  **Import Logic:**
+      * Detect if file is a Template or a Backup.
+      * **Conflict Handling:** If importing a template named "Steam Formatter" and one already exists, prompt to "Rename", "Overwrite", or "Cancel".
+
+### D. Advanced Widget Support
+
+To match current capabilities, the Form Builder needs:
+
+1.  **Conditional Logic:** "Show Field B only if Checkbox A is checked."
+2.  **Nested Repeaters:** Support at least 3 levels deep (e.g., Update -\> Provider -\> Links).
+3.  **Custom Actions:** Ability to define simple JS actions (like the "Copy Crack Filename" button in the current app).
+
+-----
+
+## 4\. Implementation Phases
+
+### Phase 1: Engine Foundation
+
+  * Define the JSON Schema for Templates and Sessions.
+  * Build the `TemplateManager` class (Create, Load, Save, Delete).
+  * Create the "Steam Formatter" JSON file manually to prove the schema works.
+
+### Phase 2: The Form Renderer
+
+  * Build a dynamic form generator that reads the JSON schema.
+  * Implement standard widgets (Text, Color, Checkbox).
+  * **Critical:** Implement the `RepeaterWidget` that supports nesting (recursion).
+
+### Phase 3: The Template Builder UI
+
+  * Create the UI to allow users to build these forms *without* writing JSON.
+  * Drag-and-drop form builder.
+  * Visual Parser/Regex builder.
+
+### Phase 4: Output & logic
+
+  * Implement the template renderer (replacing variables like `{gameTitle}` in the output string).
+  * Implement conditional logic blocks (`...`).
+
+### Phase 5: Polish & Migration
+
+  * Implement Import/Export flows.
+  * Add the "Migration Wizard" that converts existing LocalStorage data into the new format.
+
+-----
+
+## 5\. Success Criteria
+
+1.  The app loads with "Steam Formatter" pre-selected.
+2.  I can create a NEW template called "Recipe Maker".
+3.  I can add a "Ingredients" repeater list to "Recipe Maker".
+4.  I can export "Recipe Maker.json" and import it in a private window.
+5.  **Most Importantly:** The original Steam functionality works exactly as before, but runs entirely off the new JSON engine.
+
+<!-- end list -->
