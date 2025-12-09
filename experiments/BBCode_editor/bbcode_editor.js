@@ -551,7 +551,7 @@ const parseInputText = (text) => {
             const existingFile = currentGame.files[existingFileIndex];
 
             // Check for version change
-            if (existingFile.buildId !== buildId) {
+                if (existingFile.buildId !== buildId) {
                 existingFile.buildId = buildId;
                 existingFile.fullDate = cleanFullDate;
                 existingFile.shortDate = shortDate;
@@ -561,6 +561,24 @@ const parseInputText = (text) => {
             } else {
                 existingFile.fullDate = cleanFullDate;
                 existingFile.shortDate = shortDate;
+            }
+
+            // ALSO Update Custom Groups
+            if (currentGame.customGroups) {
+                currentGame.customGroups.forEach(grp => {
+                    // Find matching file in this group
+                    const grpFile = grp.files.find(f => f.platform === platform && f.branch === branch);
+                    if (grpFile) {
+                        grpFile.buildId = buildId;
+                        grpFile.fullDate = cleanFullDate;
+                        grpFile.shortDate = shortDate;
+                        grpFile.patchNoteUrl = `https://steamdb.info/patchnotes/${buildId}/`;
+                        
+                        // We don't necessarily flag cleanUrlNeedsUpdate for custom groups as they might point to different generic links, 
+                        // but if we want consistency we can. The user specifically mentioned "build info is not updated".
+                        // Let's just update the info.
+                    }
+                });
             }
         } else {
             // --- NEW FILE ---
@@ -848,6 +866,9 @@ const updateUIForActiveGame = () => {
                 <div class="flex gap-2 mt-1 items-center">
                      <input type="text" data-update-index="${ui}" data-section-index="${si}" data-link-index="${li}" data-prop="linkName" value="${l.name || ''}" class="w-1/3 text-xs bg-gray-900 border-gray-600 rounded p-1" placeholder="Name (e.g., Windows)">
                      <input type="text" data-update-index="${ui}" data-section-index="${si}" data-link-index="${li}" data-prop="linkUrl" value="${l.url || ''}" class="w-2/3 text-xs bg-gray-900 border-gray-600 rounded p-1" placeholder="URL">
+                     <button id="copy-update-btn-${ui}-${si}-${li}" class="text-gray-400 font-bold ml-1 hover:text-blue-400" onclick="window.copyUpdateFileName(${ui}, ${si}, ${li})" title="Copy Filename">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2-2v1"></path></svg>
+                     </button>
                      <button class="text-red-400 font-bold ml-1 hover:text-red-200" onclick="window.removeSectionLink(${ui}, ${si}, ${li})">x</button>
                 </div>`;
             });
@@ -949,6 +970,27 @@ window.addSectionLink = (uIndex, sIndex) => {
 window.removeSectionLink = (uIndex, sIndex, lIndex) => {
     state.games[state.activeGameIndex].updates[uIndex].sections[sIndex].links.splice(lIndex, 1);
     updateUIForActiveGame(); saveData();
+};
+
+window.copyUpdateFileName = (uIndex, sIndex, lIndex) => {
+    const game = state.games[state.activeGameIndex];
+    const update = game.updates[uIndex];
+
+    const cleanGameTitle = game.originalTitle.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '.');
+    
+    let updateTitle = update.title || 'Update';
+    const cleanUpdateTitle = updateTitle.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '.');
+
+    const str = `${cleanGameTitle}.${cleanUpdateTitle}`;
+
+    navigator.clipboard.writeText(str).then(() => {
+        const btn = document.getElementById(`copy-update-btn-${uIndex}-${sIndex}-${lIndex}`);
+        if (btn) {
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+            setTimeout(() => btn.innerHTML = originalHTML, 1500);
+        }
+    });
 };
 
 // COPY CRACK FUNCTION
