@@ -985,9 +985,13 @@ window.removeSectionLink = (uIndex, sIndex, lIndex) => {
 };
 
 // Helper for generating standardized filenames
+// Expected format: "Game.Title.Update_1.0_to_1.02"
 const generateUpdateFilename = (gameTitle, updateTitle) => {
+    // Game title: remove special chars (keep letters, numbers, spaces, dots, hyphens), trim, replace spaces with dots
     const g = gameTitle.replace(/[^\w\s.-]/g, '').trim().replace(/\s+/g, '.');
-    const u = (updateTitle || 'Update').replace(/[^\w\s.-]/g, '').trim().replace(/\s+/g, '_');
+    // Update title: remove special chars (keep letters, numbers, spaces, dots, hyphens), trim, replace spaces with underscores
+    // Dots in version numbers like "1.0" are preserved
+    const u = (updateTitle || 'Update').replace(/[^\w\s._-]/g, '').trim().replace(/\s+/g, '_');
     return `${g}.${u}`;
 };
 
@@ -1133,11 +1137,35 @@ function setupEventListeners() {
 
             // UPDATE LOGIC FOR NEW STRUCTURE
             else if (u !== undefined && s !== undefined && l !== undefined) {
-                if (p === 'linkName') game.updates[u].sections[s].links[l].name = t.value;
+                if (p === 'linkName') {
+                    game.updates[u].sections[s].links[l].name = t.value;
+                    // Mark as manually modified so auto-update doesn't overwrite
+                    game.updates[u].sections[s].links[l].userModified = true;
+                }
                 else if (p === 'linkUrl') game.updates[u].sections[s].links[l].url = t.value;
             }
             else if (u !== undefined && s !== undefined && p === 'miniTitle') game.updates[u].sections[s].miniTitle = t.value;
-            else if (u !== undefined && p === 'title') game.updates[u].title = t.value;
+            else if (u !== undefined && p === 'title') {
+                const oldTitle = game.updates[u].title;
+                game.updates[u].title = t.value;
+                
+                // Auto-update filename fields that haven't been manually modified
+                const newFilename = generateUpdateFilename(game.originalTitle, t.value);
+                const oldFilename = generateUpdateFilename(game.originalTitle, oldTitle);
+                
+                game.updates[u].sections.forEach((section, sIdx) => {
+                    section.links.forEach((link, lIdx) => {
+                        // Only update if: not manually modified, OR if current name matches old auto-generated name
+                        if (!link.userModified || link.name === oldFilename) {
+                            link.name = newFilename;
+                            link.userModified = false; // Reset if we're updating
+                            // Also update the input field in the DOM
+                            const input = document.querySelector(`input[data-update-index="${u}"][data-section-index="${sIdx}"][data-link-index="${lIdx}"][data-prop="linkName"]`);
+                            if (input) input.value = newFilename;
+                        }
+                    });
+                });
+            }
 
             else if (p === 'mainGroupTitle') game.mainGroupTitle = t.value;
             else if (f !== undefined) {
