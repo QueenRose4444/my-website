@@ -1,7 +1,7 @@
 <template id="multi-url-group-template-with-updates">
 <!--IF:gameVersion--><!--IF:showVersionLabel-->Version: <!--/IF:showVersionLabel-->{gameVersion}
 
-<!--/IF:gameVersion--><!--IF:customGroups-->[size=85]{mainGroupTitle}[/size]
+<!--/IF:gameVersion--><!--IF:customGroups-->{mainGroupTitle}
 <!--/IF:customGroups-->[color={sectionTitleColor}]Clean Steam Files:[/color]
 <!--LOOP:cleanFiles-->[url={file.cleanUrl}][color={cleanUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] (Clean Steam Files)[/b][/color][/url]
 [size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
