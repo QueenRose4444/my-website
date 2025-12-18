@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Steam Update Tracker</title>
+
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" href="/images/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/images/favicon.svg" />
+    <link rel="shortcut icon" href="/images/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="RoseStuffs" />
+    <link rel="manifest" href="/images/site.webmanifest" />
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="steam_update_checker.css">
+</head>
+
+<body>
+
+    <!-- NAVBAR -->
+    <header class="top-bar">
+        <nav class="nav-container">
+            <div class="nav-left">
+                <ul class="nav-links">
+                    <li><a href="../../home/">Home</a></li>
+                    <li><a href="../../meds/">Meds</a></li>
+                    <li><a href="">WIP-PAGE</a></li>
+                    <li><a href="../">Experiments</a></li>
+                    <li><a href="#" class="active-link">Steam Tracker</a></li>
+                </ul>
+            </div>
+        </nav>
+        <div class="user-account">
+            <!-- Status for the MAIN Website Account -->
+            <span id="webUserStatus" style="font-size: 0.8em; color: #666;">Guest</span>
+            <button id="webLoginBtn" class="btn btn-dark">Web Login</button>
+            <button id="webLogoutBtn" class="btn btn-dark" style="display:none;">Web Logout</button>
+        </div>
+    </header>
+
+    <div class="app-container">
+        <!-- SIDEBAR -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <span class="sidebar-title">LIBRARY</span>
+                <i class="fas fa-bars" style="cursor: pointer;" onclick="toggleSidebar()"></i>
+            </div>
+
+            <!-- MAIN MENU -->
+            <ul class="sidebar-menu">
+                <!-- 1. All Games -->
+                <li>
+                    <button id="btn-all" onclick="switchView('all')">
+                        <i class="fas fa-globe"></i>
+                        <span class="menu-text">All Games</span>
+                    </button>
+                </li>
+
+                <!-- 2. Top 100 -->
+                <li>
+                    <button id="btn-top100" onclick="switchView('top100')">
+                        <i class="fas fa-trophy"></i>
+                        <span class="menu-text">Top 100</span>
+                    </button>
+                </li>
+
+                <!-- 3. Tracked (With Separator) -->
+                <li style="margin-top: 20px; border-top: 1px solid #333; padding-top: 10px;">
+                    <button id="btn-tracked" class="active" onclick="switchView('tracked')">
+                        <i class="fas fa-heart"></i>
+                        <span class="menu-text">Tracked Games</span>
+                    </button>
+                </li>
+            </ul>
+
+            <!-- FOOTER (Settings + Discord) -->
+            <div class="sidebar-footer">
+                <!-- Settings -->
+                <button onclick="openGlobalSettings()" class="btn btn-dark footer-btn" title="Settings">
+                    <i class="fas fa-cog"></i> <span class="menu-text">Settings</span>
+                </button>
+
+                <div id="discordStatusSection" class="footer-group">
+                    <p class="footer-label">Tracker Account</p>
+
+                    <!-- Link Button -->
+                    <button id="discordConnectBtn" class="btn btn-discord footer-btn" onclick="showLoginPrompt()"
+                        title="Link Discord">
+                        <i class="fab fa-discord"></i> <span class="menu-text">Link Discord</span>
+                    </button>
+
+                    <!-- User Info (Logged In) -->
+                    <div id="discordUserInfo" style="display: none;">
+                        <div class="discord-user-row">
+                            <img id="discordAvatar" src="" class="discord-avatar">
+                            <span id="discordName" class="menu-text" style="font-weight: bold;">User</span>
+                        </div>
+                        <button onclick="logoutDiscord()" class="btn btn-dark footer-btn" style="font-size: 0.8em;"
+                            title="Unlink Account">
+                            <i class="fas fa-sign-out-alt"></i> <span class="menu-text">Unlink</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <!-- Auth Overlay / Login Modal (Hidden by default now) -->
+            <div id="authOverlay" class="auth-overlay" style="display: none;">
+                <div class="auth-modal-content"
+                    style="text-align: center; background: #222; padding: 40px; border-radius: 12px; border: 1px solid #444; position: relative;">
+                    <span class="close-modal" onclick="closeLoginPrompt()"
+                        style="top: 10px; right: 15px;">&times;</span>
+                    <i class="fab fa-discord" style="font-size: 4em; color: #5865F2; margin-bottom: 20px;"></i>
+                    <h2>Connect to Steam Tracker</h2>
+                    <p style="color: #aaa; margin-bottom: 30px;">Link your Discord account to track games and receive
+                        updates.</p>
+                    <button onclick="loginDiscord()" class="btn btn-discord"
+                        style="font-size: 1.2em; padding: 15px 30px;">
+                        Login with Discord
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search (UPDATED: oninput for live search) -->
+            <div class="search-container">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" id="searchInput" class="search-input"
+                    placeholder="Search games or paste Steam URL..." oninput="handleSearch(event)">
+            </div>
+
+            <!-- Controls Bar -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 id="viewTitle" style="color: #4bc0c0; margin: 0;">Your Tracked Games</h2>
+
+                <!-- Right Side Controls -->
+                <div style="display: flex; align-items: center; gap: 10px;">
+
+                    <!-- Top 100 Specific Toggles (Hidden by default) -->
+                    <div id="top100Controls"
+                        style="display: none; background: #2a2a2a; padding: 4px; border-radius: 6px;">
+                        <button id="btn-rank-ccu" class="btn btn-dark" onclick="loadTop100('ccu')"
+                            style="font-size: 0.9em;">Concurrent</button>
+                        <button id="btn-rank-daily" class="btn btn-dark" onclick="loadTop100('daily')"
+                            style="font-size: 0.9em;">Daily</button>
+                    </div>
+
+                    <!-- Regular Sort (Hidden on Top 100 page) -->
+                    <div id="sortControlContainer" class="sort-control">
+                        <span style="color: #888; margin-right: 10px; font-size: 0.9em;">Sort by:</span>
+                        <select id="sortSelect" onchange="handleSort()" class="search-input"
+                            style="width: auto; padding: 8px 15px; font-size: 0.9em; cursor: pointer;">
+                            <option value="popular">Popularity</option>
+                            <option value="name">Name (A-Z)</option>
+                            <option value="added">Date Added</option>
+                            <option value="updated">Last Update</option>
+                        </select>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Grid -->
+            <div id="gameGrid" class="game-grid"></div>
+
+            <!-- Load More Button Container -->
+            <div id="loadMoreContainer" style="text-align: center; padding: 20px; display: none;">
+                <button class="btn btn-dark" onclick="loadMoreGames()" style="min-width: 200px;">Load More
+                    Results</button>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- GAME DETAILS MODAL -->
+    <div id="gameModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <!-- NEW: Track Button Top Left -->
+            <button id="modalTrackBtn" class="modal-header-btn-left">Track</button>
+
+            <span class="close-modal" onclick="closeModal('gameModal')">&times;</span>
+            <div class="modal-tabs">
+                <button class="tab-btn active" onclick="switchModalTab('info')">Game Info</button>
+                <!-- Renamed from 'Settings' to 'Links' since Notification settings moved -->
+                <button class="tab-btn" onclick="switchModalTab('settings')">Links</button>
+            </div>
+            <div id="modalBody" style="min-height: 200px;">
+                <!-- Content injected via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- GLOBAL SETTINGS MODAL -->
+    <div id="globalSettingsModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal('globalSettingsModal')">&times;</span>
+
+            <!-- Settings Tabs -->
+            <div class="modal-tabs" style="padding-top: 20px;">
+                <button class="tab-btn active" onclick="switchSettingsTab('interface')">Interface</button>
+                <button class="tab-btn" onclick="switchSettingsTab('notifications')">Notifications</button>
+                <button class="tab-btn" onclick="switchSettingsTab('rules')">Domain Rules</button>
+                <button class="tab-btn" onclick="switchSettingsTab('security')">Security</button>
+            </div>
+
+            <!-- INTERFACE SETTINGS TAB -->
+            <div id="settingsTabInterface" style="padding: 20px;">
+                <div class="settings-group" style="background: none; border: none; padding: 0;">
+                    <h2 style="color:#4bc0c0; margin-bottom: 20px;">Interface Settings</h2>
+                    <p style="color:#ccc; margin-bottom: 20px; font-size: 0.9em;">
+                        Customize how the site looks and behaves. These settings sync to your Web Account.
+                    </p>
+
+                    <!-- Default View -->
+                    <div class="checkbox-row" style="margin-bottom: 15px;">
+                        <span class="checkbox-label">Start Page</span>
+                        <select id="prefDefaultPage" class="search-input" style="width: auto; padding: 5px 10px;"
+                            onchange="saveInterfacePreferences()">
+                            <option value="tracked">Tracked Games</option>
+                            <option value="all">All Games</option>
+                            <option value="top100">Top 100</option>
+                        </select>
+                    </div>
+
+                    <!-- PC Sidebar -->
+                    <div class="checkbox-row" style="margin-bottom: 15px;">
+                        <span class="checkbox-label">Default PC Sidebar</span>
+                        <select id="prefSidebarPC" class="search-input" style="width: auto; padding: 5px 10px;"
+                            onchange="saveInterfacePreferences()">
+                            <option value="open">Open</option>
+                            <option value="closed">Closed</option>
+                        </select>
+                    </div>
+
+                    <!-- Mobile Sidebar -->
+                    <div class="checkbox-row" style="margin-bottom: 15px;">
+                        <span class="checkbox-label">Default Mobile Sidebar</span>
+                        <select id="prefSidebarMobile" class="search-input" style="width: auto; padding: 5px 10px;"
+                            onchange="saveInterfacePreferences()">
+                            <option value="closed">Closed</option>
+                            <option value="open">Open</option>
+                        </select>
+                    </div>
+
+                    <!-- Mobile Padding -->
+                    <div class="checkbox-row" style="margin-bottom: 15px;">
+                        <span class="checkbox-label">Mobile Sidebar Padding (Bottom)</span>
+                        <div style="display:flex; align-items:center; gap:5px;">
+                            <input type="number" id="prefMobilePadding" class="search-input"
+                                style="width: 80px; padding: 5px;" value="0" onchange="saveInterfacePreferences()">
+                            <span style="color:#888;">px</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- NOTIFICATIONS TAB (New!) -->
+            <div id="settingsTabNotifications" style="padding: 20px; display: none;">
+                <div class="settings-group" style="background: none; border: none; padding: 0;">
+                    <h2 style="color:#4bc0c0; margin-bottom: 20px;">Server Notifications</h2>
+                    <p style="color:#ccc; margin-bottom: 20px; font-size: 0.9em;">
+                        Manage how the bot notifies you across different Discord servers. These settings apply to
+                        <strong>all games</strong>.
+                    </p>
+
+                    <div id="guildSettingsList" style="min-height:50px; max-height: 400px; overflow-y: auto;">
+                        <div style="text-align:center; color:#666;">Loading settings...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DOMAIN RULES TAB -->
+            <div id="settingsTabRules" style="padding: 20px; display: none;">
+                <div class="settings-group" style="background: none; border: none; padding: 0;">
+                    <h2 style="color:#4bc0c0; margin-bottom: 20px;">Global Tracking Rules</h2>
+                    <p style="color:#ccc; margin-bottom: 20px; font-size: 0.9em;">
+                        Define rules to automatically add parameters to URLs based on their domain.
+                    </p>
+
+                    <div style="display:flex; gap:10px; margin-bottom: 20px;">
+                        <input type="text" id="ruleDomain" placeholder="Domain (e.g. steampowered.com)"
+                            class="search-input" style="flex: 2; padding: 10px; border-radius: 4px;">
+                        <input type="text" id="ruleParams" placeholder="Params (e.g. ?source=discord)"
+                            class="search-input" style="flex: 2; padding: 10px; border-radius: 4px;">
+                        <button class="btn btn-primary" onclick="addDomainRule()">Add</button>
+                    </div>
+
+                    <div id="domainRulesList" style="max-height: 300px; overflow-y: auto;">
+                        <!-- Rules injected here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECURITY TAB -->
+            <div id="settingsTabSecurity" style="padding: 20px; display: none;">
+                <div class="settings-group" style="background: none; border: none; padding: 0;">
+                    <h2 style="color:#4bc0c0; margin-bottom: 20px;">Account Security</h2>
+
+                    <!-- Token Info -->
+                    <div style="background: #1a1a1a; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <p style="color:#ccc; font-size: 0.9em; margin-bottom: 10px;">
+                            <i class="fas fa-key" style="color:#4bc0c0; margin-right: 8px;"></i>
+                            Your tracker token is used to authenticate API requests. If you suspect it's been
+                            compromised, regenerate it immediately.
+                        </p>
+                        <p style="color:#888; font-size: 0.8em;">
+                            <strong>Note:</strong> Regenerating will log you out on all other devices/browsers.
+                        </p>
+                    </div>
+
+                    <!-- Regenerate Button -->
+                    <div id="securityActions">
+                        <button class="btn btn-danger" onclick="regenerateToken()" style="width: 100%; padding: 12px;">
+                            <i class="fas fa-sync-alt"></i> Regenerate Security Token
+                        </button>
+                    </div>
+
+                    <!-- Not logged in state -->
+                    <div id="securityNotLoggedIn" style="display: none; text-align: center; padding: 20px;">
+                        <p style="color:#888;">Login to manage security settings.</p>
+                        <button class="btn btn-discord" onclick="showLoginPrompt()">
+                            <i class="fab fa-discord"></i> Login with Discord
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- WEB LOGIN MODAL -->
+    <div id="webLoginModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 400px;">
+            <span class="close-modal" onclick="closeModal('webLoginModal')">&times;</span>
+            <h2 style="margin-bottom: 20px; color: #4bc0c0; padding: 20px;">Web Account Login</h2>
+            <form id="webLoginForm" style="padding: 0 20px 20px 20px;">
+                <input type="text" id="webUsername" placeholder="Username" autocomplete="username" class="search-input"
+                    style="border-radius: 4px; margin-bottom: 10px; padding: 10px;">
+                <input type="password" id="webPassword" placeholder="Password" autocomplete="current-password"
+                    class="search-input" style="border-radius: 4px; margin-bottom: 20px; padding: 10px;">
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="/auth.js"></script>
+    <script src="steam_update_checker.js"></script>
+</body>
+
+</html>
