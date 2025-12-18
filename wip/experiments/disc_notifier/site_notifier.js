@@ -1,4 +1,5 @@
 // site_notifier.js - Handles login and managing site monitors via the backend API.
+// UPDATED: Now uses the global AuthManager for cross-tab login syncing.
 
 /*************************************
  * APPLICATION & ENVIRONMENT CONFIGURATION
@@ -8,13 +9,9 @@ const ENVIRONMENT = 'wip'; // 'live' or 'wip'
 
 const envConfigs = {
     live: {
-        storagePrefix: `${APP_NAME}_live_`,
-        loginBackendUrl: 'https://main-backend-live.rosiesite.workers.dev',
         notifierBackendUrl: 'https://disc_notifier.rosestuffs.org'
     },
     wip: {
-        storagePrefix: `${APP_NAME}_wip_`,
-        loginBackendUrl: 'https://main-backend-wip.rosiesite.workers.dev',
         notifierBackendUrl: 'https://disc_notifier.rosestuffs.org'
     }
 };
@@ -24,17 +21,7 @@ const activeConfig = envConfigs[ENVIRONMENT];
 /*************************************
  * CONSTANTS
  *************************************/
-const storagePrefix = activeConfig.storagePrefix;
-const LOGIN_BACKEND_URL = activeConfig.loginBackendUrl;
 const NOTIFIER_BACKEND_URL = activeConfig.notifierBackendUrl;
-
-// Auth endpoints
-const LOGIN_ENDPOINT = `${LOGIN_BACKEND_URL}/api/auth/login`;
-const REGISTER_ENDPOINT = `${LOGIN_BACKEND_URL}/api/auth/register`;
-const REFRESH_ENDPOINT = `${LOGIN_BACKEND_URL}/api/auth/refresh`;
-const LOGOUT_ENDPOINT = `${LOGIN_BACKEND_URL}/api/auth/logout`;
-const CHANGE_PASSWORD_ENDPOINT = `${LOGIN_BACKEND_URL}/api/auth/change-password`;
-const USER_DATA_ENDPOINT = `${LOGIN_BACKEND_URL}/api/data/${APP_NAME}`; 
 
 // Notifier endpoints
 const MONITORS_ENDPOINT = `${NOTIFIER_BACKEND_URL}/api/monitors`;
@@ -48,12 +35,8 @@ let countdownIntervals = {};
 let autoRefreshInterval = null;
 let pendingCookieFile = null; // Stores the cookie file for new monitors
 
-// --- Auth State ---
-let currentUser = null;
-let authToken = localStorage.getItem(`${storagePrefix}authToken`);
-let refreshToken = localStorage.getItem(`${storagePrefix}refreshToken`);
-let isRefreshingToken = false;
-let refreshSubscribers = [];
+// --- Auth State (via AuthManager) ---
+let authManager = null; // Will be initialized in DOMContentLoaded
 
 /***********************
  * DOM Element References
@@ -131,66 +114,12 @@ function getElements() {
 }
 
 /************************************
- * Auth & Generic Backend Logic
+ * Auth Wrapper (uses global AuthManager)
  ************************************/
-function decodeJwtPayload(token) {
-    try {
-        const base64Url = token.split('.')[1];
-        if (!base64Url) return null;
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
-        return JSON.parse(jsonPayload);
-    } catch (e) { 
-        console.error("Failed to decode JWT:", e); 
-        return null; 
-    }
-}
-
-function isTokenExpired(token) {
-    if (!token) return true;
-    const payload = decodeJwtPayload(token);
-    return payload ? Date.now() >= payload.exp * 1000 : true;
-}
-
-async function attemptRefreshToken() {
-    if (!refreshToken) return false;
-    if (isRefreshingToken) return new Promise(resolve => refreshSubscribers.push(resolve));
-    isRefreshingToken = true;
-    let success = false;
-    try {
-        const response = await fetch(REFRESH_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken }) });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Refresh failed');
-        authToken = data.accessToken;
-        localStorage.setItem(`${storagePrefix}authToken`, authToken);
-        currentUser = decodeJwtPayload(authToken);
-        success = true;
-    } catch (error) {
-        await logoutUser("Your session could not be refreshed. This can happen if you log out elsewhere. Please log in again.");
-        success = false;
-    } finally {
-        isRefreshingToken = false;
-        refreshSubscribers.forEach(cb => cb(success));
-        refreshSubscribers = [];
-    }
-    return success;
-}
-
+// Helper to access AuthManager's fetchWithAuth for authenticated requests
 async function fetchWithAuth(url, options = {}) {
-    if (!authToken || isTokenExpired(authToken)) {
-        const refreshed = await attemptRefreshToken();
-        if (!refreshed) throw new Error("Authentication failed; session expired.");
-    }
-    options.headers = { ...options.headers, 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' };
-    let response = await fetch(url, options);
-    if (response.status === 401) {
-        const refreshed = await attemptRefreshToken();
-        if (refreshed) {
-            options.headers['Authorization'] = `Bearer ${authToken}`;
-            response = await fetch(url, options);
-        } else { throw new Error("Authentication failed after retry."); }
-    }
-    return response;
+    if (!authManager) throw new Error("AuthManager not initialized");
+    return authManager.fetchWithAuth(url, options);
 }
 
 /*******************************
@@ -394,9 +323,9 @@ function updateDisplay() {
  * Discord User Management (User Data Sync)
  ********************************/
 async function fetchUserData() {
-    if (!currentUser) return;
+    if (!authManager || !authManager.isLoggedIn()) return;
     try {
-        const response = await fetchWithAuth(USER_DATA_ENDPOINT);
+        const response = await authManager.fetchWithAuth(authManager.endpoints.data);
         if (!response.ok) {
             if (response.status === 404) {
                 console.log("No user data on server yet.");
@@ -415,9 +344,9 @@ async function fetchUserData() {
 }
 
 async function saveUserData() {
-    if (!currentUser) return;
+    if (!authManager || !authManager.isLoggedIn()) return;
     try {
-        await fetchWithAuth(USER_DATA_ENDPOINT, {
+        await authManager.fetchWithAuth(authManager.endpoints.data, {
             method: 'POST',
             body: JSON.stringify({ discordUsers: discordUsers })
         });
@@ -483,10 +412,10 @@ async function handleDeleteDiscordUser(id) {
  ********************************/
 
 async function fetchMonitors(isAutoRefresh = false) {
-    if (!currentUser) return;
+    if (!authManager || !authManager.isLoggedIn()) return;
     try {
-        const userIdField = currentUser.sub || currentUser.userId;
-        const response = await fetchWithAuth(`${MONITORS_ENDPOINT}?userId=${userIdField}`);
+        const userIdField = authManager.currentUser.sub || authManager.currentUser.userId;
+        const response = await authManager.fetchWithAuth(`${MONITORS_ENDPOINT}?userId=${userIdField}`);
         if (!response.ok) throw new Error('Failed to fetch monitors');
         
         const newMonitors = await response.json();
@@ -508,7 +437,7 @@ async function handleAddMonitor(event) {
     event.preventDefault();
     const elements = getElements();
     elements.addMonitorError.textContent = '';
-    const userIdField = currentUser?.sub || currentUser?.userId;
+    const userIdField = authManager?.currentUser?.sub || authManager?.currentUser?.userId;
     if (!userIdField) {
         elements.addMonitorError.textContent = 'Please log in first.';
         return;
@@ -531,7 +460,7 @@ async function handleAddMonitor(event) {
     };
 
     try {
-        const response = await fetchWithAuth(MONITORS_ENDPOINT, { method: 'POST', body: JSON.stringify(newMonitor) });
+        const response = await authManager.fetchWithAuth(MONITORS_ENDPOINT, { method: 'POST', body: JSON.stringify(newMonitor) });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Failed to add monitor');
         
@@ -582,7 +511,7 @@ async function handleUpdateMonitor(event) {
     };
 
     try {
-        const response = await fetchWithAuth(`${MONITORS_ENDPOINT}/${monitorId}`, { method: 'PUT', body: JSON.stringify(updatedData) });
+        const response = await authManager.fetchWithAuth(`${MONITORS_ENDPOINT}/${monitorId}`, { method: 'PUT', body: JSON.stringify(updatedData) });
         const errorData = await response.json();
         if (!response.ok) throw new Error(errorData.error || 'Failed to update monitor');
 
@@ -653,7 +582,7 @@ async function handleDeleteCookies() {
 
 async function handleResumeMonitor(monitorId) {
     try {
-        const response = await fetchWithAuth(`${MONITORS_ENDPOINT}/${monitorId}/resume`, { method: 'POST' });
+        const response = await authManager.fetchWithAuth(`${MONITORS_ENDPOINT}/${monitorId}/resume`, { method: 'POST' });
         if (!response.ok) throw new Error((await response.json()).error);
         await fetchMonitors();
     } catch (error) {
@@ -664,7 +593,7 @@ async function handleResumeMonitor(monitorId) {
 async function handleDeleteMonitor(monitorId) {
     if (confirm("Are you sure you want to delete this monitor?")) {
         try {
-            const response = await fetchWithAuth(`${MONITORS_ENDPOINT}/${monitorId}`, { method: 'DELETE' });
+            const response = await authManager.fetchWithAuth(`${MONITORS_ENDPOINT}/${monitorId}`, { method: 'DELETE' });
             if (!response.ok) throw new Error((await response.json()).error);
             await fetchMonitors();
         } catch (error) {
@@ -678,8 +607,10 @@ async function handleDeleteMonitor(monitorId) {
  ********************************/
 function updateUIForLoginState() {
     const elements = getElements();
-    if (!elements.loginButton) return;
-    const isLoggedIn = !!refreshToken;
+    if (!elements.loginButton || !authManager) return;
+    const isLoggedIn = authManager.isLoggedIn();
+    const currentUser = authManager.currentUser;
+    
     elements.loginButton.style.display = isLoggedIn ? 'none' : 'inline-block';
     elements.registerButton.style.display = isLoggedIn ? 'none' : 'inline-block';
     elements.logoutButton.style.display = isLoggedIn ? 'inline-block' : 'none';
@@ -702,20 +633,10 @@ async function handleLogin(event) {
     const username = elements.loginForm.elements.loginUsername.value.trim();
     const password = elements.loginForm.elements.loginPassword.value;
     try {
-        const response = await fetch(LOGIN_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
-        
-        authToken = data.accessToken;
-        refreshToken = data.refreshToken;
-        localStorage.setItem(`${storagePrefix}authToken`, authToken);
-        localStorage.setItem(`${storagePrefix}refreshToken`, refreshToken);
-        currentUser = decodeJwtPayload(authToken);
-        
+        await authManager.login(username, password);
         elements.loginModal.style.display = 'none';
-        updateUIForLoginState();
-        await fetchUserData();
-        await fetchMonitors();
+        elements.loginForm.reset();
+        // Auth events will trigger UI update via listeners
     } catch (error) {
         elements.loginError.textContent = error.message;
     }
@@ -734,13 +655,7 @@ async function handleRegister(event) {
         return;
     }
     try {
-        const response = await fetch(REGISTER_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
+        await authManager.register(username, password);
         alert("Registration successful! Please log in.");
         elements.registerModal.style.display = 'none';
         elements.loginModal.style.display = 'block';
@@ -750,21 +665,12 @@ async function handleRegister(event) {
     }
 }
 
-async function logoutUser(logoutMessage = null) {
-    const tokenToInvalidate = refreshToken;
-    authToken = null; refreshToken = null; currentUser = null;
-    monitoredSites = []; discordUsers = [];
-    localStorage.removeItem(`${storagePrefix}authToken`);
-    localStorage.removeItem(`${storagePrefix}refreshToken`);
+async function handleLogout(logoutMessage = null) {
+    monitoredSites = []; 
+    discordUsers = [];
     if (logoutMessage) alert(logoutMessage);
-    if (tokenToInvalidate) {
-        try {
-            await fetch(LOGOUT_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: tokenToInvalidate }) });
-        } catch (error) { console.warn("Backend logout failed:", error); }
-    }
-    updateUIForLoginState();
-    updateDisplay();
-    renderDiscordUsers();
+    await authManager.logout();
+    // Auth events will trigger UI update via listeners
 }
 
 /********************************
@@ -790,11 +696,11 @@ function setupEventListeners() {
     // Auth listeners
     elements.loginButton.addEventListener('click', () => elements.loginModal.style.display = 'block');
     elements.registerButton.addEventListener('click', () => elements.registerModal.style.display = 'block');
-    elements.logoutButton.addEventListener('click', () => logoutUser());
+    elements.logoutButton.addEventListener('click', () => handleLogout());
     elements.loginForm.addEventListener('submit', handleLogin);
     elements.registerForm.addEventListener('submit', handleRegister);
     elements.settingsButton.addEventListener("click", () => {
-        if (elements.changePasswordButton) elements.changePasswordButton.style.display = authToken ? 'inline-block' : 'none';
+        if (elements.changePasswordButton) elements.changePasswordButton.style.display = authManager?.isLoggedIn() ? 'inline-block' : 'none';
         elements.settingsModal.style.display = "block";
     });
     if (elements.changePasswordButton) elements.changePasswordButton.addEventListener('click', () => elements.changePasswordModal.style.display = 'block');
@@ -869,27 +775,61 @@ function setupEventListeners() {
 }
 
 /**********************
+ * Auth Event Listeners (for cross-tab sync)
+ **********************/
+function setupAuthEventListeners() {
+    // Listen for login events (from this tab or other tabs)
+    window.addEventListener('auth:login', async (e) => {
+        console.log('[AUTH_EVENT] Login detected:', e.detail?.user?.username);
+        updateUIForLoginState();
+        await fetchUserData();
+        await fetchMonitors();
+    });
+
+    // Listen for session restoration (page load with existing session)
+    window.addEventListener('auth:session-restored', async (e) => {
+        console.log('[AUTH_EVENT] Session restored:', e.detail?.user?.username);
+        updateUIForLoginState();
+        await fetchUserData();
+        await fetchMonitors();
+    });
+
+    // Listen for logout events (from this tab or other tabs)
+    window.addEventListener('auth:logout', (e) => {
+        console.log('[AUTH_EVENT] Logout detected:', e.detail?.message);
+        monitoredSites = [];
+        discordUsers = [];
+        updateUIForLoginState();
+        updateDisplay();
+        renderDiscordUsers();
+    });
+
+    // Listen for no session on page load
+    window.addEventListener('auth:no-session', () => {
+        console.log('[AUTH_EVENT] No active session');
+        updateUIForLoginState();
+        renderDiscordUsers();
+    });
+}
+
+/**********************
  * Initial Page Load
  **********************/
 document.addEventListener("DOMContentLoaded", async () => {
-    setupEventListeners();
-    authToken = localStorage.getItem(`${storagePrefix}authToken`);
-    refreshToken = localStorage.getItem(`${storagePrefix}refreshToken`);
-
-    if (refreshToken) {
-        if (isTokenExpired(authToken)) {
-            await attemptRefreshToken();
-        } else {
-            currentUser = decodeJwtPayload(authToken);
-        }
-        if (currentUser) {
-            await fetchUserData();
-            await fetchMonitors();
-        }
+    // Initialize AuthManager
+    if (typeof AuthManager !== 'undefined') {
+        authManager = new AuthManager(APP_NAME, ENVIRONMENT);
     } else {
-        renderDiscordUsers();
+        console.error("AuthManager not loaded! Make sure auth.js is included before this script.");
+        return;
     }
+
+    setupEventListeners();
+    setupAuthEventListeners();
+
+    // Initialize auth session - AuthManager will dispatch appropriate events
+    await authManager.initialize();
     
-    updateUIForLoginState();
+    // Initial display update (in case no events fire)
     updateDisplay();
 });

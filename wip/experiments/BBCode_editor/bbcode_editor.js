@@ -1,25 +1,11 @@
 // bbcode_editor.js - Combined application logic with sync, auth, and collapsible modules.
+// UPDATED: Now uses the global AuthManager for cross-tab login syncing.
 
 /*************************************
  * APPLICATION & ENVIRONMENT CONFIGURATION
  *************************************/
 const APP_NAME = 'bbcode_editor';
 const ENVIRONMENT = 'wip';
-
-const envConfigs = {
-    live: { storagePrefix: `${APP_NAME}_live_`, backendUrl: 'https://main-backend-live.rosiesite.workers.dev' },
-    wip: { storagePrefix: `${APP_NAME}_wip_`, backendUrl: 'https://main-backend-wip.rosiesite.workers.dev' }
-};
-const activeConfig = envConfigs[ENVIRONMENT];
-const storagePrefix = activeConfig.storagePrefix;
-
-const BACKEND_URL = activeConfig.backendUrl;
-const LOGIN_ENDPOINT = `${BACKEND_URL}/api/auth/login`;
-const REGISTER_ENDPOINT = `${BACKEND_URL}/api/auth/register`;
-const REFRESH_ENDPOINT = `${BACKEND_URL}/api/auth/refresh`;
-const LOGOUT_ENDPOINT = `${BACKEND_URL}/api/auth/logout`;
-const USER_DATA_ENDPOINT = `${BACKEND_URL}/api/data/${APP_NAME}`;
-const CHANGE_PASSWORD_ENDPOINT = `${BACKEND_URL}/api/auth/change-password`;
 
 const LOGGING_ENABLED = ENVIRONMENT === 'wip';
 function syncLog(...args) { if (LOGGING_ENABLED) console.log('[SYNC_LOG]', ...args); }
@@ -45,11 +31,9 @@ let state = {
 };
 
 let templates = {};
-let currentUser = null;
-let authToken = localStorage.getItem(`${storagePrefix}authToken`);
-let refreshToken = localStorage.getItem(`${storagePrefix}refreshToken`);
-let isRefreshingToken = false;
-let refreshSubscribers = [];
+
+// --- Auth State (via AuthManager) ---
+let authManager = null; // Will be initialized in DOMContentLoaded
 
 /***********************
  * DOM Elements
@@ -243,6 +227,7 @@ function migrateGameData(game) {
 function loadLocalData() {
     // Default both toggles to TRUE
     const defaultSettings = { cleanUrlColor: '#00aa00', crackedUrlColor: '#00babd', useSameUrlColor: false, sectionTitleColor: '#ee11d5', patchNotesMode: 'multiple', showVersionLabel: true, showPatchNotesVersionLabel: true };
+    const storagePrefix = `${APP_NAME}_${ENVIRONMENT}_`;
     try {
         const storedData = localStorage.getItem(`${storagePrefix}appData`);
         if (storedData) {
@@ -253,35 +238,27 @@ function loadLocalData() {
     } catch (e) { state = { games: [], activeGameIndex: 0, presets: [], settings: defaultSettings, template: '' }; }
 }
 
-function saveLocalData() { try { localStorage.setItem(`${storagePrefix}appData`, JSON.stringify(state)); } catch (e) { console.error("Error saving local data:", e); } }
-function saveData() { saveLocalData(); if (currentUser && authToken) saveBackendData(); }
+function saveLocalData() { 
+    const storagePrefix = `${APP_NAME}_${ENVIRONMENT}_`;
+    try { localStorage.setItem(`${storagePrefix}appData`, JSON.stringify(state)); } catch (e) { console.error("Error saving local data:", e); } 
+}
+function saveData() { saveLocalData(); if (authManager && authManager.isLoggedIn()) saveBackendData(); }
 
 /************************************
- * Auth & Backend
+ * Auth Wrapper (uses global AuthManager)
  ************************************/
-function decodeJwtPayload(token) { try { return JSON.parse(decodeURIComponent(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''))); } catch (e) { return null; } }
-function isTokenExpired(token) { if (!token) return true; const p = decodeJwtPayload(token); return p ? Date.now() >= p.exp * 1000 : true; }
-async function attemptRefreshToken() {
-    if (!refreshToken) return false;
-    if (isRefreshingToken) return new Promise(resolve => refreshSubscribers.push(resolve));
-    isRefreshingToken = true;
-    try {
-        const res = await fetch(REFRESH_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken }) });
-        const data = await res.json();
-        if (!res.ok) throw new Error();
-        authToken = data.accessToken; localStorage.setItem(`${storagePrefix}authToken`, authToken); currentUser = decodeJwtPayload(authToken);
-        isRefreshingToken = false; refreshSubscribers.forEach(cb => cb(true)); refreshSubscribers = []; return true;
-    } catch (e) { await logoutUser("Session expired."); isRefreshingToken = false; refreshSubscribers.forEach(cb => cb(false)); refreshSubscribers = []; return false; }
+async function fetchWithAuth(url, options = {}) {
+    if (!authManager) throw new Error("AuthManager not initialized");
+    return authManager.fetchWithAuth(url, options);
 }
-async function fetchWithAuth(url, opt = {}) {
-    if (!authToken || isTokenExpired(authToken)) { if (!(await attemptRefreshToken())) throw new Error("Auth failed"); }
-    opt.headers = { ...opt.headers, 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' };
-    let res = await fetch(url, opt);
-    if (res.status === 401) { if (await attemptRefreshToken()) { opt.headers['Authorization'] = `Bearer ${authToken}`; res = await fetch(url, opt); } else throw new Error("Auth failed retry"); }
-    return res;
+async function fetchBackendData() { 
+    if (!authManager || !authManager.isLoggedIn()) return null; 
+    try { return await (await authManager.fetchWithAuth(authManager.endpoints.data, { method: 'GET' })).json(); } catch { return null; } 
 }
-async function fetchBackendData() { if (!authToken) return null; try { return await (await fetchWithAuth(USER_DATA_ENDPOINT, { method: 'GET' })).json(); } catch { return null; } }
-async function saveBackendData() { if (!authToken) return false; try { await fetchWithAuth(USER_DATA_ENDPOINT, { method: 'POST', body: JSON.stringify(state) }); return true; } catch { return false; } }
+async function saveBackendData() { 
+    if (!authManager || !authManager.isLoggedIn()) return false; 
+    try { await authManager.fetchWithAuth(authManager.endpoints.data, { method: 'POST', body: JSON.stringify(state) }); return true; } catch { return false; } 
+}
 
 /*******************************
  * PARSERS
@@ -1136,7 +1113,7 @@ function setupEventListeners() {
     // Auth Logic
     els.loginButton.addEventListener('click', () => els.loginModal.style.display = 'block');
     els.registerButton.addEventListener('click', () => els.registerModal.style.display = 'block');
-    els.logoutButton.addEventListener('click', () => logoutUser());
+    els.logoutButton.addEventListener('click', () => handleLogout());
     els.localSyncButton.addEventListener('click', () => els.syncModal.style.display = 'block');
     els.settingsButton.addEventListener('click', () => els.settingsModal.style.display = 'block');
     els.loginForm.addEventListener('submit', handleLogin);
@@ -1171,7 +1148,7 @@ function importDataFromFile(e) {
                 data.games = data.games.map(migrateGameData);
                 if (confirm("Overwrite current data?")) {
                     state = data; saveLocalData(); updateDisplay();
-                    if (currentUser && confirm("Save to server?")) await saveBackendData();
+                    if (authManager?.isLoggedIn() && confirm("Save to server?")) await saveBackendData();
                 }
             } else alert("Invalid file.");
         } catch (err) { alert("Import failed."); }
@@ -1179,71 +1156,54 @@ function importDataFromFile(e) {
     r.readAsText(f);
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
-    await loadTemplates();
-    loadLocalData();
-    setupEventListeners();
-    if (refreshToken) {
-        if (isTokenExpired(authToken)) await attemptRefreshToken();
-        currentUser = decodeJwtPayload(authToken);
-        if (currentUser) await syncOnLoad();
-    }
-    if (!state.template) state.template = templates.multiple;
-    const savedIndex = localStorage.getItem(`${storagePrefix}activeGameIndex`);
-    if (savedIndex !== null && state.games.length > savedIndex) state.activeGameIndex = parseInt(savedIndex);
-    updateUIForLoginState(); updateDisplay();
-});
-
+/**********************
+ * Auth UI & Handlers
+ **********************/
 function updateUIForLoginState() {
-    const els = getElements(); if (!els.loginButton) return;
-    const loggedIn = !!refreshToken;
+    const els = getElements(); if (!els.loginButton || !authManager) return;
+    const loggedIn = authManager.isLoggedIn();
+    const currentUser = authManager.currentUser;
     els.loginButton.style.display = loggedIn ? 'none' : 'inline-block';
     els.registerButton.style.display = loggedIn ? 'none' : 'inline-block';
     els.logoutButton.style.display = loggedIn ? 'inline-block' : 'none';
     els.userStatus.textContent = loggedIn ? `Logged in: ${currentUser?.username || 'User'}` : 'Not logged in';
     if (els.changePasswordButton) els.changePasswordButton.style.display = loggedIn ? 'inline-block' : 'none';
 }
+
 async function handleLogin(e) {
     e.preventDefault(); const els = getElements(); els.loginError.textContent = '';
     try {
-        const res = await fetch(LOGIN_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: els.loginForm.loginUsername.value, password: els.loginForm.loginPassword.value }) });
-        const data = await res.json(); if (!res.ok) throw new Error(data.error);
-        authToken = data.accessToken; refreshToken = data.refreshToken;
-        localStorage.setItem(`${storagePrefix}authToken`, authToken); localStorage.setItem(`${storagePrefix}refreshToken`, refreshToken);
-        currentUser = decodeJwtPayload(authToken); els.loginModal.style.display = 'none';
-        const serverData = await fetchBackendData();
-        if (serverData) {
-            if (JSON.stringify(state) !== JSON.stringify(serverData)) {
-                if (confirm("Server data found. Overwrite local data?")) { state = serverData; state.games = state.games.map(migrateGameData); }
-                else await saveBackendData();
-            } else state = serverData;
-        } else if (state.games.length > 0) await saveBackendData();
-        saveLocalData(); updateUIForLoginState(); updateDisplay();
+        await authManager.login(els.loginForm.loginUsername.value, els.loginForm.loginPassword.value);
+        els.loginModal.style.display = 'none';
+        els.loginForm.reset();
+        // Auth events will trigger sync via listeners
     } catch (err) { els.loginError.textContent = err.message; }
 }
+
 async function handleRegister(e) {
     e.preventDefault(); const els = getElements(); els.registerError.textContent = '';
     if (els.registerForm.registerPassword.value !== els.registerForm.registerConfirmPassword.value) { els.registerError.textContent = 'Mismatch'; return; }
     try {
-        const res = await fetch(REGISTER_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: els.registerForm.registerUsername.value, password: els.registerForm.registerPassword.value }) });
-        const data = await res.json(); if (!res.ok) throw new Error(data.error);
+        await authManager.register(els.registerForm.registerUsername.value, els.registerForm.registerPassword.value);
         alert("Registered."); els.registerModal.style.display = 'none'; els.loginModal.style.display = 'block';
     } catch (err) { els.registerError.textContent = err.message; }
 }
-async function logoutUser(msg) {
-    if (refreshToken) try { await fetch(LOGOUT_ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken }) }); } catch (e) { }
-    authToken = null; refreshToken = null; currentUser = null; localStorage.removeItem(`${storagePrefix}authToken`); localStorage.removeItem(`${storagePrefix}refreshToken`);
-    if (msg) alert(msg); loadLocalData(); updateUIForLoginState(); updateDisplay();
+
+async function handleLogout(msg) {
+    if (msg) alert(msg);
+    await authManager.logout();
+    // Auth events will trigger UI update via listeners
 }
+
 async function handleChangePassword(e) {
     e.preventDefault(); const els = getElements(); els.changePasswordError.textContent = '';
     if (els.changePasswordForm.newPassword.value !== els.changePasswordForm.confirmNewPassword.value) { els.changePasswordError.textContent = 'Mismatch'; return; }
     try {
-        const res = await fetchWithAuth(CHANGE_PASSWORD_ENDPOINT, { method: 'POST', body: JSON.stringify({ currentPassword: els.changePasswordForm.currentPassword.value, newPassword: els.changePasswordForm.newPassword.value }) });
-        const data = await res.json(); if (!res.ok) throw new Error(data.error);
-        alert("Changed."); logoutUser();
+        await authManager.changePassword(els.changePasswordForm.currentPassword.value, els.changePasswordForm.newPassword.value);
+        alert("Changed."); await handleLogout();
     } catch (err) { els.changePasswordError.textContent = err.message; }
 }
+
 function exportDataToFile() {
     const b = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -1251,5 +1211,68 @@ function exportDataToFile() {
     a.download = `${APP_NAME}-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
 }
+
 function importOldLocalData() { const o = localStorage.getItem('gameInfoFormatterCache'); if (o && confirm('Import old?')) { state.games = JSON.parse(o).games.map(migrateGameData); saveData(); updateDisplay(); } }
+
 async function syncOnLoad() { const d = await fetchBackendData(); if (d) { state = d; state.games = state.games.map(migrateGameData); saveLocalData(); updateDisplay(); } }
+
+/**********************
+ * Auth Event Listeners (for cross-tab sync)
+ **********************/
+function setupAuthEventListeners() {
+    // Listen for login events (from this tab or other tabs)
+    window.addEventListener('auth:login', async (e) => {
+        console.log('[AUTH_EVENT] Login detected:', e.detail?.user?.username);
+        updateUIForLoginState();
+        await syncOnLoad();
+    });
+
+    // Listen for session restoration (page load with existing session)
+    window.addEventListener('auth:session-restored', async (e) => {
+        console.log('[AUTH_EVENT] Session restored:', e.detail?.user?.username);
+        updateUIForLoginState();
+        await syncOnLoad();
+    });
+
+    // Listen for logout events (from this tab or other tabs)
+    window.addEventListener('auth:logout', (e) => {
+        console.log('[AUTH_EVENT] Logout detected:', e.detail?.message);
+        loadLocalData();
+        updateUIForLoginState();
+        updateDisplay();
+    });
+
+    // Listen for no session on page load
+    window.addEventListener('auth:no-session', () => {
+        console.log('[AUTH_EVENT] No active session');
+        updateUIForLoginState();
+    });
+}
+
+/**********************
+ * Initial Page Load
+ **********************/
+document.addEventListener("DOMContentLoaded", async () => {
+    // Initialize AuthManager
+    if (typeof AuthManager !== 'undefined') {
+        authManager = new AuthManager(APP_NAME, ENVIRONMENT);
+    } else {
+        console.error("AuthManager not loaded! Make sure auth.js is included before this script.");
+        return;
+    }
+
+    await loadTemplates();
+    loadLocalData();
+    setupEventListeners();
+    setupAuthEventListeners();
+
+    if (!state.template) state.template = templates.multiple;
+    const storagePrefix = `${APP_NAME}_${ENVIRONMENT}_`;
+    const savedIndex = localStorage.getItem(`${storagePrefix}activeGameIndex`);
+    if (savedIndex !== null && state.games.length > savedIndex) state.activeGameIndex = parseInt(savedIndex);
+
+    // Initialize auth session - AuthManager will dispatch appropriate events
+    await authManager.initialize();
+    
+    updateDisplay();
+});
