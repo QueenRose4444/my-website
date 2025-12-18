@@ -1,0 +1,491 @@
+/* --- CORE TEMPLATE STYLES --- */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* FIXED: Lock the window height so the sidebar stays pinned */
+html, body {
+    height: 100vh;
+    overflow: hidden;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #121212;
+    color: #eee;
+    line-height: 1.6;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Navbar */
+.top-bar {
+    background-color: #1a1a1a;
+    padding: 0 20px;
+    height: 60px;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #333;
+    flex-shrink: 0; /* Prevent navbar from squishing */
+}
+.nav-links { list-style: none; display: flex; gap: 20px; }
+.nav-links a { text-decoration: none; color: #aaa; font-weight: bold; transition: color 0.2s; }
+.nav-links a:hover, .nav-links a.active-link { color: #4bc0c0; }
+.user-account { display: flex; gap: 10px; align-items: center; }
+
+/* Buttons */
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s;
+}
+.btn-dark { background: #333; color: white; border: 1px solid #555; }
+.btn-dark:hover { background: #444; }
+.btn-primary { background: #007bff; color: white; }
+.btn-primary:hover { background: #0056b3; }
+.btn-discord { background: #5865F2; color: white; }
+.btn-discord:hover { background: #4752C4; }
+.btn-danger { background: #dc3545; color: white; }
+.btn-danger:hover { background: #c82333; }
+.btn-success { background: #28a745; color: white; }
+.btn-success:hover { background: #218838; }
+
+/* --- APP LAYOUT --- */
+.app-container {
+    display: flex;
+    flex: 1;
+    overflow: hidden; /* Ensures content stays within the fixed body height */
+    height: 100%;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 260px;
+    background-color: #161616;
+    border-right: 1px solid #333;
+    display: flex;
+    flex-direction: column;
+    transition: width 0.3s ease;
+    flex-shrink: 0;
+    height: 100%; /* Force sidebar to fill vertical space */
+    
+    /* Variable Bottom Padding (injected via JS for mobile) */
+    padding-bottom: var(--mobile-padding, 0px);
+}
+.sidebar.collapsed { width: 70px; }
+
+.sidebar-header {
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #888;
+    font-size: 0.9em;
+    flex-shrink: 0;
+}
+.sidebar.collapsed .sidebar-title { display: none; }
+
+/* Sidebar Menu: Added flex:1 so it pushes footer down, and overflow so it scrolls if menu is huge */
+.sidebar-menu { 
+    list-style: none; 
+    padding: 10px; 
+    flex: 1; 
+    overflow-y: auto;
+}
+.sidebar-menu li { margin-bottom: 5px; }
+.sidebar-menu button {
+    width: 100%;
+    padding: 12px 15px;
+    background: none;
+    border: none;
+    color: #ccc;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-size: 1em;
+    transition: background 0.2s;
+}
+.sidebar-menu button:hover { background-color: #252525; color: white; }
+.sidebar-menu button.active { background-color: #2a2a2a; color: #4bc0c0; border-left: 3px solid #4bc0c0; }
+.sidebar.collapsed .menu-text { display: none; }
+.sidebar.collapsed button { justify-content: center; padding: 12px 0; }
+
+
+/* --- SIDEBAR FOOTER STYLES (UPDATED) --- */
+.sidebar-footer {
+    margin-top: auto;
+    padding: 20px;
+    border-top: 1px solid #333;
+    flex-shrink: 0;
+}
+
+.footer-btn {
+    width: 100%; 
+    margin-bottom: 15px; 
+    display: flex; 
+    align-items: center; 
+    gap: 10px; 
+    justify-content: center;
+    border: 1px solid #333;
+    background: #222;
+}
+
+.footer-label {
+    margin-bottom: 10px; 
+    font-size: 0.9em; 
+    color: #aaa;
+}
+
+.discord-user-row {
+    display: flex; 
+    align-items: center; 
+    gap: 10px; 
+    margin-bottom: 10px;
+}
+
+.discord-avatar {
+    width: 32px; 
+    height: 32px; 
+    border-radius: 50%;
+}
+
+/* COLLAPSED FOOTER BEHAVIOR */
+/* When collapsed, we do NOT hide the footer anymore */
+.sidebar.collapsed .sidebar-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 5px;
+}
+
+/* Hide text labels and descriptions when collapsed */
+.sidebar.collapsed .footer-label { display: none; }
+.sidebar.collapsed .footer-text { display: none; } /* If specific footer text class used */
+
+/* Center buttons and adjust padding */
+.sidebar.collapsed .footer-btn {
+    padding: 10px; /* Reduce padding */
+    margin-bottom: 10px;
+    justify-content: center;
+}
+
+/* Handle Discord User Info in collapsed state */
+.sidebar.collapsed .discord-user-row {
+    justify-content: center;
+    margin-bottom: 5px;
+}
+.sidebar.collapsed .discord-avatar {
+    margin: 0; /* Ensure avatar is centered */
+}
+
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: #121212;
+    overflow-y: auto; /* This now handles the scrolling for long pages */
+    padding: 20px;
+}
+
+/* Auth Overlay */
+.auth-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(18, 18, 18, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2005; /* Above everything */
+}
+
+/* Search Bar */
+.search-container {
+    margin-bottom: 30px;
+    position: relative;
+    max-width: 800px;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+}
+.search-input {
+    width: 100%;
+    padding: 15px 25px;
+    padding-left: 50px;
+    background-color: #1e1e1e;
+    border: 1px solid #333;
+    border-radius: 50px;
+    color: white;
+    font-size: 1.1em;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.search-input:focus {
+    border-color: #4bc0c0;
+    box-shadow: 0 0 15px rgba(75, 192, 192, 0.2);
+}
+.search-icon {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #666;
+    font-size: 1.2em;
+}
+
+/* Game Grid */
+.game-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+    padding-bottom: 40px;
+}
+
+/* Game Card */
+.game-card {
+    background-color: #1e1e1e;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+    border: 1px solid #2a2a2a;
+    position: relative;
+    cursor: pointer;
+}
+.game-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+    border-color: #444;
+}
+.game-image {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+}
+.game-info { padding: 15px; }
+.game-title {
+    font-weight: bold;
+    font-size: 1.1em;
+    margin-bottom: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #fff;
+}
+.game-meta {
+    font-size: 0.85em;
+    color: #888;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.update-badge {
+    background-color: #28a745;
+    color: white;
+    font-size: 0.7em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    font-weight: bold;
+}
+
+/* Action Button Overlay */
+.action-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(0,0,0,0.7);
+    border: none;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+.game-card:hover .action-btn { opacity: 1; }
+.action-btn:hover { background: #dc3545; }
+
+/* Status Messages */
+.empty-state {
+    text-align: center;
+    padding: 50px;
+    color: #666;
+    grid-column: 1 / -1;
+}
+.empty-state i { font-size: 3em; margin-bottom: 20px; display: block; }
+
+/* Modals */
+.modal {
+    display: none; 
+    position: fixed; 
+    z-index: 2000; 
+    left: 0; top: 0; 
+    width: 100%; height: 100%; 
+    background-color: rgba(0,0,0,0.85);
+    align-items: center;
+    justify-content: center;
+}
+.modal-content {
+    background-color: #222;
+    padding: 0; /* Padding moved to inner containers */
+    border-radius: 12px;
+    width: 90%;
+    max-width: 600px;
+    position: relative;
+    border: 1px solid #444;
+    color: #eee;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.close-modal {
+    position: absolute; top: 10px; right: 15px;
+    font-size: 1.5em; cursor: pointer; color: #aaa; z-index: 10;
+    width: 30px; height: 30px; line-height: 30px; text-align: center;
+}
+.close-modal:hover { color: white; }
+
+/* Modal Header Buttons */
+.modal-header-btn-left {
+    position: absolute;
+    top: 10px;
+    left: 15px;
+    z-index: 10;
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: none;
+    font-size: 0.9em;
+    cursor: pointer;
+    font-weight: bold;
+    color: white;
+}
+
+/* Modal Tabs */
+.modal-tabs {
+    display: flex;
+    background: #1a1a1a;
+    border-bottom: 1px solid #333;
+    padding-top: 45px; /* Make room for header buttons */
+}
+.tab-btn {
+    flex: 1;
+    padding: 15px;
+    background: transparent;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-weight: bold;
+    border-bottom: 2px solid transparent;
+}
+.tab-btn.active {
+    color: #4bc0c0;
+    border-bottom: 2px solid #4bc0c0;
+    background: #222;
+}
+#modalBody {
+    padding: 25px;
+}
+
+/* Settings List in Modal */
+.settings-group {
+    background: #1a1a1a;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 15px;
+    border: 1px solid #333;
+}
+.settings-header {
+    color: #ccc;
+    font-size: 0.9em;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.checkbox-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid #2a2a2a;
+}
+.checkbox-row:last-child { border-bottom: none; }
+.checkbox-label { font-size: 0.95em; color: #ddd; }
+
+/* --- NEW: COOL PILL TOGGLE SWITCHES --- */
+.switch-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 0.9em;
+    color: #ccc;
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.switch input { 
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #333;
+    -webkit-transition: .4s;
+    transition: .4s;
+    border-radius: 24px;
+    border: 1px solid #555;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    -webkit-transition: .4s;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-color: #4bc0c0;
+    border-color: #4bc0c0;
+}
+
+input:focus + .slider {
+    box-shadow: 0 0 1px #4bc0c0;
+}
+
+input:checked + .slider:before {
+    -webkit-transform: translateX(20px);
+    -ms-transform: translateX(20px);
+    transform: translateX(20px);
+}
