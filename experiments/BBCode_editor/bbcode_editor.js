@@ -373,10 +373,17 @@ const parseBBCodeInput = (text) => {
     };
 
     mainBody = mainBody.replace(spoilerRegex, (match, title, content) => {
+        // IGNORE Depots & Manifests
+        if (title.includes('Depots') && title.includes('Manifests')) return '';
+
         const files = extractFilesFromBlock(content);
         const footerMatch = content.match(/\[size=85\](.*?)\[\/size\]\s*$/);
         const footer = footerMatch ? footerMatch[1] : '';
-        customGroups.push({ title, files, footer });
+        
+        // Only add if we actually found files OR if it really looks like a user group
+        if (files.length > 0) {
+            customGroups.push({ title, files, footer });
+        }
         return '';
     });
 
@@ -477,19 +484,29 @@ const mergeGameData = (existing, incoming) => {
 
     merged.files = mergeFiles(incoming.files, existing.files);
 
+    // MERGE Custom Groups (Additive: Keep existing, Merge matches, Add new)
     if (incoming.customGroups && incoming.customGroups.length > 0) {
-        merged.customGroups = incoming.customGroups.map(ig => {
-            const eg = existing.customGroups ? existing.customGroups.find(g => g.title === ig.title) : null;
-            if (eg) {
-                return {
+        // Start with all existing groups
+        const combinedGroups = existing.customGroups ? [...existing.customGroups] : [];
+
+        incoming.customGroups.forEach(ig => {
+            const existingIndex = combinedGroups.findIndex(eg => eg.title === ig.title);
+            if (existingIndex !== -1) {
+                // Merge into existing
+                combinedGroups[existingIndex] = {
                     ...ig,
-                    files: mergeFiles(ig.files, eg.files),
-                    footer: ig.footer || eg.footer
+                    files: mergeFiles(ig.files, combinedGroups[existingIndex].files),
+                    footer: ig.footer || combinedGroups[existingIndex].footer
                 };
+            } else {
+                // Add new
+                combinedGroups.push(ig);
             }
-            return ig;
         });
+        merged.customGroups = combinedGroups;
     }
+    // If incoming has NO groups, keep existing (default behavior of spread above) unless we specifically want to clear them?
+    // Assuming "import" adds/updates, doesn't delete.
 
     if (incoming.updates && incoming.updates.length > 0) {
         merged.updates = incoming.updates.map(iu => {
