@@ -127,11 +127,11 @@ async function loadTemplates() {
 
 <!--/IF:gameVersion--><!--IF:customGroups-->{mainGroupTitle}
 <!--/IF:customGroups-->[color={sectionTitleColor}]Clean Steam Files:[/color]
-<!--LOOP:cleanFiles-->[url={file.cleanUrl}][color={cleanUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] (Clean Steam Files)[/b][/color][/url]<!--IF:file.cleanFileSize--> [{file.cleanFileSize} GB]<!--/IF:file.cleanFileSize-->
+<!--LOOP:cleanFiles-->[url={file.cleanUrl}][color={cleanUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] (Clean Steam Files)[/b][/color][/url]<!--IF:file.cleanFileSize--> [{file.cleanFileSize}]<!--/IF:file.cleanFileSize-->
 [size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
 
 <!--/LOOP:cleanFiles--><!--IF:crackedExists-->[color={sectionTitleColor}]Cracked:[/color]
-<!--LOOP:crackedFiles-->[url={file.crackedUrl}][color={crackedUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType})[/b][/color][/url]<!--IF:file.crackedFileSize--> [{file.crackedFileSize} GB]<!--/IF:file.crackedFileSize-->
+<!--LOOP:crackedFiles-->[url={file.crackedUrl}][color={crackedUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType})[/b][/color][/url]<!--IF:file.crackedFileSize--> [{file.crackedFileSize}]<!--/IF:file.crackedFileSize-->
 [size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
 
 <!--/LOOP:crackedFiles--><!--/IF:crackedExists--><!--LOOP:customGroups-->[spoiler="{group.title}"][color={sectionTitleColor}]Clean Steam Files:[/color]
@@ -143,9 +143,18 @@ async function loadTemplates() {
 [size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
 
 <!--/LOOP:groupCrackedFiles--><!--/IF:crackedExists--><!--IF:group.footer-->[size=85]{group.footer}[/size]
+<!--/LOOP:crackedFiles--><!--/IF:crackedExists--><!--LOOP:customGroups-->[spoiler="{group.title}"][color={sectionTitleColor}]Clean Steam Files:[/color]
+<!--LOOP:groupCleanFiles-->[url={file.cleanUrl}][color={cleanUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] (Clean Steam Files)[/b][/color][/url]<!--IF:file.cleanFileSize--> [{file.cleanFileSize}]<!--/IF:file.cleanFileSize-->
+[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
+
+<!--/LOOP:groupCleanFiles--><!--IF:crackedExists-->[color={sectionTitleColor}]Cracked:[/color]
+<!--LOOP:groupCrackedFiles-->[url={file.crackedUrl}][color={crackedUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType})[/b][/color][/url]<!--IF:file.crackedFileSize--> [{file.crackedFileSize}]<!--/IF:file.crackedFileSize-->
+[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
+
+<!--/LOOP:groupCrackedFiles--><!--/IF:crackedExists--><!--IF:group.footer-->[size=85]{group.footer}[/size]
 <!--/IF:group.footer-->[/spoiler]
-<!--/LOOP:customGroups--><!--LOOP:updates-->[spoiler="{update.title}<!--IF:update.fileSize--> [{update.fileSize} GB]<!--/IF:update.fileSize-->"]<!--LOOP:sections-->[color={sectionTitleColor}]{section.miniTitle}[/color]
-<!--LOOP:sectionLinks-->[url={link.url}][color={crackedUrlColor}][b]{link.name}[/b][/color][/url]<!--IF:update.fileSize--> [{update.fileSize} GB]<!--/IF:update.fileSize-->
+<!--/LOOP:customGroups--><!--LOOP:updates-->[spoiler="{update.title}<!--IF:update.fileSize--> [{update.fileSize}]<!--/IF:update.fileSize-->"]<!--LOOP:sections-->[color={sectionTitleColor}]{section.miniTitle}[/color]
+<!--LOOP:sectionLinks-->[url={link.url}][color={crackedUrlColor}][b]{link.name}[/b][/color][/url]<!--IF:update.fileSize--> [{update.fileSize}]<!--/IF:update.fileSize-->
 <!--/LOOP:sectionLinks-->
 
 <!--/LOOP:sections-->[/spoiler]
@@ -826,7 +835,19 @@ const renderOutput = () => {
                 itemData.cleanUrlColor = state.settings.cleanUrlColor;
                 itemData.crackedUrlColor = state.settings.useSameUrlColor ? state.settings.cleanUrlColor : state.settings.crackedUrlColor;
                 itemData.sectionTitleColor = state.settings.sectionTitleColor;
+                itemData.sectionTitleColor = state.settings.sectionTitleColor;
                 itemData.patchNotesTitle = activeGame.patchNotesTitle;
+
+                // FIX: Ensure file sizes have units (GB default if just number)
+                const ensureGB = (val) => {
+                    if (!val) return '';
+                    if (/^[\d.]+$/.test(val.trim())) return `${val.trim()} GB`;
+                    return val;
+                };
+                if (itemData.cleanFileSize) itemData.cleanFileSize = ensureGB(itemData.cleanFileSize);
+                if (itemData.crackedFileSize) itemData.crackedFileSize = ensureGB(itemData.crackedFileSize);
+                if (itemData.update && itemData.update.fileSize) itemData.update.fileSize = ensureGB(itemData.update.fileSize);
+                if (itemData.fileSize) itemData.fileSize = ensureGB(itemData.fileSize); // Catch-all for other size props
 
                 let processedContent = loopContent.replace(/<!--IF:([\w.]+)-->([\s\S]*?)<!--\/IF:\1-->/g, (m, k, c) => {
                     // Check boolean flags injected above
