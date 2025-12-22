@@ -210,6 +210,26 @@ function migrateGameData(game) {
     };
     game.files = ensureFileProps(game.files);
     game.customGroups.forEach(grp => { grp.files = ensureFileProps(grp.files); });
+    
+    // Sync file sizes from main files to custom groups
+    // This ensures custom groups created before file size feature have their sizes populated
+    if (game.files && game.customGroups) {
+        game.customGroups.forEach(grp => {
+            grp.files.forEach(cgFile => {
+                const mainFile = game.files.find(mf => mf.platform === cgFile.platform && mf.branch === cgFile.branch);
+                if (mainFile) {
+                    // Only sync if custom group file is missing size but main file has it
+                    if (!cgFile.cleanFileSize && mainFile.cleanFileSize) {
+                        cgFile.cleanFileSize = mainFile.cleanFileSize;
+                    }
+                    if (!cgFile.crackedFileSize && mainFile.crackedFileSize) {
+                        cgFile.crackedFileSize = mainFile.crackedFileSize;
+                    }
+                }
+            });
+        });
+    }
+    
     if (game.mainGroupTitle === undefined) game.mainGroupTitle = 'Proton Drive Links';
     if (game.patchNotesTitle === undefined) game.patchNotesTitle = '';
     return game;
@@ -776,15 +796,20 @@ const renderOutput = () => {
                 }
                 
                 // For custom group files, look up sizes from the matching main file
-                let fileWithSizes = item;
+                let fileWithSizes = { ...item };
                 if (loopKey === 'groupCleanFiles' || loopKey === 'groupCrackedFiles') {
-                    const mainFile = activeGame.files.find(f => f.platform === item.platform && f.branch === item.branch);
+                    // First try exact match by platform and branch
+                    let mainFile = activeGame.files.find(f => f.platform === item.platform && f.branch === item.branch);
+                    
+                    // Fallback: try finding by platform only
+                    if (!mainFile) {
+                        mainFile = activeGame.files.find(f => f.platform === item.platform);
+                    }
+                    
                     if (mainFile) {
-                        fileWithSizes = { 
-                            ...item, 
-                            cleanFileSize: mainFile.cleanFileSize,
-                            crackedFileSize: mainFile.crackedFileSize 
-                        };
+                        // Copy sizes from main file, preferring main file's sizes but falling back to item's
+                        fileWithSizes.cleanFileSize = mainFile.cleanFileSize || item.cleanFileSize;
+                        fileWithSizes.crackedFileSize = mainFile.crackedFileSize || item.crackedFileSize;
                     }
                 }
                 
