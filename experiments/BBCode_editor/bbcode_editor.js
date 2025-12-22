@@ -331,12 +331,14 @@ const parseBBCodeInput = (text) => {
 
     const extractFilesFromBlock = (block) => {
         const fileMap = new Map();
-        const urlLineRegex = /\[url=([^\]]*?)\]\[color=.*?\]\[b\](.*?) \[(.*?)\] \[Branch: (.*?)\] \((.*?)\)\[\/b\]\[\/color\]\[\/url\]/g;
+        // UPDATED: Regex now captures whitespace + [Size] at the end
+        const urlLineRegex = /\[url=([^\]]*?)\]\[color=.*?\]\[b\](.*?) \[(.*?)\] \[Branch: (.*?)\] \((.*?)\)\[\/b\]\[\/color\]\[\/url\](?:[ \t]+\[(?<fileSize>[^\[\]]*?)\])?/g;
         const dateRegex = /\[size=85\].*?Version:\[\/b\] \[i\](.*?) \[Build (.*?)\]\[\/i\]/;
 
         let match;
         while ((match = urlLineRegex.exec(block)) !== null) {
             const [fullLine, url, title, platform, branch, typeRaw] = match;
+            const fileSize = match.groups?.fileSize || ''; // Capture size
             const key = `${platform}_${branch}`;
 
             const remainder = block.substring(match.index + fullLine.length);
@@ -354,17 +356,20 @@ const parseBBCodeInput = (text) => {
                 fileObj = {
                     gameTitle: title, platform, branch, fullDate, shortDate, buildId,
                     cleanUrl: '', crackedUrl: '', includeCracked: false, crackType: 'Cracked: Detanup01 Goldberg Fork',
-                    patchNoteUrl: `https://steamdb.info/patchnotes/${buildId}/`
+                    patchNoteUrl: `https://steamdb.info/patchnotes/${buildId}/`,
+                    cleanFileSize: '', crackedFileSize: '' // Init
                 };
                 fileMap.set(key, fileObj);
             }
 
             if (typeRaw.includes('Clean Steam Files')) {
                 fileObj.cleanUrl = url;
+                fileObj.cleanFileSize = fileSize;
             } else if (typeRaw.includes('Cracked')) {
                 fileObj.crackedUrl = url;
                 fileObj.includeCracked = true;
                 fileObj.crackType = typeRaw.replace('(', '').replace(')', '');
+                fileObj.crackedFileSize = fileSize;
             }
 
             if (buildId && !fileObj.buildId) {
