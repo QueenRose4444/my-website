@@ -134,7 +134,10 @@ async function loadTemplates() {
 <!--LOOP:crackedFiles-->[url={file.crackedUrl}][color={crackedUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType})[/b][/color][/url]<!--IF:file.crackedFileSize--> [{file.crackedFileSize}]<!--/IF:file.crackedFileSize-->
 [size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
 
-<!--/LOOP:crackedFiles--><!--/IF:crackedExists--><!--LOOP:customGroups-->[spoiler="{group.title}"][color={sectionTitleColor}]Clean Steam Files:[/color]
+<!--/LOOP:crackedFiles--><!--LOOP:crackedFiles2-->[url={file.crackedUrl2}][color={crackedUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType2})[/b][/color][/url]<!--IF:file.crackedFileSize2--> [{file.crackedFileSize2}]<!--/IF:file.crackedFileSize2-->
+[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
+
+<!--/LOOP:crackedFiles2--><!--/IF:crackedExists--><!--LOOP:customGroups-->[spoiler="{group.title}"][color={sectionTitleColor}]Clean Steam Files:[/color]
 <!--LOOP:groupCleanFiles-->[url={file.cleanUrl}][color={cleanUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] (Clean Steam Files)[/b][/color][/url]<!--IF:file.cleanFileSize--> [{file.cleanFileSize}]<!--/IF:file.cleanFileSize-->
 [size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
 
@@ -142,7 +145,10 @@ async function loadTemplates() {
 <!--LOOP:groupCrackedFiles-->[url={file.crackedUrl}][color={crackedUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType})[/b][/color][/url]<!--IF:file.crackedFileSize--> [{file.crackedFileSize}]<!--/IF:file.crackedFileSize-->
 [size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
 
-<!--/LOOP:groupCrackedFiles--><!--/IF:crackedExists--><!--IF:group.footer-->[size=85]{group.footer}[/size]
+<!--/LOOP:groupCrackedFiles--><!--LOOP:groupCrackedFiles2-->[url={file.crackedUrl2}][color={crackedUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType2})[/b][/color][/url]<!--IF:file.crackedFileSize2--> [{file.crackedFileSize2}]<!--/IF:file.crackedFileSize2-->
+[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
+
+<!--/LOOP:groupCrackedFiles2--><!--/IF:crackedExists--><!--IF:group.footer-->[size=85]{group.footer}[/size]
 <!--/IF:group.footer-->[/spoiler]
 <!--/LOOP:customGroups--><!--LOOP:updates-->[spoiler="{update.title}<!--IF:update.fileSize--> [{update.fileSize}]<!--/IF:update.fileSize-->"]<!--LOOP:sections-->[color={sectionTitleColor}]{section.miniTitle}[/color]
 <!--LOOP:sectionLinks-->[url={link.url}][color={crackedUrlColor}][b]{link.name}[/b][/color][/url]<!--IF:update.fileSize--> [{update.fileSize}]<!--/IF:update.fileSize-->
@@ -205,6 +211,11 @@ function migrateGameData(game) {
             if (f.crackType === undefined) f.crackType = 'Cracked: Detanup01 Goldberg Fork';
             if (f.cleanFileSize === undefined) f.cleanFileSize = ''; // File size for clean version
             if (f.crackedFileSize === undefined) f.crackedFileSize = ''; // File size for cracked version
+            // Secondary crack support
+            if (f.crackedUrl2 === undefined) f.crackedUrl2 = '';
+            if (f.crackType2 === undefined) f.crackType2 = 'Cracked: Online-Fix';
+            if (f.includeCracked2 === undefined) f.includeCracked2 = false;
+            if (f.crackedFileSize2 === undefined) f.crackedFileSize2 = '';
             return f;
         });
     };
@@ -224,6 +235,9 @@ function migrateGameData(game) {
                     }
                     if (!cgFile.crackedFileSize && mainFile.crackedFileSize) {
                         cgFile.crackedFileSize = mainFile.crackedFileSize;
+                    }
+                    if (!cgFile.crackedFileSize2 && mainFile.crackedFileSize2) {
+                        cgFile.crackedFileSize2 = mainFile.crackedFileSize2;
                     }
                 }
             });
@@ -774,10 +788,12 @@ const renderOutput = () => {
             let items = [];
             if (loopKey === 'cleanFiles') items = context.files;
             else if (loopKey === 'crackedFiles') items = context.files.filter(f => f.includeCracked);
+            else if (loopKey === 'crackedFiles2') items = context.files.filter(f => f.includeCracked2);
             else if (loopKey === 'patchNotes') items = state.settings.patchNotesMode === 'single' ? context.files.slice(0, 1) : context.files;
             else if (loopKey === 'customGroups') items = context.customGroups || [];
             else if (loopKey === 'groupCleanFiles') items = context.files;
             else if (loopKey === 'groupCrackedFiles') items = context.files.filter(f => f.includeCracked);
+            else if (loopKey === 'groupCrackedFiles2') items = context.files.filter(f => f.includeCracked2);
 
             // NEW LOOPS FOR UPDATES
             else if (loopKey === 'updates') items = context.updates || [];
@@ -797,7 +813,7 @@ const renderOutput = () => {
                 
                 // For custom group files, look up sizes from the matching main file
                 let fileWithSizes = { ...item };
-                if (loopKey === 'groupCleanFiles' || loopKey === 'groupCrackedFiles') {
+                if (loopKey === 'groupCleanFiles' || loopKey === 'groupCrackedFiles' || loopKey === 'groupCrackedFiles2') {
                     // First try exact match by platform and branch
                     let mainFile = activeGame.files.find(f => f.platform === item.platform && f.branch === item.branch);
                     
@@ -810,6 +826,7 @@ const renderOutput = () => {
                         // Copy sizes from main file, preferring main file's sizes but falling back to item's
                         fileWithSizes.cleanFileSize = mainFile.cleanFileSize || item.cleanFileSize;
                         fileWithSizes.crackedFileSize = mainFile.crackedFileSize || item.crackedFileSize;
+                        fileWithSizes.crackedFileSize2 = mainFile.crackedFileSize2 || item.crackedFileSize2;
                     }
                 }
                 
@@ -848,10 +865,12 @@ const renderOutput = () => {
                 };
                 if (itemData.cleanFileSize) itemData.cleanFileSize = ensureGB(itemData.cleanFileSize);
                 if (itemData.crackedFileSize) itemData.crackedFileSize = ensureGB(itemData.crackedFileSize);
+                if (itemData.crackedFileSize2) itemData.crackedFileSize2 = ensureGB(itemData.crackedFileSize2);
                 // Also update the nested file object for template access via {file.cleanFileSize}
                 if (itemData.file) {
                     if (itemData.file.cleanFileSize) itemData.file.cleanFileSize = ensureGB(itemData.file.cleanFileSize);
                     if (itemData.file.crackedFileSize) itemData.file.crackedFileSize = ensureGB(itemData.file.crackedFileSize);
+                    if (itemData.file.crackedFileSize2) itemData.file.crackedFileSize2 = ensureGB(itemData.file.crackedFileSize2);
                 }
                 if (itemData.update && itemData.update.fileSize) itemData.update.fileSize = ensureGB(itemData.update.fileSize);
                 if (itemData.fileSize) itemData.fileSize = ensureGB(itemData.fileSize); // Catch-all for other size props
@@ -972,8 +991,12 @@ const createPlatformInputs = (files, parentIndex, type = 'main') => {
             <label class="block text-xs font-medium text-gray-400 mb-1">${file.platform} - ${file.branch}${warn}</label>
             <input type="text" ${id} data-prop="cleanUrl" value="${file.cleanUrl || ''}" class="w-full p-1 bg-gray-900 border border-gray-600 rounded-md text-sm focus:border-blue-500" placeholder="Clean URL">
             <div class="${file.includeCracked ? 'mt-2' : 'hidden'}">
-                 <label class="block text-xs font-medium text-gray-500 mb-1">Cracked URL</label>
+                 <label class="block text-xs font-medium text-gray-500 mb-1">Cracked URL (Primary)</label>
                  <input type="text" ${id} data-prop="crackedUrl" value="${file.crackedUrl || ''}" class="w-full p-1 bg-gray-900 border border-gray-600 rounded-md text-sm text-gray-300">
+            </div>
+            <div class="${file.includeCracked2 ? 'mt-2' : 'hidden'}">
+                 <label class="block text-xs font-medium text-cyan-500 mb-1">Cracked URL (Secondary)</label>
+                 <input type="text" ${id} data-prop="crackedUrl2" value="${file.crackedUrl2 || ''}" class="w-full p-1 bg-gray-900 border border-cyan-700 rounded-md text-sm text-cyan-300">
             </div>
         </div>`;
     });
@@ -1023,20 +1046,28 @@ const updateUIForActiveGame = () => {
 
     els.crackTogglesContainer.innerHTML = '';
     g.files.forEach((f, i) => {
-        // Check if it's a known built-in crack type
+        // Primary crack type detection
         const isDetanup = f.crackType.includes('Detanup01');
         const isOnlineFix = f.crackType.includes('Online-Fix');
         const isCustom = !isDetanup && !isOnlineFix;
         
-        // Determine which option should be selected
         const isDetanupFork = isDetanup && !f.crackType.includes('Steamless');
         const isDetanupSteamless = isDetanup && f.crackType.includes('Steamless');
         const isOnlineFixOnly = isOnlineFix && !f.crackType.includes('Steamless');
         const isOnlineFixSteamless = isOnlineFix && f.crackType.includes('Steamless');
         
+        // Secondary crack type detection
+        const isDetanup2 = f.crackType2 && f.crackType2.includes('Detanup01');
+        const isOnlineFix2 = f.crackType2 && f.crackType2.includes('Online-Fix');
+        const isCustom2 = f.crackType2 && !isDetanup2 && !isOnlineFix2;
+        
+        const isDetanupFork2 = isDetanup2 && !f.crackType2.includes('Steamless');
+        const isDetanupSteamless2 = isDetanup2 && f.crackType2.includes('Steamless');
+        const isOnlineFixOnly2 = isOnlineFix2 && !f.crackType2.includes('Steamless');
+        const isOnlineFixSteamless2 = isOnlineFix2 && f.crackType2.includes('Steamless');
+        
         const d = document.createElement('div'); d.className = 'p-2 bg-gray-700/30 rounded mb-2 border border-gray-600';
 
-        // Added Copy Button logic below
         d.innerHTML = `
         <div class="flex justify-between items-center">
             <span class="text-xs font-bold text-gray-300">${f.platform}</span>
@@ -1044,11 +1075,39 @@ const updateUIForActiveGame = () => {
                 <button id="copy-crack-btn-${i}" onclick="window.copyCrackFileName(${i})" class="mr-2 text-gray-400 hover:text-blue-400" title="Copy Release Name">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                 </button>
-                <label class="text-xs mr-2 text-gray-400">Include Cracked</label>
+                <label class="text-xs mr-2 text-gray-400">Primary Crack</label>
                 <input type="checkbox" data-file-index="${i}" data-prop="includeCracked" ${f.includeCracked ? 'checked' : ''} class="h-4 w-4 rounded border-gray-300">
             </div>
         </div>
-        ${f.includeCracked ? `<div class="mt-2 space-y-2"><select data-file-index="${i}" data-prop="crackType" class="w-full text-xs bg-gray-900 border-gray-600 rounded p-1"><option value="Cracked: Detanup01 Goldberg Fork" ${isDetanupFork ? 'selected' : ''}>Detanup01 Goldberg Fork</option><option value="Cracked: Detanup01 Goldberg Fork + Steamless" ${isDetanupSteamless ? 'selected' : ''}>Detanup01 Goldberg Fork + Steamless</option><option value="Cracked: Online-Fix" ${isOnlineFixOnly ? 'selected' : ''}>Online-Fix</option><option value="Cracked: Online-Fix + Steamless" ${isOnlineFixSteamless ? 'selected' : ''}>Online-Fix + Steamless</option><option value="custom" ${isCustom ? 'selected' : ''}>Custom</option></select><input type="text" data-file-index="${i}" data-prop="customCrackType" value="${f.crackType}" class="w-full text-xs bg-gray-900 border-gray-600 rounded p-1 ${isCustom ? '' : 'hidden'}"></div>` : ''}`;
+        ${f.includeCracked ? `<div class="mt-2 space-y-2">
+            <select data-file-index="${i}" data-prop="crackType" class="w-full text-xs bg-gray-900 border-gray-600 rounded p-1">
+                <option value="Cracked: Detanup01 Goldberg Fork" ${isDetanupFork ? 'selected' : ''}>Detanup01 Goldberg Fork</option>
+                <option value="Cracked: Detanup01 Goldberg Fork + Steamless" ${isDetanupSteamless ? 'selected' : ''}>Detanup01 Goldberg Fork + Steamless</option>
+                <option value="Cracked: Online-Fix" ${isOnlineFixOnly ? 'selected' : ''}>Online-Fix</option>
+                <option value="Cracked: Online-Fix + Steamless" ${isOnlineFixSteamless ? 'selected' : ''}>Online-Fix + Steamless</option>
+                <option value="custom" ${isCustom ? 'selected' : ''}>Custom</option>
+            </select>
+            <input type="text" data-file-index="${i}" data-prop="customCrackType" value="${f.crackType}" class="w-full text-xs bg-gray-900 border-gray-600 rounded p-1 ${isCustom ? '' : 'hidden'}">
+        </div>` : ''}
+        
+        <!-- Secondary Crack Section -->
+        ${f.includeCracked ? `
+        <div class="mt-3 pt-2 border-t border-gray-600">
+            <div class="flex items-center justify-between">
+                <label class="text-xs text-cyan-400">Secondary Crack (Optional)</label>
+                <input type="checkbox" data-file-index="${i}" data-prop="includeCracked2" ${f.includeCracked2 ? 'checked' : ''} class="h-4 w-4 rounded border-gray-300">
+            </div>
+            ${f.includeCracked2 ? `<div class="mt-2 space-y-2">
+                <select data-file-index="${i}" data-prop="crackType2" class="w-full text-xs bg-gray-900 border-gray-600 rounded p-1">
+                    <option value="Cracked: Detanup01 Goldberg Fork" ${isDetanupFork2 ? 'selected' : ''}>Detanup01 Goldberg Fork</option>
+                    <option value="Cracked: Detanup01 Goldberg Fork + Steamless" ${isDetanupSteamless2 ? 'selected' : ''}>Detanup01 Goldberg Fork + Steamless</option>
+                    <option value="Cracked: Online-Fix" ${isOnlineFixOnly2 ? 'selected' : ''}>Online-Fix</option>
+                    <option value="Cracked: Online-Fix + Steamless" ${isOnlineFixSteamless2 ? 'selected' : ''}>Online-Fix + Steamless</option>
+                    <option value="custom" ${isCustom2 ? 'selected' : ''}>Custom</option>
+                </select>
+                <input type="text" data-file-index="${i}" data-prop="customCrackType2" value="${f.crackType2 || ''}" class="w-full text-xs bg-gray-900 border-gray-600 rounded p-1 ${isCustom2 ? '' : 'hidden'}">
+            </div>` : ''}
+        </div>` : ''}`;
         els.crackTogglesContainer.appendChild(d);
     });
 
@@ -1059,14 +1118,19 @@ const updateUIForActiveGame = () => {
     let sizesHtml = '<div class="space-y-2">';
     g.files.forEach((f, i) => {
         const hasCracked = f.includeCracked;
+        const hasCracked2 = f.includeCracked2;
         sizesHtml += `
-        <div class="flex items-center gap-2 text-xs">
+        <div class="flex items-center gap-2 text-xs flex-wrap">
             <span class="text-gray-400 w-20 shrink-0">${f.platform}</span>
             <span class="text-green-400 shrink-0">Clean:</span>
             <input type="text" data-file-index="${i}" data-prop="cleanFileSize" value="${f.cleanFileSize || ''}" class="w-14 p-1 bg-gray-900 border border-gray-600 rounded text-xs text-center" placeholder="GB">
             ${hasCracked ? `
             <span class="text-cyan-400 shrink-0">Cracked:</span>
             <input type="text" data-file-index="${i}" data-prop="crackedFileSize" value="${f.crackedFileSize || ''}" class="w-14 p-1 bg-gray-900 border border-gray-600 rounded text-xs text-center" placeholder="GB">
+            ` : ''}
+            ${hasCracked2 ? `
+            <span class="text-cyan-300 shrink-0">2nd:</span>
+            <input type="text" data-file-index="${i}" data-prop="crackedFileSize2" value="${f.crackedFileSize2 || ''}" class="w-14 p-1 bg-gray-900 border border-cyan-700 rounded text-xs text-center" placeholder="GB">
             ` : ''}
         </div>`;
     });
@@ -1183,13 +1247,17 @@ window.addCustomGroup = () => {
         branch: x.branch, 
         cleanUrl: '', 
         crackedUrl: '', 
+        crackedUrl2: '', // Secondary crack URL
         shortDate: x.shortDate, 
         buildId: x.buildId, 
         includeCracked: x.includeCracked, 
         crackType: x.crackType,
-        // FIX: Copy existing file sizes when creating a new group
+        includeCracked2: x.includeCracked2, // Secondary crack toggle
+        crackType2: x.crackType2, // Secondary crack type
+        // Copy existing file sizes when creating a new group
         cleanFileSize: x.cleanFileSize,
-        crackedFileSize: x.crackedFileSize
+        crackedFileSize: x.crackedFileSize,
+        crackedFileSize2: x.crackedFileSize2 // Secondary crack file size
     })); 
     g.customGroups.push({ title: 'New Group', files: f, footer: '' }); 
     updateUIForActiveGame(); 
