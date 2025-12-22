@@ -722,7 +722,9 @@ const finishImport = (targetTitle) => {
 
 // --- FILENAME GENERATOR ---
 const generateUpdateFilename = (gameTitle, updateTitle) => {
-    const sanitizedGame = gameTitle.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '.');
+    // Replace & with and
+    let sanitizedGame = gameTitle.replace(/&/g, 'and');
+    sanitizedGame = sanitizedGame.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '.');
     
     // Rule: Space before digit -> Dot. Else -> Underscore.
     let sanitizedUpdate = updateTitle.trim();
@@ -1053,16 +1055,24 @@ window.savePreset = () => { const t = prompt("Name:"); if (!t) return; const f =
 
 // UPDATED ACTIONS FOR NEW STRUCTURE
 window.addUpdate = () => {
+    const game = state.games[state.activeGameIndex];
+    const defaultTitle = 'Update X to Y';
+    const defaultFilename = generateUpdateFilename(game.originalTitle, defaultTitle);
+    
     state.games[state.activeGameIndex].updates.push({
-        title: 'Update X to Y',
-        sections: [{ miniTitle: 'Proton Drive', links: [{ name: 'Update File', url: '' }] }]
+        title: defaultTitle,
+        sections: [{ miniTitle: 'Proton Drive', links: [{ name: defaultFilename, url: '' }] }]
     });
     updateUIForActiveGame(); saveData();
 };
 window.removeUpdate = (i) => { if (confirm('Delete update?')) { state.games[state.activeGameIndex].updates.splice(i, 1); updateUIForActiveGame(); saveData(); } };
 
 window.addUpdateSection = (uIndex) => {
-    state.games[state.activeGameIndex].updates[uIndex].sections.push({ miniTitle: 'New Provider', links: [{ name: 'File Name', url: '' }] });
+    const game = state.games[state.activeGameIndex];
+    const updateTitle = game.updates[uIndex].title || 'Update';
+    const filename = generateUpdateFilename(game.originalTitle, updateTitle);
+    
+    state.games[state.activeGameIndex].updates[uIndex].sections.push({ miniTitle: 'New Provider', links: [{ name: filename, url: '' }] });
     updateUIForActiveGame(); saveData();
 };
 window.removeUpdateSection = (uIndex, sIndex) => {
@@ -1072,7 +1082,11 @@ window.removeUpdateSection = (uIndex, sIndex) => {
     }
 };
 window.addSectionLink = (uIndex, sIndex) => {
-    state.games[state.activeGameIndex].updates[uIndex].sections[sIndex].links.push({ name: 'Part X', url: '' });
+    const game = state.games[state.activeGameIndex];
+    const updateTitle = game.updates[uIndex].title || 'Update';
+    const filename = generateUpdateFilename(game.originalTitle, updateTitle);
+    
+    state.games[state.activeGameIndex].updates[uIndex].sections[sIndex].links.push({ name: filename, url: '' });
     updateUIForActiveGame(); saveData();
 };
 window.removeSectionLink = (uIndex, sIndex, lIndex) => {
@@ -1224,7 +1238,25 @@ function setupEventListeners() {
                 else if (p === 'linkUrl') game.updates[u].sections[s].links[l].url = t.value;
             }
             else if (u !== undefined && s !== undefined && p === 'miniTitle') game.updates[u].sections[s].miniTitle = t.value;
-            else if (u !== undefined && p === 'title') game.updates[u].title = t.value;
+            else if (u !== undefined && p === 'title') {
+                // Auto-update filenames logic
+                const oldTitle = game.updates[u].title;
+                const newTitle = t.value;
+                game.updates[u].title = newTitle;
+                
+                // Calculate old default filename to check against
+                const oldFilename = generateUpdateFilename(game.originalTitle, oldTitle);
+                const newFilename = generateUpdateFilename(game.originalTitle, newTitle);
+
+                game.updates[u].sections.forEach(sec => {
+                    sec.links.forEach(chkLink => {
+                        // Update if empty OR if it matches the old auto-generated name
+                        if (!chkLink.name || chkLink.name === oldFilename) {
+                            chkLink.name = newFilename;
+                        }
+                    });
+                });
+            }
 
             else if (p === 'mainGroupTitle') game.mainGroupTitle = t.value;
             else if (f !== undefined) {
