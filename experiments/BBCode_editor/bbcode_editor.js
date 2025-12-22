@@ -1400,8 +1400,23 @@ function setupEventListeners() {
                         });
                     }
                 }
-                else if (p === 'cleanUrl') { file.cleanUrl = t.value; file.cleanUrlNeedsUpdate = false; }
-                else file[p] = t.value;
+                else if (p === 'cleanUrl') { 
+                    file.cleanUrl = t.value; 
+                    file.cleanUrlNeedsUpdate = false; 
+                } 
+                else {
+                    file[p] = t.value;
+                    
+                    // FIX: Propagate file sizes to all custom groups immediately
+                    if (p === 'cleanFileSize' || p === 'crackedFileSize') {
+                        if (game.customGroups) {
+                            game.customGroups.forEach(grp => {
+                                // Update the matching file in every custom group
+                                if (grp.files[f]) grp.files[f][p] = t.value;
+                            });
+                        }
+                    }
+                }
             }
         }
         if (t.type === 'color' || t.id === 'use-same-url-color') {
