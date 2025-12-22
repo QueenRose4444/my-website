@@ -39,7 +39,8 @@
     [{update.fileSize}]<!--/IF:update.fileSize-->
     <!--/LOOP:sectionLinks-->
 
-    <!--/LOOP:sections-->[/spoiler]<!--/LOOP:updates-->[color={sectionTitleColor}]Patch notes:[/color]
+    <!--/LOOP:sections-->[/spoiler]
+    <!--/LOOP:updates-->[color={sectionTitleColor}]Patch notes:[/color]
     <!--LOOP:patchNotes-->[size=88][color=white][b] <!--IF:patchNotesTitle-->{patchNotesTitle}
     <!--/IF:patchNotesTitle--><!--IF:showPatchNotesVersionLabel-->Version:<!--/IF:showPatchNotesVersionLabel-->[/b]
     [i]{file.fullDate} [Build {file.buildId}][/i][/color][/size]
