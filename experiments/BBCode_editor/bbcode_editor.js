@@ -147,7 +147,6 @@ async function loadTemplates() {
 <!--/LOOP:customGroups--><!--LOOP:updates-->[spoiler="{update.title}<!--IF:update.fileSize--> [{update.fileSize}]<!--/IF:update.fileSize-->"]<!--LOOP:sections-->[color={sectionTitleColor}]{section.miniTitle}[/color]
 <!--LOOP:sectionLinks-->[url={link.url}][color={crackedUrlColor}][b]{link.name}[/b][/color][/url]<!--IF:update.fileSize--> [{update.fileSize}]<!--/IF:update.fileSize-->
 <!--/LOOP:sectionLinks-->
-
 <!--/LOOP:sections-->[/spoiler]
 <!--/LOOP:updates-->[color={sectionTitleColor}]Patch notes:[/color]
 <!--LOOP:patchNotes-->[size=88][color=white][b] <!--IF:patchNotesTitle-->{patchNotesTitle} <!--/IF:patchNotesTitle--><!--IF:showPatchNotesVersionLabel-->Version:<!--/IF:showPatchNotesVersionLabel-->[/b] [i]{file.fullDate} [Build {file.buildId}][/i][/color][/size]
@@ -156,20 +155,7 @@ async function loadTemplates() {
 
     templates.multiple = defaultTemplate;
     templates.single = defaultTemplate;
-
-    try {
-        const response = await fetch('templates.html');
-        if (response.ok) {
-            const text = await response.text();
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(text, 'text/html');
-            const loaded = doc.getElementById('multi-url-group-template-with-updates')?.innerHTML;
-            if (loaded) {
-                templates.multiple = loaded;
-                templates.single = loaded;
-            }
-        }
-    } catch (e) { console.warn("Using internal default template."); }
+    // Template is now embedded in JS - no need to fetch external file
 }
 
 function migrateGameData(game) {
@@ -872,7 +858,7 @@ const renderOutput = () => {
 
                 processedContent = processLoops(processedContent, item, nestedParent);
                 return applyTemplate(processedContent, itemData);
-            }).join('\n');
+            }).join('');
         });
     };
 
