@@ -990,7 +990,17 @@ const updateUIForActiveGame = () => {
 
     els.crackTogglesContainer.innerHTML = '';
     g.files.forEach((f, i) => {
-        const isCustom = !f.crackType.includes('Detanup01');
+        // Check if it's a known built-in crack type
+        const isDetanup = f.crackType.includes('Detanup01');
+        const isOnlineFix = f.crackType.includes('Online-Fix');
+        const isCustom = !isDetanup && !isOnlineFix;
+        
+        // Determine which option should be selected
+        const isDetanupFork = isDetanup && !f.crackType.includes('Steamless');
+        const isDetanupSteamless = isDetanup && f.crackType.includes('Steamless');
+        const isOnlineFixOnly = isOnlineFix && !f.crackType.includes('Steamless');
+        const isOnlineFixSteamless = isOnlineFix && f.crackType.includes('Steamless');
+        
         const d = document.createElement('div'); d.className = 'p-2 bg-gray-700/30 rounded mb-2 border border-gray-600';
 
         // Added Copy Button logic below
@@ -1005,7 +1015,7 @@ const updateUIForActiveGame = () => {
                 <input type="checkbox" data-file-index="${i}" data-prop="includeCracked" ${f.includeCracked ? 'checked' : ''} class="h-4 w-4 rounded border-gray-300">
             </div>
         </div>
-        ${f.includeCracked ? `<div class="mt-2 space-y-2"><select data-file-index="${i}" data-prop="crackType" class="w-full text-xs bg-gray-900 border-gray-600 rounded p-1"><option value="Cracked: Detanup01 Goldberg Fork" ${f.crackType.includes('Fork') && !f.crackType.includes('Steamless') ? 'selected' : ''}>Detanup01 Goldberg Fork</option><option value="Cracked: Detanup01 Goldberg Fork + Steamless" ${f.crackType.includes('Steamless') ? 'selected' : ''}>Detanup01 Goldberg Fork + Steamless</option><option value="custom" ${isCustom ? 'selected' : ''}>Custom</option></select><input type="text" data-file-index="${i}" data-prop="customCrackType" value="${f.crackType}" class="w-full text-xs bg-gray-900 border-gray-600 rounded p-1 ${isCustom ? '' : 'hidden'}"></div>` : ''}`;
+        ${f.includeCracked ? `<div class="mt-2 space-y-2"><select data-file-index="${i}" data-prop="crackType" class="w-full text-xs bg-gray-900 border-gray-600 rounded p-1"><option value="Cracked: Detanup01 Goldberg Fork" ${isDetanupFork ? 'selected' : ''}>Detanup01 Goldberg Fork</option><option value="Cracked: Detanup01 Goldberg Fork + Steamless" ${isDetanupSteamless ? 'selected' : ''}>Detanup01 Goldberg Fork + Steamless</option><option value="Cracked: Online-Fix" ${isOnlineFixOnly ? 'selected' : ''}>Online-Fix</option><option value="Cracked: Online-Fix + Steamless" ${isOnlineFixSteamless ? 'selected' : ''}>Online-Fix + Steamless</option><option value="custom" ${isCustom ? 'selected' : ''}>Custom</option></select><input type="text" data-file-index="${i}" data-prop="customCrackType" value="${f.crackType}" class="w-full text-xs bg-gray-900 border-gray-600 rounded p-1 ${isCustom ? '' : 'hidden'}"></div>` : ''}`;
         els.crackTogglesContainer.appendChild(d);
     });
 
