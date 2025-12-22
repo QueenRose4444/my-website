@@ -8,6 +8,7 @@ const APP_NAME = 'bbcode_editor';
 const ENVIRONMENT = 'live';
 
 const LOGGING_ENABLED = ENVIRONMENT === 'wip';
+const STORAGE_PREFIX = `${APP_NAME}_${ENVIRONMENT}_`;
 function syncLog(...args) { if (LOGGING_ENABLED) console.log('[SYNC_LOG]', ...args); }
 
 /*************************************
@@ -227,9 +228,8 @@ function migrateGameData(game) {
 function loadLocalData() {
     // Default both toggles to TRUE
     const defaultSettings = { cleanUrlColor: '#00aa00', crackedUrlColor: '#00babd', useSameUrlColor: false, sectionTitleColor: '#ee11d5', patchNotesMode: 'multiple', showVersionLabel: true, showPatchNotesVersionLabel: true };
-    const storagePrefix = `${APP_NAME}_${ENVIRONMENT}_`;
     try {
-        const storedData = localStorage.getItem(`${storagePrefix}appData`);
+        const storedData = localStorage.getItem(`${STORAGE_PREFIX}appData`);
         if (storedData) {
             const parsedData = JSON.parse(storedData);
             if (parsedData.games) parsedData.games = parsedData.games.map(migrateGameData);
@@ -239,8 +239,7 @@ function loadLocalData() {
 }
 
 function saveLocalData() { 
-    const storagePrefix = `${APP_NAME}_${ENVIRONMENT}_`;
-    try { localStorage.setItem(`${storagePrefix}appData`, JSON.stringify(state)); } catch (e) { console.error("Error saving local data:", e); } 
+    try { localStorage.setItem(`${STORAGE_PREFIX}appData`, JSON.stringify(state)); } catch (e) { console.error("Error saving local data:", e); } 
 }
 function saveData() { saveLocalData(); if (authManager && authManager.isLoggedIn()) saveBackendData(); }
 
@@ -451,23 +450,38 @@ const parseInputText = (text) => {
     const rawBlockRegex = /\[url=.*?\](?:\[color=.*?\])?\[b\](?<gameName>.+?) \[(?<platform>Win\d+|Linux\d+|Mac)\] \[Branch: (?<branch>[^\]]+)\] \(Clean Steam Files\)\[\/b\][\s\S]*?Version:\[\/b\]\s*\[i\](?<fullDate>.+?)\s*\[Build\s(?<buildId>\d+)\]\[\/i\]/g;
 
     // --- DETECTION LOGIC ---
-    // 1. Does this look like Raw Data? (Contains "Depots & Manifests" OR matches the raw regex)
+    // 1. Does this look like Raw Data? (Contains "Depots & Manifests" OR known raw patterns)
     // We check this FIRST to prevent the app from thinking the Depot spoilers are Link Groups.
-    const isRawData = text.includes('Depots & Manifests') || rawBlockRegex.test(text);
+    // But we must be careful not to flag BBCode files as Raw Data just because they share keywords.
+    const isRawData = text.includes('Depots & Manifests');
 
     // Reset regex index after test
     rawBlockRegex.lastIndex = 0;
 
     // 2. BBCODE EDITOR MODE
-    // Only run this if it is NOT raw data, but looks like a formatted post (Has spoilers + Branch info)
-    if (!isRawData && text.includes('[spoiler=') && text.includes('Branch:')) {
+    // Priority: If it looks like BBCode (has [spoiler= and Branch:), treat as such.
+    // The previous check (isRawData) was too aggressive for mixed content.
+    if (text.includes('[spoiler=') && text.includes('Branch:')) {
         const bbGame = parseBBCodeInput(text);
         if (bbGame) {
             const existIdx = state.games.findIndex(g => g.gameTitle === bbGame.gameTitle);
             if (existIdx !== -1) {
-                if (confirm(`Update existing game "${bbGame.gameTitle}" from this BBCode export?`)) {
-                    state.games[existIdx] = bbGame;
-                }
+                // Determine if we need to confirm
+                // For a drag-and-drop, it might be annoying to confirm every time if it's just an update.
+                // However, safe is better.
+                // Let's assume if we are parsing BBCode input, it's an intentional update.
+                // Merging data:
+                const existing = state.games[existIdx];
+                // Update specific fields from the dropped data
+                state.games[existIdx] = {
+                    ...existing,
+                    ...bbGame,
+                    files: bbGame.files, // Replace files (usually what is desired on re-import)
+                    updates: bbGame.updates && bbGame.updates.length > 0 ? bbGame.updates : existing.updates, // Keep existing updates if new one has none? Or overwrite? 
+                    // Request says: "update all relavent fields ... including the ones in the extra link areas"
+                    // So we should overwrite if present.
+                    customGroups: bbGame.customGroups && bbGame.customGroups.length > 0 ? bbGame.customGroups : existing.customGroups
+                };
             } else {
                 state.games.push(bbGame);
             }
@@ -603,9 +617,10 @@ const finishImport = (targetTitle) => {
         if (idx !== -1) newIdx = idx;
     }
     state.activeGameIndex = newIdx;
-    localStorage.setItem(`${storagePrefix}activeGameIndex`, state.activeGameIndex);
+    localStorage.setItem(`${STORAGE_PREFIX}activeGameIndex`, state.activeGameIndex);
     getElements().customizationPanel.classList.remove('hidden');
-    updateDisplay();
+    updateGameList(); // Refresh the dropdown list in case new game added
+    renderGameView(); // Show the game
     saveData();
 };
 
@@ -727,10 +742,29 @@ const handleCopyClick = async (button) => {
 /*******************************
  * UI
  *******************************/
-const updateGameSelector = () => {
-    const { gameSelector } = getElements(); gameSelector.innerHTML = '';
-    state.games.forEach((g, i) => { const o = document.createElement('option'); o.value = i; o.textContent = g.gameTitle; if (i === state.activeGameIndex) o.selected = true; gameSelector.appendChild(o); });
+// SEPARATE LIST UPDATE FROM VIEW RENDER
+const updateGameList = () => {
+    const { gameSelector } = getElements();
+    // Save current selection if possible, though state.activeGameIndex is the truth
+    const currentOpts = gameSelector.options.length;
+    
+    // Valid check: If length matches and titles match, skip rebuild to prevent UI flicker/focus loss?
+    // Actually, simple rebuild is fine as long as we don't do it ON change event.
+    gameSelector.innerHTML = '';
+    state.games.forEach((g, i) => { 
+        const o = document.createElement('option'); 
+        o.value = i; 
+        o.textContent = g.gameTitle; 
+        if (i === state.activeGameIndex) o.selected = true; 
+        gameSelector.appendChild(o); 
+    });
 };
+
+const renderGameView = () => {
+    updateUIForActiveGame();
+};
+
+const updateDisplay = () => { updateGameList(); renderGameView(); };
 
 const createPlatformInputs = (files, parentIndex, type = 'main') => {
     let html = '';
@@ -890,7 +924,7 @@ const updateUIForActiveGame = () => {
     renderOutput();
 };
 
-const updateDisplay = () => { updateGameSelector(); updateUIForActiveGame(); };
+
 
 // Global Actions
 window.resetMainTitle = () => { state.games[state.activeGameIndex].mainGroupTitle = 'Proton Drive Links'; updateUIForActiveGame(); saveData(); };
@@ -966,7 +1000,12 @@ function setupEventListeners() {
     els.dropZone.addEventListener('drop', (e) => { e.preventDefault(); els.dropZone.classList.remove('dragover'); if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); });
     els.fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
     els.processTextBtn.addEventListener('click', () => { if (els.textInput.value.trim()) parseInputText(els.textInput.value); });
-    els.gameSelector.addEventListener('change', (e) => { state.activeGameIndex = parseInt(e.target.value, 10); localStorage.setItem(`${storagePrefix}activeGameIndex`, state.activeGameIndex); updateDisplay(); });
+    els.gameSelector.addEventListener('change', (e) => { 
+        state.activeGameIndex = parseInt(e.target.value, 10); 
+        localStorage.setItem(`${STORAGE_PREFIX}activeGameIndex`, state.activeGameIndex); 
+        // IMPORTANT: Do NOT call updateGameList() here, or it rebuilds the dropdown you are interacting with.
+        renderGameView(); 
+    });
 
     els.addCustomGroupBtn.addEventListener('click', window.addCustomGroup);
     els.loadPresetBtn.addEventListener('click', window.loadPreset);
@@ -1268,8 +1307,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     setupAuthEventListeners();
 
     if (!state.template) state.template = templates.multiple;
-    const storagePrefix = `${APP_NAME}_${ENVIRONMENT}_`;
-    const savedIndex = localStorage.getItem(`${storagePrefix}activeGameIndex`);
+    const savedIndex = localStorage.getItem(`${STORAGE_PREFIX}activeGameIndex`);
     if (savedIndex !== null && state.games.length > savedIndex) state.activeGameIndex = parseInt(savedIndex);
 
     // Initialize auth session - AuthManager will dispatch appropriate events
