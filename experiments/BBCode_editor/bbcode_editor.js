@@ -66,6 +66,7 @@ function getElements() {
         savePresetBtn: document.getElementById('save-preset-btn'),
 
         crackTogglesContainer: document.getElementById('crack-toggles-container'),
+        fileSizesContainer: document.getElementById('file-sizes-container'),
         updatesContainer: document.getElementById('updates-container'),
         addUpdateBtn: document.getElementById('add-update-btn'),
 
@@ -930,8 +931,6 @@ const updateDisplay = () => { updateGameList(); renderGameView(); };
 
 const createPlatformInputs = (files, parentIndex, type = 'main') => {
     let html = '';
-    const showSizeInputs = type === 'main'; // Only show size inputs on main group
-    
     files.forEach((file, fIndex) => {
         const id = type === 'group' ? `data-group-index="${parentIndex}" data-file-index="${fIndex}"` : `data-file-index="${fIndex}"`;
         const warn = file.cleanUrlNeedsUpdate ? '<span class="text-yellow-400 font-bold"> (!)</span>' : '';
@@ -939,19 +938,9 @@ const createPlatformInputs = (files, parentIndex, type = 'main') => {
         html += `<div class="mb-3 pb-2 border-b border-gray-700 last:border-0">
             <label class="block text-xs font-medium text-gray-400 mb-1">${file.platform} - ${file.branch}${warn}</label>
             <input type="text" ${id} data-prop="cleanUrl" value="${file.cleanUrl || ''}" class="w-full p-1 bg-gray-900 border border-gray-600 rounded-md text-sm focus:border-blue-500" placeholder="Clean URL">
-            ${showSizeInputs ? `<div class="flex items-center gap-2 mt-1">
-                <label class="text-xs text-gray-500 whitespace-nowrap">Size:</label>
-                <input type="text" ${id} data-prop="cleanFileSize" value="${file.cleanFileSize || ''}" class="w-20 p-1 bg-gray-900 border border-gray-600 rounded text-xs text-center" placeholder="GB">
-                <span class="text-xs text-gray-500">GB</span>
-            </div>` : ''}
             <div class="${file.includeCracked ? 'mt-2' : 'hidden'}">
                  <label class="block text-xs font-medium text-gray-500 mb-1">Cracked URL</label>
                  <input type="text" ${id} data-prop="crackedUrl" value="${file.crackedUrl || ''}" class="w-full p-1 bg-gray-900 border border-gray-600 rounded-md text-sm text-gray-300">
-                 ${showSizeInputs ? `<div class="flex items-center gap-2 mt-1">
-                    <label class="text-xs text-gray-500 whitespace-nowrap">Size:</label>
-                    <input type="text" ${id} data-prop="crackedFileSize" value="${file.crackedFileSize || ''}" class="w-20 p-1 bg-gray-900 border border-gray-600 rounded text-xs text-center" placeholder="GB">
-                    <span class="text-xs text-gray-500">GB</span>
-                </div>` : ''}
             </div>
         </div>`;
     });
@@ -1020,6 +1009,42 @@ const updateUIForActiveGame = () => {
         els.crackTogglesContainer.appendChild(d);
     });
 
+    // --- FILE SIZES SECTION ---
+    els.fileSizesContainer.innerHTML = '';
+    
+    // Main files sizes
+    let sizesHtml = '<div class="space-y-2">';
+    g.files.forEach((f, i) => {
+        const hasCracked = f.includeCracked;
+        sizesHtml += `
+        <div class="flex items-center gap-2 text-xs">
+            <span class="text-gray-400 w-20 shrink-0">${f.platform}</span>
+            <span class="text-green-400 shrink-0">Clean:</span>
+            <input type="text" data-file-index="${i}" data-prop="cleanFileSize" value="${f.cleanFileSize || ''}" class="w-14 p-1 bg-gray-900 border border-gray-600 rounded text-xs text-center" placeholder="GB">
+            ${hasCracked ? `
+            <span class="text-cyan-400 shrink-0">Cracked:</span>
+            <input type="text" data-file-index="${i}" data-prop="crackedFileSize" value="${f.crackedFileSize || ''}" class="w-14 p-1 bg-gray-900 border border-gray-600 rounded text-xs text-center" placeholder="GB">
+            ` : ''}
+        </div>`;
+    });
+    sizesHtml += '</div>';
+    
+    // Update section sizes
+    if (g.updates && g.updates.length > 0) {
+        sizesHtml += '<div class="mt-3 pt-3 border-t border-gray-700"><span class="text-xs text-gray-500 mb-2 block">Updates</span><div class="space-y-2">';
+        g.updates.forEach((u, ui) => {
+            const displayTitle = u.title || 'Update ' + (ui + 1);
+            sizesHtml += `
+            <div class="flex items-center gap-2 text-xs">
+                <span class="text-gray-400 flex-grow truncate">${displayTitle}</span>
+                <input type="text" data-update-index="${ui}" data-prop="fileSize" value="${u.fileSize || ''}" class="w-14 p-1 bg-gray-900 border border-gray-600 rounded text-xs text-center" placeholder="GB">
+            </div>`;
+        });
+        sizesHtml += '</div></div>';
+    }
+    
+    els.fileSizesContainer.innerHTML = sizesHtml;
+
     // --- UPDATES SECTION REDESIGN ---
     els.updatesContainer.innerHTML = '';
     if (!g.updates) g.updates = [];
@@ -1054,10 +1079,6 @@ const updateUIForActiveGame = () => {
         <div class="flex justify-between mb-2 items-center">
             <div class="flex-grow flex items-center gap-2">
                 <input type="text" data-update-index="${ui}" data-prop="title" value="${u.title || ''}" class="bg-transparent border-b border-gray-500 text-green-400 text-sm font-bold focus:outline-none flex-grow" placeholder="Update Title (e.g. Update v1 to v2)">
-                <div class="flex items-center gap-1">
-                    <input type="text" data-update-index="${ui}" data-prop="fileSize" value="${u.fileSize || ''}" class="w-16 p-1 bg-gray-900 border border-gray-600 rounded text-xs text-center" placeholder="GB">
-                    <span class="text-xs text-gray-500">GB</span>
-                </div>
                  <button id="copy-update-btn-${ui}" onclick="window.copyUpdateFilename(${ui})" class="text-gray-400 hover:text-green-400" title="Copy Filename">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                 </button>
