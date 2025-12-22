@@ -823,6 +823,11 @@ const renderOutput = () => {
                 };
                 if (itemData.cleanFileSize) itemData.cleanFileSize = ensureGB(itemData.cleanFileSize);
                 if (itemData.crackedFileSize) itemData.crackedFileSize = ensureGB(itemData.crackedFileSize);
+                // Also update the nested file object for template access via {file.cleanFileSize}
+                if (itemData.file) {
+                    if (itemData.file.cleanFileSize) itemData.file.cleanFileSize = ensureGB(itemData.file.cleanFileSize);
+                    if (itemData.file.crackedFileSize) itemData.file.crackedFileSize = ensureGB(itemData.file.crackedFileSize);
+                }
                 if (itemData.update && itemData.update.fileSize) itemData.update.fileSize = ensureGB(itemData.update.fileSize);
                 if (itemData.fileSize) itemData.fileSize = ensureGB(itemData.fileSize); // Catch-all for other size props
 
