@@ -1167,6 +1167,7 @@ function updateUIForLoginState() {
     els.registerButton.style.display = loggedIn ? 'none' : 'inline-block';
     els.logoutButton.style.display = loggedIn ? 'inline-block' : 'none';
     els.userStatus.textContent = loggedIn ? `Logged in: ${currentUser?.username || 'User'}` : 'Not logged in';
+    els.userStatus.style.color = loggedIn ? '#4bc0c0' : '#ccc';
     if (els.changePasswordButton) els.changePasswordButton.style.display = loggedIn ? 'inline-block' : 'none';
 }
 
