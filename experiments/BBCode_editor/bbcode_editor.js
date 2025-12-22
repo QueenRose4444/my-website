@@ -1133,7 +1133,25 @@ const updateUIForActiveGame = () => {
 
 // Global Actions
 window.resetMainTitle = () => { state.games[state.activeGameIndex].mainGroupTitle = 'Proton Drive Links'; updateUIForActiveGame(); saveData(); };
-window.addCustomGroup = () => { const g = state.games[state.activeGameIndex]; const f = g.files.map(x => ({ platform: x.platform, branch: x.branch, cleanUrl: '', crackedUrl: '', shortDate: x.shortDate, buildId: x.buildId, includeCracked: x.includeCracked, crackType: x.crackType })); g.customGroups.push({ title: 'New Group', files: f, footer: '' }); updateUIForActiveGame(); saveData(); };
+window.addCustomGroup = () => { 
+    const g = state.games[state.activeGameIndex]; 
+    const f = g.files.map(x => ({ 
+        platform: x.platform, 
+        branch: x.branch, 
+        cleanUrl: '', 
+        crackedUrl: '', 
+        shortDate: x.shortDate, 
+        buildId: x.buildId, 
+        includeCracked: x.includeCracked, 
+        crackType: x.crackType,
+        // FIX: Copy existing file sizes when creating a new group
+        cleanFileSize: x.cleanFileSize,
+        crackedFileSize: x.crackedFileSize
+    })); 
+    g.customGroups.push({ title: 'New Group', files: f, footer: '' }); 
+    updateUIForActiveGame(); 
+    saveData(); 
+};
 window.removeCustomGroup = (i) => { if (confirm('Delete group?')) { state.games[state.activeGameIndex].customGroups.splice(i, 1); updateUIForActiveGame(); saveData(); } };
 window.loadPreset = () => { const idx = getElements().presetSelector.value; if (idx === '') return; const p = state.presets[idx], g = state.games[state.activeGameIndex], f = g.files.map(x => ({ platform: x.platform, branch: x.branch, cleanUrl: '', crackedUrl: '', shortDate: x.shortDate, buildId: x.buildId, includeCracked: x.includeCracked, crackType: x.crackType })); g.customGroups.push({ title: p.title, footer: p.footer, files: f }); updateUIForActiveGame(); saveData(); };
 window.savePreset = () => { const t = prompt("Name:"); if (!t) return; const f = prompt("Footer:"); state.presets.push({ title: t, footer: f || '' }); updateUIForActiveGame(); saveData(); };
