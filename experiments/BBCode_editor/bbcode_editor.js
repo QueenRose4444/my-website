@@ -444,6 +444,78 @@ const handleFiles = (files) => {
     });
 };
 
+const mergeGameData = (existing, incoming) => {
+    const merged = { ...existing };
+    
+    // Merge Scalar Metadata (Prefer Incoming for Version/Date, Keep Existing for Config if needed)
+    if (incoming.gameVersion) merged.gameVersion = incoming.gameVersion;
+    if (incoming.patchNotesTitle) merged.patchNotesTitle = incoming.patchNotesTitle;
+    if (incoming.mainGroupTitle && incoming.mainGroupTitle !== 'Proton Drive Links') merged.mainGroupTitle = incoming.mainGroupTitle;
+
+    const mergeFiles = (inc, ext) => {
+        if (!inc) return ext || [];
+        if (!ext) return inc;
+        return inc.map(f => {
+            const match = ext.find(e => e.platform === f.platform && e.branch === f.branch);
+            if (match) {
+                // Merge Logic:
+                // 1. New File (f) provides the source-of-truth for BuildID, Date, Version.
+                // 2. Old File (match) provides the user-entered URLs and Settings.
+                // 3. If New File HAS valid URLs (e.g. valid import), use them.
+                return {
+                    ...match, // Start with user's existing settings (includeCracked, crackType, etc)
+                    ...f,     // Overwrite with fresh build data
+                    cleanUrl: f.cleanUrl || match.cleanUrl,
+                    crackedUrl: f.crackedUrl || match.crackedUrl,
+                    includeCracked: match.includeCracked || !!f.crackedUrl, // Keep enabled if it was enabled OR if we have a new URL
+                    crackType: match.crackType // Prefer existing crack type preference
+                };
+            }
+            return f; // Brand new file platform/branch
+        });
+    };
+
+    merged.files = mergeFiles(incoming.files, existing.files);
+
+    if (incoming.customGroups && incoming.customGroups.length > 0) {
+        merged.customGroups = incoming.customGroups.map(ig => {
+            const eg = existing.customGroups ? existing.customGroups.find(g => g.title === ig.title) : null;
+            if (eg) {
+                return {
+                    ...ig,
+                    files: mergeFiles(ig.files, eg.files),
+                    footer: ig.footer || eg.footer
+                };
+            }
+            return ig;
+        });
+    }
+
+    if (incoming.updates && incoming.updates.length > 0) {
+        merged.updates = incoming.updates.map(iu => {
+            const eu = existing.updates ? existing.updates.find(u => u.title === iu.title) : null;
+            if (eu) {
+                const sections = iu.sections.map(is => {
+                    const es = eu.sections ? eu.sections.find(s => s.miniTitle === is.miniTitle) : null;
+                    if (es) {
+                        const links = is.links.map(il => {
+                            const el = es.links ? es.links.find(l => l.name === il.name) : null;
+                            if (el) return { ...il, url: il.url || el.url };
+                            return il;
+                        });
+                        return { ...is, links };
+                    }
+                    return is;
+                });
+                return { ...iu, sections };
+            }
+            return iu;
+        });
+    }
+
+    return merged;
+};
+
 const parseInputText = (text) => {
     // --- REGEX DEFINITION (Raw Import Format) ---
     // Matches: [url=][color=white][b]Title [Platform] [Branch: Branch] (Clean Steam Files)[/b] ...
@@ -466,23 +538,10 @@ const parseInputText = (text) => {
         if (bbGame) {
             const existIdx = state.games.findIndex(g => g.gameTitle === bbGame.gameTitle);
             if (existIdx !== -1) {
-                // Determine if we need to confirm
-                // For a drag-and-drop, it might be annoying to confirm every time if it's just an update.
-                // However, safe is better.
-                // Let's assume if we are parsing BBCode input, it's an intentional update.
-                // Merging data:
+                // Merging data using smart merge:
                 const existing = state.games[existIdx];
-                // Update specific fields from the dropped data
-                state.games[existIdx] = {
-                    ...existing,
-                    ...bbGame,
-                    files: bbGame.files, // Replace files (usually what is desired on re-import)
-                    updates: bbGame.updates && bbGame.updates.length > 0 ? bbGame.updates : existing.updates, // Keep existing updates if new one has none? Or overwrite? 
-                    // Request says: "update all relavent fields ... including the ones in the extra link areas"
-                    // So we should overwrite if present.
-                    customGroups: bbGame.customGroups && bbGame.customGroups.length > 0 ? bbGame.customGroups : existing.customGroups
-                };
-            } else {
+                state.games[existIdx] = mergeGameData(existing, bbGame);
+            } else {            
                 state.games.push(bbGame);
             }
             finishImport(bbGame.gameTitle);
