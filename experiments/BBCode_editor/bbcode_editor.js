@@ -788,13 +788,26 @@ const renderOutput = () => {
                     nestedParent.section = item; // Save section for child loops
                 }
                 
+                // For custom group files, look up sizes from the matching main file
+                let fileWithSizes = item;
+                if (loopKey === 'groupCleanFiles' || loopKey === 'groupCrackedFiles') {
+                    const mainFile = activeGame.files.find(f => f.platform === item.platform && f.branch === item.branch);
+                    if (mainFile) {
+                        fileWithSizes = { 
+                            ...item, 
+                            cleanFileSize: mainFile.cleanFileSize,
+                            crackedFileSize: mainFile.crackedFileSize 
+                        };
+                    }
+                }
+                
                 let itemData = {
-                    file: item,
+                    file: fileWithSizes,
                     group: item,
                     update: loopKey === 'updates' ? item : (parentContext.update || item),
                     section: loopKey === 'sections' ? item : (parentContext.section || item),
                     link: item,
-                    ...item,
+                    ...fileWithSizes,
                     // Inject patch mode flags for the template
                     isMultiPatch: state.settings.patchNotesMode !== 'single',
                     isSinglePatch: state.settings.patchNotesMode === 'single',
@@ -873,7 +886,8 @@ const renderPreview = (bbcode) => {
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/\[url=([^\]]*)\](.*?)\[\/url\]/gs, (m, u, t) => `<a href="${u}" class="postlink" target="_blank">${t}</a>`)
         .replace(/(^|\s)(https?:\/\/[^\s<]+)/g, '$1<a href="$2" class="postlink" target="_blank">$2</a>')
-        .replace(/\[spoiler="?(.*?)"?\](.*?)\[\/spoiler\]/gs, '<div style="margin:5px 0;border:1px solid #444;padding:5px;background:#222;"><div style="font-weight:bold;color:#fff;">$1</div><div style="margin-top:5px;">$2</div></div>')
+        // Fixed: Use non-greedy match for spoiler title, stopping at "]
+        .replace(/\[spoiler="([^"]*?)"\](.*?)\[\/spoiler\]/gs, '<div style="margin:5px 0;border:1px solid #444;padding:5px;background:#222;"><div style="font-weight:bold;color:#fff;">$1</div><div style="margin-top:5px;">$2</div></div>')
         .replace(/\n/g, '<br>').replace(/\[b\](.*?)\[\/b\]/gs, '<b>$1</b>').replace(/\[i\](.*?)\[\/i\]/gs, '<i>$1</i>')
         .replace(/\[color=(.*?)\](.*?)\[\/color\]/gs, '<span style="color:$1;">$2</span>')
         .replace(/\[size=(.*?)\](.*?)\[\/size\]/gs, '<span style="font-size:$1%;">$2</span>');
@@ -916,25 +930,28 @@ const updateDisplay = () => { updateGameList(); renderGameView(); };
 
 const createPlatformInputs = (files, parentIndex, type = 'main') => {
     let html = '';
+    const showSizeInputs = type === 'main'; // Only show size inputs on main group
+    
     files.forEach((file, fIndex) => {
         const id = type === 'group' ? `data-group-index="${parentIndex}" data-file-index="${fIndex}"` : `data-file-index="${fIndex}"`;
         const warn = file.cleanUrlNeedsUpdate ? '<span class="text-yellow-400 font-bold"> (!)</span>' : '';
+        
         html += `<div class="mb-3 pb-2 border-b border-gray-700 last:border-0">
             <label class="block text-xs font-medium text-gray-400 mb-1">${file.platform} - ${file.branch}${warn}</label>
             <input type="text" ${id} data-prop="cleanUrl" value="${file.cleanUrl || ''}" class="w-full p-1 bg-gray-900 border border-gray-600 rounded-md text-sm focus:border-blue-500" placeholder="Clean URL">
-            <div class="flex items-center gap-2 mt-1">
+            ${showSizeInputs ? `<div class="flex items-center gap-2 mt-1">
                 <label class="text-xs text-gray-500 whitespace-nowrap">Size:</label>
                 <input type="text" ${id} data-prop="cleanFileSize" value="${file.cleanFileSize || ''}" class="w-20 p-1 bg-gray-900 border border-gray-600 rounded text-xs text-center" placeholder="GB">
                 <span class="text-xs text-gray-500">GB</span>
-            </div>
+            </div>` : ''}
             <div class="${file.includeCracked ? 'mt-2' : 'hidden'}">
                  <label class="block text-xs font-medium text-gray-500 mb-1">Cracked URL</label>
                  <input type="text" ${id} data-prop="crackedUrl" value="${file.crackedUrl || ''}" class="w-full p-1 bg-gray-900 border border-gray-600 rounded-md text-sm text-gray-300">
-                 <div class="flex items-center gap-2 mt-1">
+                 ${showSizeInputs ? `<div class="flex items-center gap-2 mt-1">
                     <label class="text-xs text-gray-500 whitespace-nowrap">Size:</label>
                     <input type="text" ${id} data-prop="crackedFileSize" value="${file.crackedFileSize || ''}" class="w-20 p-1 bg-gray-900 border border-gray-600 rounded text-xs text-center" placeholder="GB">
                     <span class="text-xs text-gray-500">GB</span>
-                </div>
+                </div>` : ''}
             </div>
         </div>`;
     });
