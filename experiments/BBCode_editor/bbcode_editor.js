@@ -856,7 +856,13 @@ const renderOutput = () => {
                 if (itemData.update && itemData.update.fileSize) itemData.update.fileSize = ensureGB(itemData.update.fileSize);
                 if (itemData.fileSize) itemData.fileSize = ensureGB(itemData.fileSize); // Catch-all for other size props
 
-                let processedContent = loopContent.replace(/<!--IF:([\w.]+)-->([\s\S]*?)<!--\/IF:\1-->/g, (m, k, c) => {
+                // IMPORTANT: Process nested loops FIRST, before handling IF conditionals
+                // This ensures that <!--IF:file.cleanFileSize--> inside <!--LOOP:groupCleanFiles-->
+                // is evaluated in the context of the inner loop, not the outer customGroups loop
+                let processedContent = processLoops(loopContent, item, nestedParent);
+                
+                // NOW process IF conditionals after nested loops have been resolved
+                processedContent = processedContent.replace(/<!--IF:([\w.]+)-->([\s\S]*?)<!--\/IF:\1-->/g, (m, k, c) => {
                     // Check boolean flags injected above
                     if (k === 'isMultiPatch' && itemData.isMultiPatch) return c;
                     if (k === 'isSinglePatch' && itemData.isSinglePatch) return c;
@@ -886,7 +892,6 @@ const renderOutput = () => {
                     return '';
                 });
 
-                processedContent = processLoops(processedContent, item, nestedParent);
                 return applyTemplate(processedContent, itemData);
             }).join('');
         });
