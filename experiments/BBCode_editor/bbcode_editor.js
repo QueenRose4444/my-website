@@ -720,6 +720,23 @@ const finishImport = (targetTitle) => {
     saveData();
 };
 
+// --- FILENAME GENERATOR ---
+const generateUpdateFilename = (gameTitle, updateTitle) => {
+    const sanitizedGame = gameTitle.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '.');
+    
+    // Rule: Space before digit -> Dot. Else -> Underscore.
+    let sanitizedUpdate = updateTitle.trim();
+    
+    // Special Case: "to" followed by digit should probably be underscore for readability "1.2_to_2.0"
+    // Apply general rule first
+    sanitizedUpdate = sanitizedUpdate.replace(/\s+(?=\d)/g, '.').replace(/\s+/g, '_');
+    
+    // Fix "to.2" -> "to_2" if it happened
+    sanitizedUpdate = sanitizedUpdate.replace(/_to\./g, '_to_');
+    
+    return `${sanitizedGame}.${sanitizedUpdate}`;
+};
+
 // --- RENDER ENGINE ---
 const renderOutput = () => {
     const { outputCode, previewPane, copyBtnTop, copyBtnBottom, downloadBtn } = getElements();
@@ -972,8 +989,13 @@ const updateUIForActiveGame = () => {
 
         const d = document.createElement('div'); d.className = 'p-3 bg-gray-700/30 rounded border border-gray-600 mb-3';
         d.innerHTML = `
-        <div class="flex justify-between mb-2">
-            <input type="text" data-update-index="${ui}" data-prop="title" value="${u.title || ''}" class="bg-transparent border-b border-gray-500 text-green-400 text-sm font-bold focus:outline-none w-3/4" placeholder="Update Title (e.g. Update v1 to v2)">
+        <div class="flex justify-between mb-2 items-center">
+            <div class="flex-grow flex items-center gap-2">
+                <input type="text" data-update-index="${ui}" data-prop="title" value="${u.title || ''}" class="bg-transparent border-b border-gray-500 text-green-400 text-sm font-bold focus:outline-none w-3/4" placeholder="Update Title (e.g. Update v1 to v2)">
+                 <button id="copy-update-btn-${ui}" onclick="window.copyUpdateFilename(${ui})" class="text-gray-400 hover:text-green-400" title="Copy Filename">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                </button>
+            </div>
             <button class="text-red-400 text-xs hover:text-red-200" onclick="window.removeUpdate(${ui})">Remove Update</button>
         </div>
         ${sectionsHtml}
@@ -1082,6 +1104,23 @@ window.copyCrackFileName = (fileIndex) => {
         if (btn) {
             const originalHTML = btn.innerHTML;
             // Simple Checkmark
+            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+            setTimeout(() => btn.innerHTML = originalHTML, 1500);
+        }
+    });
+};
+
+window.copyUpdateFilename = (updateIndex) => {
+    const game = state.games[state.activeGameIndex];
+    if (!game || !game.updates[updateIndex]) return;
+    
+    const title = game.updates[updateIndex].title || 'Update';
+    const filename = generateUpdateFilename(game.originalTitle, title);
+    
+    navigator.clipboard.writeText(filename).then(() => {
+        const btn = document.getElementById(`copy-update-btn-${updateIndex}`);
+        if (btn) {
+            const originalHTML = btn.innerHTML;
             btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
             setTimeout(() => btn.innerHTML = originalHTML, 1500);
         }
