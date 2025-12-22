@@ -126,25 +126,25 @@ async function loadTemplates() {
 
 <!--/IF:gameVersion--><!--IF:customGroups-->{mainGroupTitle}
 <!--/IF:customGroups-->[color={sectionTitleColor}]Clean Steam Files:[/color]
-<!--LOOP:cleanFiles-->[url={file.cleanUrl}][color={cleanUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] (Clean Steam Files)[/b][/color][/url]
+<!--LOOP:cleanFiles-->[url={file.cleanUrl}][color={cleanUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] (Clean Steam Files)[/b][/color][/url]<!--IF:file.cleanFileSize--> [{file.cleanFileSize} GB]<!--/IF:file.cleanFileSize-->
 [size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
 
 <!--/LOOP:cleanFiles--><!--IF:crackedExists-->[color={sectionTitleColor}]Cracked:[/color]
-<!--LOOP:crackedFiles-->[url={file.crackedUrl}][color={crackedUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType})[/b][/color][/url]
+<!--LOOP:crackedFiles-->[url={file.crackedUrl}][color={crackedUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType})[/b][/color][/url]<!--IF:file.crackedFileSize--> [{file.crackedFileSize} GB]<!--/IF:file.crackedFileSize-->
 [size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
 
 <!--/LOOP:crackedFiles--><!--/IF:crackedExists--><!--LOOP:customGroups-->[spoiler="{group.title}"][color={sectionTitleColor}]Clean Steam Files:[/color]
-<!--LOOP:groupCleanFiles-->[url={file.cleanUrl}][color={cleanUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] (Clean Steam Files)[/b][/color][/url]
+<!--LOOP:groupCleanFiles-->[url={file.cleanUrl}][color={cleanUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] (Clean Steam Files)[/b][/color][/url]<!--IF:file.cleanFileSize--> [{file.cleanFileSize} GB]<!--/IF:file.cleanFileSize-->
 [size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
 
 <!--/LOOP:groupCleanFiles--><!--IF:crackedExists-->[color={sectionTitleColor}]Cracked:[/color]
-<!--LOOP:groupCrackedFiles-->[url={file.crackedUrl}][color={crackedUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType})[/b][/color][/url]
+<!--LOOP:groupCrackedFiles-->[url={file.crackedUrl}][color={crackedUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] ({file.crackType})[/b][/color][/url]<!--IF:file.crackedFileSize--> [{file.crackedFileSize} GB]<!--/IF:file.crackedFileSize-->
 [size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]
 
 <!--/LOOP:groupCrackedFiles--><!--/IF:crackedExists--><!--IF:group.footer-->[size=85]{group.footer}[/size]
 <!--/IF:group.footer-->[/spoiler]
-<!--/LOOP:customGroups--><!--LOOP:updates-->[spoiler="{update.title}"]<!--LOOP:sections-->[color={sectionTitleColor}]{section.miniTitle}[/color]
-<!--LOOP:sectionLinks-->[url={link.url}][color={crackedUrlColor}][b]{link.name}[/b][/color][/url]
+<!--/LOOP:customGroups--><!--LOOP:updates-->[spoiler="{update.title}<!--IF:update.fileSize--> [{update.fileSize} GB]<!--/IF:update.fileSize-->"]<!--LOOP:sections-->[color={sectionTitleColor}]{section.miniTitle}[/color]
+<!--LOOP:sectionLinks-->[url={link.url}][color={crackedUrlColor}][b]{link.name}[/b][/color][/url]<!--IF:update.fileSize--> [{update.fileSize} GB]<!--/IF:update.fileSize-->
 <!--/LOOP:sectionLinks-->
 
 <!--/LOOP:sections-->[/spoiler]
@@ -196,6 +196,7 @@ function migrateGameData(game) {
             }
             // Ensure structure
             if (!u.sections) u.sections = [];
+            if (u.fileSize === undefined) u.fileSize = ''; // File size for update section
             u.sections.forEach(s => {
                 if (!s.miniTitle) s.miniTitle = 'Provider';
                 if (!s.links) s.links = [];
@@ -215,6 +216,8 @@ function migrateGameData(game) {
             if (f.crackedUrl === undefined) f.crackedUrl = '';
             if (f.includeCracked === undefined) f.includeCracked = true;
             if (f.crackType === undefined) f.crackType = 'Cracked: Detanup01 Goldberg Fork';
+            if (f.cleanFileSize === undefined) f.cleanFileSize = ''; // File size for clean version
+            if (f.crackedFileSize === undefined) f.crackedFileSize = ''; // File size for cracked version
             return f;
         });
     };
@@ -759,7 +762,7 @@ const renderOutput = () => {
     template = template.replace(/<!--IF:crackedExists-->([\s\S]*?)<!--\/IF:crackedExists-->/g, activeGame.files.some(f => f.includeCracked) ? '$1' : '');
     template = template.replace(/<!--IF:customGroups-->([\s\S]*?)<!--\/IF:customGroups-->/g, activeGame.customGroups && activeGame.customGroups.length > 0 ? '$1' : '');
 
-    const processLoops = (tmpl, context) => {
+    const processLoops = (tmpl, context, parentContext = {}) => {
         return tmpl.replace(/<!--LOOP:(\w+)-->([\s\S]*?)<!--\/LOOP:\1-->/g, (match, loopKey, loopContent) => {
             let items = [];
             if (loopKey === 'cleanFiles') items = context.files;
@@ -777,11 +780,19 @@ const renderOutput = () => {
             if (!items || items.length === 0) return '';
 
             return items.map(item => {
+                // Build nested context - preserve parent update for nested loops
+                let nestedParent = { ...parentContext };
+                if (loopKey === 'updates') {
+                    nestedParent.update = item; // Save update for child loops
+                } else if (loopKey === 'sections') {
+                    nestedParent.section = item; // Save section for child loops
+                }
+                
                 let itemData = {
                     file: item,
                     group: item,
-                    update: item,
-                    section: item,
+                    update: loopKey === 'updates' ? item : (parentContext.update || item),
+                    section: loopKey === 'sections' ? item : (parentContext.section || item),
                     link: item,
                     ...item,
                     // Inject patch mode flags for the template
@@ -790,6 +801,12 @@ const renderOutput = () => {
                     showVersionLabel: state.settings.showVersionLabel,
                     showPatchNotesVersionLabel: state.settings.showPatchNotesVersionLabel // Separate toggle
                 };
+                
+                // For sectionLinks, ensure update is referenced from parent context
+                if (loopKey === 'sectionLinks' && parentContext.update) {
+                    itemData.update = parentContext.update;
+                }
+                
                 itemData.gameTitle = activeGame.originalTitle;
                 itemData.mainGroupTitle = activeGame.mainGroupTitle || 'Proton Drive Links';
                 itemData.cleanUrlColor = state.settings.cleanUrlColor;
@@ -807,10 +824,27 @@ const renderOutput = () => {
                     if (k === 'crackedExists' && itemData.files && itemData.files.some(f => f.includeCracked)) return c;
                     if (k === 'group.footer' && item.footer) return c;
                     if (k === 'patchNotesTitle' && activeGame.patchNotesTitle) return c;
+                    
+                    // Handle dot-notated properties (e.g., file.cleanFileSize, update.fileSize)
+                    if (k.includes('.')) {
+                        const parts = k.split('.');
+                        let val = itemData;
+                        for (const part of parts) {
+                            if (val && typeof val === 'object' && part in val) {
+                                val = val[part];
+                            } else {
+                                val = undefined;
+                                break;
+                            }
+                        }
+                        // Return content if value exists and is truthy (non-empty string, etc.)
+                        if (val !== undefined && val !== null && val !== '') return c;
+                    }
+                    
                     return '';
                 });
 
-                processedContent = processLoops(processedContent, item);
+                processedContent = processLoops(processedContent, item, nestedParent);
                 return applyTemplate(processedContent, itemData);
             }).join('\n');
         });
@@ -887,10 +921,20 @@ const createPlatformInputs = (files, parentIndex, type = 'main') => {
         const warn = file.cleanUrlNeedsUpdate ? '<span class="text-yellow-400 font-bold"> (!)</span>' : '';
         html += `<div class="mb-3 pb-2 border-b border-gray-700 last:border-0">
             <label class="block text-xs font-medium text-gray-400 mb-1">${file.platform} - ${file.branch}${warn}</label>
-            <input type="text" ${id} data-prop="cleanUrl" value="${file.cleanUrl || ''}" class="w-full p-1 bg-gray-900 border border-gray-600 rounded-md text-sm focus:border-blue-500">
+            <input type="text" ${id} data-prop="cleanUrl" value="${file.cleanUrl || ''}" class="w-full p-1 bg-gray-900 border border-gray-600 rounded-md text-sm focus:border-blue-500" placeholder="Clean URL">
+            <div class="flex items-center gap-2 mt-1">
+                <label class="text-xs text-gray-500 whitespace-nowrap">Size:</label>
+                <input type="text" ${id} data-prop="cleanFileSize" value="${file.cleanFileSize || ''}" class="w-20 p-1 bg-gray-900 border border-gray-600 rounded text-xs text-center" placeholder="GB">
+                <span class="text-xs text-gray-500">GB</span>
+            </div>
             <div class="${file.includeCracked ? 'mt-2' : 'hidden'}">
                  <label class="block text-xs font-medium text-gray-500 mb-1">Cracked URL</label>
                  <input type="text" ${id} data-prop="crackedUrl" value="${file.crackedUrl || ''}" class="w-full p-1 bg-gray-900 border border-gray-600 rounded-md text-sm text-gray-300">
+                 <div class="flex items-center gap-2 mt-1">
+                    <label class="text-xs text-gray-500 whitespace-nowrap">Size:</label>
+                    <input type="text" ${id} data-prop="crackedFileSize" value="${file.crackedFileSize || ''}" class="w-20 p-1 bg-gray-900 border border-gray-600 rounded text-xs text-center" placeholder="GB">
+                    <span class="text-xs text-gray-500">GB</span>
+                </div>
             </div>
         </div>`;
     });
@@ -992,7 +1036,11 @@ const updateUIForActiveGame = () => {
         d.innerHTML = `
         <div class="flex justify-between mb-2 items-center">
             <div class="flex-grow flex items-center gap-2">
-                <input type="text" data-update-index="${ui}" data-prop="title" value="${u.title || ''}" class="bg-transparent border-b border-gray-500 text-green-400 text-sm font-bold focus:outline-none w-3/4" placeholder="Update Title (e.g. Update v1 to v2)">
+                <input type="text" data-update-index="${ui}" data-prop="title" value="${u.title || ''}" class="bg-transparent border-b border-gray-500 text-green-400 text-sm font-bold focus:outline-none flex-grow" placeholder="Update Title (e.g. Update v1 to v2)">
+                <div class="flex items-center gap-1">
+                    <input type="text" data-update-index="${ui}" data-prop="fileSize" value="${u.fileSize || ''}" class="w-16 p-1 bg-gray-900 border border-gray-600 rounded text-xs text-center" placeholder="GB">
+                    <span class="text-xs text-gray-500">GB</span>
+                </div>
                  <button id="copy-update-btn-${ui}" onclick="window.copyUpdateFilename(${ui})" class="text-gray-400 hover:text-green-400" title="Copy Filename">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                 </button>
@@ -1255,6 +1303,10 @@ function setupEventListeners() {
                         }
                     });
                 });
+            }
+            else if (u !== undefined && p === 'fileSize') {
+                // Handle update section file size
+                game.updates[u].fileSize = t.value;
             }
 
             else if (p === 'mainGroupTitle') game.mainGroupTitle = t.value;
