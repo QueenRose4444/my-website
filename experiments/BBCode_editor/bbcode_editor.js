@@ -722,9 +722,8 @@ const finishImport = (targetTitle) => {
 
 // --- FILENAME GENERATOR ---
 const generateUpdateFilename = (gameTitle, updateTitle) => {
-    // Replace & with and
-    let sanitizedGame = gameTitle.replace(/&/g, 'and');
-    sanitizedGame = sanitizedGame.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '.');
+    // Allow '&' in the regex (add & to the exclusion list ^...)
+    const sanitizedGame = gameTitle.replace(/[^\w\s-&]/g, '').trim().replace(/\s+/g, '.');
     
     // Rule: Space before digit -> Dot. Else -> Underscore.
     let sanitizedUpdate = updateTitle.trim();
@@ -1098,8 +1097,8 @@ window.removeSectionLink = (uIndex, sIndex, lIndex) => {
 window.copyCrackFileName = (fileIndex) => {
     const game = state.games[state.activeGameIndex];
     const file = game.files[fileIndex];
-    // Convert Title Space to Dots
-    const title = game.originalTitle.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '.');
+    // Convert Title Space to Dots, Allow '&'
+    const title = game.originalTitle.replace(/[^\w\s-&]/g, '').trim().replace(/\s+/g, '.');
     const platform = file.platform.toLowerCase();
 
     // Clean up Crack Type (e.g. "Cracked: Detanup01..." -> "Cracked-Detanup01...")
