@@ -1617,6 +1617,83 @@ function setupAuthEventListeners() {
 }
 
 /**********************
+ * DEBUGGING HELPERS (call from browser console)
+ **********************/
+window.debugFileSizes = () => {
+    const game = state.games[state.activeGameIndex];
+    if (!game) { console.log('No active game'); return; }
+    
+    console.log('=== MAIN FILES ===');
+    game.files.forEach((f, i) => {
+        console.log(`[${i}] ${f.platform}/${f.branch}:`, {
+            cleanFileSize: f.cleanFileSize || '(empty)',
+            crackedFileSize: f.crackedFileSize || '(empty)'
+        });
+    });
+    
+    console.log('\n=== CUSTOM GROUPS ===');
+    if (!game.customGroups || game.customGroups.length === 0) {
+        console.log('No custom groups');
+    } else {
+        game.customGroups.forEach((grp, gi) => {
+            console.log(`\nGroup ${gi}: "${grp.title}"`);
+            grp.files.forEach((f, fi) => {
+                console.log(`  [${fi}] ${f.platform}/${f.branch}:`, {
+                    cleanFileSize: f.cleanFileSize || '(empty)',
+                    crackedFileSize: f.crackedFileSize || '(empty)'
+                });
+                
+                // Check if matching main file exists
+                const mainFile = game.files.find(mf => mf.platform === f.platform && mf.branch === f.branch);
+                if (mainFile) {
+                    console.log(`      -> Main file FOUND, sizes:`, {
+                        cleanFileSize: mainFile.cleanFileSize || '(empty)',
+                        crackedFileSize: mainFile.crackedFileSize || '(empty)'
+                    });
+                } else {
+                    console.log(`      -> Main file NOT FOUND for ${f.platform}/${f.branch}`);
+                    // Try platform-only match
+                    const platformMatch = game.files.find(mf => mf.platform === f.platform);
+                    if (platformMatch) {
+                        console.log(`      -> Platform-only match found: ${platformMatch.platform}/${platformMatch.branch}`);
+                    }
+                }
+            });
+        });
+    }
+};
+
+window.debugState = () => {
+    console.log('Full state:', JSON.parse(JSON.stringify(state)));
+};
+
+window.syncFileSizesNow = () => {
+    const game = state.games[state.activeGameIndex];
+    if (!game || !game.customGroups) { console.log('No game/groups'); return; }
+    
+    let updated = 0;
+    game.customGroups.forEach(grp => {
+        grp.files.forEach(cgFile => {
+            const mainFile = game.files.find(mf => mf.platform === cgFile.platform && mf.branch === cgFile.branch);
+            if (mainFile) {
+                if (mainFile.cleanFileSize && !cgFile.cleanFileSize) {
+                    cgFile.cleanFileSize = mainFile.cleanFileSize;
+                    updated++;
+                }
+                if (mainFile.crackedFileSize && !cgFile.crackedFileSize) {
+                    cgFile.crackedFileSize = mainFile.crackedFileSize;
+                    updated++;
+                }
+            }
+        });
+    });
+    
+    console.log(`Synced ${updated} file sizes. Saving and re-rendering...`);
+    saveData();
+    renderOutput();
+};
+
+/**********************
  * Initial Page Load
  **********************/
 document.addEventListener("DOMContentLoaded", async () => {
