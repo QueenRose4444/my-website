@@ -23,8 +23,8 @@
                 <ul class="nav-links">
                     <li><a href="../../home/">Home</a></li>
                     <li><a href="../../meds/">Meds</a></li>
-                    <li><a href="../">Experiments</a></li>
                     <li><a href="">WIP-PAGE</a></li>
+                    <li><a href="../">Experiments</a></li>
                     <li><a href="" class="active-link">bbcode editor</a></li>
                 </ul>
             </div>
@@ -141,6 +141,24 @@
                         </div>
                         <div class="p-4 border-t border-gray-700 module-content">
                             <div id="crack-toggles-container"></div>
+                        </div>
+                    </div>
+
+                    <!-- File Sizes -->
+                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
+                        <div
+                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
+                            <h3 class="text-md font-bold text-white">File Sizes</h3>
+                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                        <div class="p-4 border-t border-gray-700 module-content">
+                            <p class="text-xs text-gray-500 mb-3">Sizes apply to main group and all custom link groups
+                            </p>
+                            <div id="file-sizes-container"></div>
                         </div>
                     </div>
 
@@ -353,7 +371,6 @@
                     data-modal-id="settingsModal">Close</button></div>
         </div>
     </div>
-    <!-- The global AuthManager module -->
     <script src="/auth.js"></script>
     <script src="bbcode_editor.js"></script>
 </body>
