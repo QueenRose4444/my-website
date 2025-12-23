@@ -157,7 +157,11 @@ async function loadTemplates() {
 <!--/LOOP:updates-->[color={sectionTitleColor}]Patch notes:[/color]
 <!--LOOP:patchNotes-->[size=88][color=white][b] <!--IF:patchNotesTitle-->{patchNotesTitle} <!--/IF:patchNotesTitle--><!--IF:showPatchNotesVersionLabel-->Version:<!--/IF:showPatchNotesVersionLabel-->[/b] [i]{file.fullDate} [Build {file.buildId}][/i][/color][/size]
 [url={file.patchNoteUrl}]{file.patchNoteUrl}[/url]
-<!--/LOOP:patchNotes-->`;
+<!--/LOOP:patchNotes--><!--IF:endNote-->
+
+[color={sectionTitleColor}]note:[/color]
+{endNote}
+<!--/IF:endNote-->`;
 
     templates.multiple = defaultTemplate;
     templates.single = defaultTemplate;
@@ -246,6 +250,7 @@ function migrateGameData(game) {
     
     if (game.mainGroupTitle === undefined) game.mainGroupTitle = 'Proton Drive Links';
     if (game.patchNotesTitle === undefined) game.patchNotesTitle = '';
+    if (game.endNote === undefined) game.endNote = ''; // End note/footer
     return game;
 }
 
@@ -782,6 +787,7 @@ const renderOutput = () => {
     template = template.replace(/<!--IF:gameVersion-->([\s\S]*?)<!--\/IF:gameVersion-->/g, activeGame.gameVersion ? '$1' : '');
     template = template.replace(/<!--IF:crackedExists-->([\s\S]*?)<!--\/IF:crackedExists-->/g, activeGame.files.some(f => f.includeCracked) ? '$1' : '');
     template = template.replace(/<!--IF:customGroups-->([\s\S]*?)<!--\/IF:customGroups-->/g, activeGame.customGroups && activeGame.customGroups.length > 0 ? '$1' : '');
+    template = template.replace(/<!--IF:endNote-->([\s\S]*?)<!--\/IF:endNote-->/g, activeGame.endNote ? '$1' : '');
 
     const processLoops = (tmpl, context, parentContext = {}) => {
         return tmpl.replace(/<!--LOOP:(\w+)-->([\s\S]*?)<!--\/LOOP:\1-->/g, (match, loopKey, loopContent) => {
@@ -920,7 +926,8 @@ const renderOutput = () => {
     processed = applyTemplate(processed, {
         sectionTitleColor: state.settings.sectionTitleColor,
         gameVersion: activeGame.gameVersion,
-        mainGroupTitle: activeGame.mainGroupTitle || 'Proton Drive Links'
+        mainGroupTitle: activeGame.mainGroupTitle || 'Proton Drive Links',
+        endNote: activeGame.endNote
     });
     processed = processed.replace(/^\s*[\r\n]/gm, "\n").replace(/\n\n\n+/g, "\n\n").trim();
 
@@ -1228,6 +1235,14 @@ const updateUIForActiveGame = () => {
         g.files.forEach((f, i) => { urlContainer.innerHTML += `<div class="mb-1"><label class="text-xs text-gray-400">${f.platform}</label><input type="text" data-file-index="${i}" data-prop="patchNoteUrl" value="${f.patchNoteUrl || ''}" class="w-full bg-gray-900 border-gray-600 rounded p-1 text-sm"></div>`; });
     }
 
+    // End Note Section
+    els.patchNotesOptionsContainer.innerHTML += `
+        <div class="mt-3 pt-3 border-t border-gray-700">
+            <label class="text-xs text-gray-400 font-bold block mb-1">End Note (Optional)</label>
+            <textarea id="end-note-input" data-game-prop="endNote" class="w-full bg-gray-900 border border-gray-600 text-gray-300 text-xs p-2 rounded resize-y" rows="3" placeholder="Add a note at the end of the output...">${g.endNote || ''}</textarea>
+        </div>
+    `;
+
     els.cleanUrlColorInput.value = state.settings.cleanUrlColor;
     els.crackedUrlColorInput.value = state.settings.crackedUrlColor;
     els.sectionTitleColorInput.value = state.settings.sectionTitleColor;
@@ -1439,6 +1454,13 @@ function setupEventListeners() {
         }
 
         if (t.id === 'game-version-input') game.gameVersion = t.value;
+
+        // Handle game-level properties (like endNote)
+        const gameProp = t.dataset.gameProp;
+        if (gameProp) {
+            game[gameProp] = t.value;
+            saveData(); renderOutput(); return;
+        }
 
         const f = t.dataset.fileIndex, g = t.dataset.groupIndex, u = t.dataset.updateIndex, s = t.dataset.sectionIndex, l = t.dataset.linkIndex, p = t.dataset.prop;
 
