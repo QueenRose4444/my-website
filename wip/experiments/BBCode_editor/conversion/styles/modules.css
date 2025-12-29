@@ -1,0 +1,768 @@
+/* UI Modules Styles */
+
+/* ===== TEMPLATE DESIGNER LAYOUT ===== */
+.designer-container {
+    display: grid;
+    grid-template-columns: 200px 1fr 280px;
+    gap: var(--spacing-md);
+    height: calc(100vh - 180px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    align-items: start;
+    /* Allow sticky to work */
+}
+
+.designer-palette {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    overflow-y: auto;
+}
+
+.designer-palette h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: var(--spacing-md);
+    color: var(--text-primary);
+}
+
+.designer-palette h4 {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--spacing-sm);
+    margin-top: var(--spacing-md);
+}
+
+.designer-palette h4:first-of-type {
+    margin-top: 0;
+}
+
+.palette-section {
+    margin-bottom: var(--spacing-md);
+}
+
+.designer-palette .module-palette {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.designer-palette .module-item {
+    flex-direction: row;
+    padding: var(--spacing-sm) var(--spacing-md);
+    gap: var(--spacing-sm);
+}
+
+.designer-palette .module-icon {
+    font-size: 16px;
+}
+
+.designer-palette .module-name {
+    font-size: 12px;
+}
+
+/* Layout Preview Area */
+.designer-layout {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.designer-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+}
+
+.layout-preview {
+    flex: 1;
+    display: grid;
+    gap: var(--spacing-md);
+    min-height: 400px;
+}
+
+.layout-preview.two-columns {
+    grid-template-columns: 1fr 1fr;
+}
+
+.layout-preview.three-columns {
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+.layout-zone {
+    background: var(--bg-secondary);
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    transition: all var(--transition-fast);
+}
+
+.layout-zone.drag-over {
+    border-color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.layout-zone h4 {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: var(--spacing-md);
+    text-align: center;
+}
+
+.zone-modules {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    min-height: 100px;
+}
+
+.zone-drop-hint {
+    text-align: center;
+    padding: var(--spacing-lg);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-style: italic;
+}
+
+/* Module Config Panel */
+.designer-config {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    overflow-y: auto;
+    position: sticky;
+    top: 0;
+    max-height: calc(100vh - 220px);
+    height: fit-content;
+}
+
+.designer-config h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: var(--spacing-md);
+    color: var(--text-primary);
+}
+
+.module-config-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.config-section {
+    padding-bottom: var(--spacing-md);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.config-section:last-child {
+    border-bottom: none;
+}
+
+.config-section label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-xs);
+}
+
+.config-section input,
+.config-section select {
+    width: 100%;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    padding: var(--spacing-sm);
+    font-size: 13px;
+}
+
+.config-section input:focus,
+.config-section select:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+/* Module Type Header in Config */
+.config-module-type {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--spacing-md);
+}
+
+.config-module-type .type-icon {
+    font-size: 20px;
+}
+
+.config-module-type .type-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Color Picker Row */
+.color-picker-row {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+}
+
+.color-picker-row input[type="color"] {
+    width: 50px;
+    height: 38px;
+    padding: 2px;
+    cursor: pointer;
+}
+
+.color-picker-row input[type="text"] {
+    flex: 1;
+}
+
+/* Config Actions */
+.config-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--border-color);
+}
+
+/* Checkbox Label */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: auto;
+}
+
+/* ===== ORIGINAL MODULE PALETTE (fallback) ===== */
+.module-palette {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-sm);
+}
+
+.module-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-md);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    cursor: grab;
+    transition: all var(--transition-fast);
+    user-select: none;
+}
+
+.module-item:hover {
+    border-color: var(--accent-primary);
+    background: var(--bg-hover);
+}
+
+.module-item:active {
+    cursor: grabbing;
+}
+
+.module-item.dragging {
+    opacity: 0.5;
+}
+
+.module-icon {
+    font-size: 24px;
+}
+
+.module-name {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+/* Template Modules List */
+.template-modules-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    min-height: 200px;
+}
+
+.drop-zone {
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-xl);
+    text-align: center;
+    transition: all var(--transition-fast);
+}
+
+.drop-zone.empty {
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.drop-zone.drag-over {
+    border-color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.drop-zone p {
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+/* Module Instance */
+.module-instance {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    cursor: move;
+    transition: all var(--transition-fast);
+}
+
+.module-instance:hover {
+    border-color: var(--accent-primary);
+}
+
+.module-instance .module-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.module-instance-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.module-instance-label {
+    font-weight: 500;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.module-instance-link {
+    font-size: 11px;
+    color: var(--accent-primary);
+    font-family: monospace;
+}
+
+.module-instance-actions {
+    display: flex;
+    gap: var(--spacing-xs);
+    flex-shrink: 0;
+}
+
+.module-instance-actions button {
+    background: var(--bg-tertiary);
+    border: none;
+    color: var(--text-secondary);
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 14px;
+    transition: all var(--transition-fast);
+}
+
+.module-instance-actions button:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.module-instance-actions .delete-btn:hover {
+    background: var(--accent-danger);
+    color: white;
+}
+
+/* Module Count */
+.module-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-primary);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+}
+
+/* Rendered Module (in Use Mode) */
+.rendered-module {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.rendered-module label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-xs);
+}
+
+.rendered-module input[type="text"],
+.rendered-module input[type="url"],
+.rendered-module input[type="number"],
+.rendered-module textarea,
+.rendered-module select {
+    width: 100%;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    padding: var(--spacing-sm);
+    font-size: 14px;
+}
+
+.rendered-module input:focus,
+.rendered-module textarea:focus,
+.rendered-module select:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.rendered-module input[type="color"] {
+    width: 100%;
+    height: 40px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    padding: 2px;
+    background: var(--bg-primary);
+}
+
+.rendered-module .copy-btn {
+    width: 100%;
+    background: var(--gradient-success);
+    color: white;
+    border: none;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.rendered-module .copy-btn:hover {
+    box-shadow: 0 0 15px rgba(34, 197, 94, 0.3);
+}
+
+.rendered-module .toggle-container {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.toggle-switch {
+    position: relative;
+    width: 48px;
+    height: 24px;
+    background: var(--bg-tertiary);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
+.toggle-switch.active {
+    background: var(--accent-success);
+}
+
+.toggle-switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    transition: transform var(--transition-fast);
+}
+
+.toggle-switch.active::after {
+    transform: translateX(24px);
+}
+
+/* ===== MODULE PREVIEW STYLES (Designer Use Mode Preview) ===== */
+.module-instance {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.module-preview-container {
+    width: 100%;
+    pointer-events: none;
+}
+
+.module-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: var(--spacing-xs);
+    border-top: 1px solid var(--border-color);
+    margin-top: var(--spacing-xs);
+}
+
+.module-meta .module-label {
+    font-weight: 500;
+    font-size: 12px;
+    color: var(--text-primary);
+}
+
+.module-meta .module-link {
+    font-size: 10px;
+    color: var(--accent-primary);
+    font-family: monospace;
+}
+
+.module-meta .module-link em {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Preview Input Elements */
+.preview-input,
+.preview-textarea,
+.preview-select {
+    width: 100%;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: 11px;
+}
+
+.preview-textarea {
+    min-height: 40px;
+    resize: none;
+}
+
+.preview-color {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.preview-color input[type="color"] {
+    width: 40px;
+    height: 24px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    cursor: not-allowed;
+}
+
+.preview-color span {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.preview-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.preview-toggle input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+}
+
+.preview-btn {
+    width: 100%;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    color: var(--text-secondary);
+    cursor: not-allowed;
+}
+
+.preview-file-input,
+.preview-file-drop {
+    padding: var(--spacing-sm);
+    background: var(--bg-tertiary);
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-sm);
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.preview-file-drop {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: var(--spacing-md);
+}
+
+.preview-file-drop span:first-child {
+    font-size: 20px;
+}
+
+.preview-output {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.preview-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 4px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.preview-tabs span {
+    padding: 2px 8px;
+    font-size: 10px;
+    border-radius: 3px;
+    color: var(--text-muted);
+}
+
+.preview-tabs span.active {
+    background: var(--accent-primary);
+    color: white;
+}
+
+.preview-output-area {
+    padding: var(--spacing-sm);
+    font-size: 10px;
+    color: var(--text-muted);
+    min-height: 30px;
+}
+
+.preview-live {
+    padding: var(--spacing-md);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.preview-group,
+.preview-repeater,
+.preview-unknown {
+    padding: var(--spacing-sm);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* Selected Module Highlight */
+.module-instance.selected {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+/* Dragging State for Module Instance */
+.module-instance.dragging {
+    opacity: 0.5;
+    border-color: var(--accent-primary);
+}
+
+/* Drop Indicator for Reordering */
+.drop-indicator {
+    height: 3px;
+    background: var(--accent-primary);
+    border-radius: 2px;
+    margin: var(--spacing-xs) 0;
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
+    animation: pulse-indicator 1s infinite alternate;
+}
+
+@keyframes pulse-indicator {
+    from {
+        opacity: 0.7;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Clone Group / Nested List Preview */
+.preview-clone-group,
+.preview-nested-list {
+    padding: var(--spacing-sm);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.preview-add-btn {
+    background: var(--accent-primary);
+    color: white;
+    border: none;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: default;
+}
+
+.preview-clone-info,
+.preview-nested-info {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Config Panel Enhancements */
+.config-description {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin: 0 0 var(--spacing-md) 0;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    line-height: 1.4;
+}
+
+.config-hint {
+    display: block;
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}

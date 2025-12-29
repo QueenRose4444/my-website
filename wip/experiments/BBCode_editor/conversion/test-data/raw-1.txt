@@ -1,0 +1,6 @@
+[url=][color=white][b]Rooftops & Alleys The Parkour Game [Win64] [Branch: Public] (Clean Steam Files)[/b][/color][/url]
+[size=85][color=white][b]Version:[/b] [i]December 22, 2025 - 17:24:16 UTC [Build 20968763][/i][/color][/size]
+
+[spoiler="[color=white]Depots & Manifests[/color]"][code=text]228989 - VC 2022 Redist [Manifest 3514306556860204959]
+228990 - DirectX Jun 2010 Redist [Manifest 1829726630299308803]
+2703851 - DepotName [Manifest 7698519686750476040][/code][/spoiler][color=white][b]Uploaded version:[/b] [i]December 22, 2025 - 17:24:16 UTC [Build 20968763][/i][/color]

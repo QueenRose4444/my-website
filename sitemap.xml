@@ -38,7 +38,11 @@
   </url>
 
   <url>
-    <loc>https://rosestuffs.org/experiments/cs_rin_text_editor/</loc>
+    <loc>https://rosestuffs.org/experiments/steam_update_checker/</loc>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://rosestuffs.org/experiments/disc_notifier/</loc>
     <priority>0.7</priority>
   </url>
 

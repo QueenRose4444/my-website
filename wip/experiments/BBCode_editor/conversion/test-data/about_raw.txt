@@ -1,0 +1,1 @@
+so as you can see i have 3 files raw-1.txt, raw-2.txt, raw-3.txt, all the same game, im using these to indicate that like with the existing code i may drop 3 files for the same game into it and it will need to parse the data match it to the game name, and if existing update the relevant data and if not create a new entry for it
