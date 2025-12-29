@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <link rel="icon" type="image/png" href="/images/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/images/favicon.svg" />
+    <link rel="shortcut icon" href="/images/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="RoseStuffs" />
+    <link rel="manifest" href="/images/site.webmanifest" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BBCode Template Builder</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/modules.css">
+    <link rel="stylesheet" href="styles/logic-editor.css">
+    <link rel="stylesheet" href="styles/layout.css">
+    <link rel="canonical" href="https://rosestuffs.org/wip/experiments/BBCode_editor/conversion/" />
+</head>
+
+<body>
+    <!-- Top Bar (matching existing BBCode editor) -->
+    <header class="top-bar">
+        <nav class="nav-container">
+            <div class="nav-left">
+                <ul class="nav-links">
+                    <li><a href="../../../home/">Home</a></li>
+                    <li><a href="../../../meds/">Meds</a></li>
+                    <li><a href="">WIP-PAGE</a></li>
+                    <li><a href="../../">Experiments</a></li>
+                    <li><a href="../">BBCode Editor</a></li>
+                    <li><a href="" class="active-link">Template Builder</a></li>
+                </ul>
+            </div>
+            <div class="nav-center"></div>
+            <div class="nav-right">
+                <div class="user-account">
+                    <span id="userStatus" style="color: #ccc; align-self: center; margin-right: 15px;">Loading...</span>
+                    <button id="loginButton" style="display: none;">Login</button>
+                    <button id="registerButton" style="display: none;">Register</button>
+                    <button id="logoutButton" style="display: none;">Logout</button>
+                    <button id="localSyncButton">Local Sync</button>
+                    <button id="settingsButton">Settings</button>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main Application -->
+    <main id="app" class="app-container">
+        <!-- Template Management Bar -->
+        <div class="template-bar">
+            <div class="template-selector-group">
+                <label for="template-selector">Template:</label>
+                <select id="template-selector" class="template-dropdown">
+                    <option value="">-- No Templates --</option>
+                </select>
+            </div>
+            <div class="template-actions">
+                <button id="new-template-btn" class="btn btn-primary" title="Create New Template">
+                    <span class="btn-icon">+</span> New
+                </button>
+                <button id="import-template-btn" class="btn btn-secondary" title="Import Template">
+                    <span class="btn-icon">📥</span> Import
+                </button>
+                <button id="export-template-btn" class="btn btn-secondary" title="Export Template" disabled>
+                    <span class="btn-icon">📤</span> Export
+                </button>
+                <button id="rename-template-btn" class="btn btn-secondary" title="Rename Template" disabled>
+                    <span class="btn-icon">✏️</span> Rename
+                </button>
+                <button id="delete-template-btn" class="btn btn-danger" title="Delete Template" disabled>
+                    <span class="btn-icon">🗑️</span> Delete
+                </button>
+            </div>
+            <div class="template-mode-toggle">
+                <button id="edit-mode-btn" class="mode-btn active" title="Edit Mode">Edit</button>
+                <button id="use-mode-btn" class="mode-btn" title="Use Mode">Use</button>
+            </div>
+        </div>
+
+        <!-- Editor Tabs (Edit Mode) -->
+        <div id="editor-tabs" class="editor-tabs">
+            <button class="tab-btn active" data-tab="parser">Parser Setup</button>
+            <button class="tab-btn" data-tab="output">Output Template</button>
+            <button class="tab-btn" data-tab="designer">Template Designer</button>
+            <button class="tab-btn" data-tab="logic">Logic Flow</button>
+            <button class="tab-btn" data-tab="data">Data Config</button>
+        </div>
+
+        <!-- No Template Selected State -->
+        <div id="no-template-view" class="empty-state">
+            <div class="empty-state-content">
+                <div class="empty-icon">📋</div>
+                <h2>No Template Selected</h2>
+                <p>Create a new template or import an existing one to get started.</p>
+                <div class="empty-actions">
+                    <button id="empty-new-btn" class="btn btn-primary btn-large">+ Create New Template</button>
+                    <button id="empty-import-btn" class="btn btn-secondary btn-large">📥 Import Template</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Editor Content (Edit Mode) -->
+        <div id="editor-content" class="editor-content hidden">
+            <!-- Parser Tab -->
+            <div id="tab-parser" class="tab-panel active">
+                <!-- Parser Variant Selector -->
+                <div class="variant-bar">
+                    <label for="parser-variant-selector">Parser Variant:</label>
+                    <select id="parser-variant-selector" class="variant-dropdown">
+                        <option value="default">Default Parser</option>
+                    </select>
+                    <button id="add-variant-btn" class="btn btn-sm btn-secondary" title="Add new parser variant">+ Add
+                        Variant</button>
+                    <button id="edit-variant-btn" class="btn btn-sm btn-secondary" title="Edit variant rules">⚙️
+                        Rules</button>
+                    <button id="delete-variant-btn" class="btn btn-sm btn-danger" title="Delete variant">🗑️</button>
+                </div>
+                <div class="panel-grid">
+                    <div class="panel panel-input">
+                        <div class="panel-header">
+                            <h3>Sample Input Text</h3>
+                            <button id="test-parser-btn" class="btn btn-primary btn-sm">🧪 Test Parser</button>
+                        </div>
+                        <div class="panel-body">
+                            <textarea id="sample-text" class="full-textarea"
+                                placeholder="Paste your sample input text here...&#10;&#10;Example:&#10;[url=][color=white][b]Game Name [Win64] [Branch: Public]..."></textarea>
+                            <p class="help-text">💡 Select text and click "+ Add Field" to create smart extraction rules
+                            </p>
+                        </div>
+                    </div>
+                    <div class="panel panel-fields">
+                        <div class="panel-header">
+                            <h3>Extracted Fields</h3>
+                            <button id="add-field-btn" class="btn btn-success btn-sm">+ Add Field</button>
+                        </div>
+                        <div class="panel-body">
+                            <div id="fields-list" class="fields-list">
+                                <p class="empty-message">No fields defined yet. Select text and click "+ Add Field".</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="panel panel-preview">
+                        <div class="panel-header">
+                            <h3>Parser Test Results</h3>
+                        </div>
+                        <div class="panel-body">
+                            <div id="parser-results" class="parser-results">
+                                <p class="empty-message">Click "🧪 Test Parser" to see extracted values.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Output Template Tab -->
+            <div id="tab-output" class="tab-panel hidden">
+                <div class="panel-grid three-col">
+                    <!-- Variable Picker Sidebar -->
+                    <div class="panel panel-narrow">
+                        <div class="panel-header">
+                            <h3>Available Variables</h3>
+                        </div>
+                        <div class="panel-body" id="variable-picker">
+                            <p class="empty-message">No variables defined yet.</p>
+                            <p class="help-text">Add fields in the Parser tab.</p>
+                        </div>
+                    </div>
+                    <!-- Template Editor -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>BBCode Output Template</h3>
+                        </div>
+                        <!-- BBCode Toolbar -->
+                        <div class="bbcode-toolbar">
+                            <div class="toolbar-group">
+                                <span class="toolbar-label">BBCode:</span>
+                                <button class="btn btn-sm" data-bbcode="url" title="Insert URL [url={varName}]">🔗
+                                    URL</button>
+                                <button class="btn btn-sm" data-bbcode="color" title="Insert Color [color={varName}]">🎨
+                                    Color</button>
+                                <button class="btn btn-sm" data-bbcode="b"
+                                    title="Insert Bold [b]...[/b]"><b>B</b></button>
+                                <button class="btn btn-sm" data-bbcode="i"
+                                    title="Insert Italic [i]...[/i]"><i>I</i></button>
+                                <button class="btn btn-sm" data-bbcode="size" title="Insert Size [size={varName}]">Aa
+                                    Size</button>
+                                <button class="btn btn-sm" data-bbcode="spoiler"
+                                    title="Insert Spoiler [spoiler=&#34;...&#34;]">📦 Spoiler</button>
+                            </div>
+                            <div class="toolbar-group">
+                                <span class="toolbar-label">Logic:</span>
+                                <button class="btn btn-sm btn-secondary" data-insert="if"
+                                    title="Insert IF block">IF</button>
+                                <button class="btn btn-sm btn-secondary" data-insert="loop"
+                                    title="Insert LOOP block">LOOP</button>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <textarea id="output-template" class="full-textarea code-editor"
+                                placeholder="Enter your BBCode template here...&#10;&#10;Click a variable on the left to insert it.&#10;Use <!--IF:condition-->...<!--/IF:condition--> for conditionals&#10;Use <!--LOOP:array-->...<!--/LOOP:array--> for loops"></textarea>
+                        </div>
+                    </div>
+                    <!-- Live Preview -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>Live Preview</h3>
+                            <div class="preview-toggle">
+                                <button id="preview-rendered-btn" class="btn btn-sm active">Rendered</button>
+                                <button id="preview-code-btn" class="btn btn-sm">Code</button>
+                            </div>
+                        </div>
+                        <div class="panel-body preview-body">
+                            <div id="output-preview" class="output-preview">
+                                <p class="empty-message">Preview will appear here...</p>
+                            </div>
+                            <textarea id="output-code" class="full-textarea code-output hidden" readonly></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Template Designer Tab (Combined Modules + Layout) -->
+            <div id="tab-designer" class="tab-panel hidden">
+                <div class="designer-container">
+                    <!-- Module Palette Sidebar -->
+                    <div class="designer-palette">
+                        <h3>Modules</h3>
+                        <div class="module-palette">
+                            <div class="palette-section">
+                                <h4>Inputs</h4>
+                                <div class="module-item" draggable="true" data-module-type="text-input">
+                                    <span class="module-icon">📝</span>
+                                    <span class="module-name">Text</span>
+                                </div>
+                                <div class="module-item" draggable="true" data-module-type="textarea">
+                                    <span class="module-icon">📄</span>
+                                    <span class="module-name">Text Area</span>
+                                </div>
+                                <div class="module-item" draggable="true" data-module-type="url-input">
+                                    <span class="module-icon">🔗</span>
+                                    <span class="module-name">URL</span>
+                                </div>
+                                <div class="module-item" draggable="true" data-module-type="number-input">
+                                    <span class="module-icon">🔢</span>
+                                    <span class="module-name">Number</span>
+                                </div>
+                                <div class="module-item" draggable="true" data-module-type="file-input">
+                                    <span class="module-icon">📁</span>
+                                    <span class="module-name">File Drop</span>
+                                </div>
+                            </div>
+                            <div class="palette-section">
+                                <h4>Controls</h4>
+                                <div class="module-item" draggable="true" data-module-type="color-picker">
+                                    <span class="module-icon">🎨</span>
+                                    <span class="module-name">Color</span>
+                                </div>
+                                <div class="module-item" draggable="true" data-module-type="dropdown">
+                                    <span class="module-icon">📋</span>
+                                    <span class="module-name">Dropdown</span>
+                                </div>
+                                <div class="module-item" draggable="true" data-module-type="toggle">
+                                    <span class="module-icon">🔘</span>
+                                    <span class="module-name">Toggle</span>
+                                </div>
+                                <div class="module-item" draggable="true" data-module-type="copy-button">
+                                    <span class="module-icon">📋</span>
+                                    <span class="module-name">Copy</span>
+                                </div>
+                            </div>
+                            <div class="palette-section">
+                                <h4>Containers</h4>
+                                <div class="module-item" draggable="true" data-module-type="group">
+                                    <span class="module-icon">📦</span>
+                                    <span class="module-name">Group</span>
+                                </div>
+                                <div class="module-item" draggable="true" data-module-type="repeater">
+                                    <span class="module-icon">🔄</span>
+                                    <span class="module-name">Repeater</span>
+                                </div>
+                            </div>
+                            <div class="palette-section">
+                                <h4>System</h4>
+                                <div class="module-item" draggable="true" data-module-type="file-drop">
+                                    <span class="module-icon">📂</span>
+                                    <span class="module-name">File Drop Zone</span>
+                                </div>
+                                <div class="module-item" draggable="true" data-module-type="raw-text-input">
+                                    <span class="module-icon">📑</span>
+                                    <span class="module-name">Raw Text Input</span>
+                                </div>
+                                <div class="module-item" draggable="true" data-module-type="output-panel">
+                                    <span class="module-icon">📤</span>
+                                    <span class="module-name">Output Panel</span>
+                                </div>
+                                <div class="module-item" draggable="true" data-module-type="live-preview">
+                                    <span class="module-icon">👁️</span>
+                                    <span class="module-name">Live Preview</span>
+                                </div>
+                            </div>
+                            <div class="palette-section">
+                                <h4>Dynamic</h4>
+                                <div class="module-item" draggable="true" data-module-type="clone-group">
+                                    <span class="module-icon">📋➕</span>
+                                    <span class="module-name">Clone Group</span>
+                                </div>
+                                <div class="module-item" draggable="true" data-module-type="nested-list">
+                                    <span class="module-icon">📝📝</span>
+                                    <span class="module-name">Nested List</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Layout Preview -->
+                    <div class="designer-layout">
+                        <div class="designer-toolbar">
+                            <div class="column-toggle">
+                                <label>Layout:</label>
+                                <button id="two-col-btn" class="col-btn active">2 Columns</button>
+                                <button id="three-col-btn" class="col-btn">3 Columns</button>
+                            </div>
+                            <span class="module-count">0 modules</span>
+                        </div>
+                        <div id="layout-preview" class="layout-preview two-columns">
+                            <div class="layout-zone" data-zone="left">
+                                <div class="zone-header">
+                                    <select class="zone-purpose" data-zone="left">
+                                        <option value="inputs" selected>📥 Inputs</option>
+                                        <option value="outputs">📤 Output</option>
+                                        <option value="modules">⚙️ Custom Modules</option>
+                                        <option value="preview">👁️ Preview</option>
+                                    </select>
+                                </div>
+                                <div class="zone-modules"></div>
+                                <div class="zone-drop-hint">Drop modules here</div>
+                            </div>
+                            <div class="layout-zone" data-zone="right">
+                                <div class="zone-header">
+                                    <select class="zone-purpose" data-zone="right">
+                                        <option value="inputs">📥 Inputs</option>
+                                        <option value="outputs" selected>📤 Output</option>
+                                        <option value="modules">⚙️ Custom Modules</option>
+                                        <option value="preview">👁️ Preview</option>
+                                    </select>
+                                </div>
+                                <div class="zone-modules"></div>
+                                <div class="zone-drop-hint">Drop modules here</div>
+                            </div>
+                            <div class="layout-zone hidden" data-zone="center">
+                                <div class="zone-header">
+                                    <select class="zone-purpose" data-zone="center">
+                                        <option value="inputs">📥 Inputs</option>
+                                        <option value="outputs">📤 Output</option>
+                                        <option value="modules" selected>⚙️ Custom Modules</option>
+                                        <option value="preview">👁️ Preview</option>
+                                    </select>
+                                </div>
+                                <div class="zone-modules"></div>
+                                <div class="zone-drop-hint">Drop modules here</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Module Config Panel -->
+                    <div class="designer-config">
+                        <h3>Module Settings</h3>
+                        <div id="module-config-panel" class="module-config-panel">
+                            <p class="empty-message">Select a module to configure</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logic Flow Tab -->
+            <div id="tab-logic" class="tab-panel hidden">
+                <div class="logic-editor-container">
+                    <div class="logic-toolbar">
+                        <div class="node-palette">
+                            <button class="node-btn" data-node-type="input" title="Add Input Node">📥 Input</button>
+                            <button class="node-btn" data-node-type="parser" title="Add Parser Node">⚙️ Parser</button>
+                            <button class="node-btn" data-node-type="transform" title="Add Transform Node">🔄
+                                Transform</button>
+                            <button class="node-btn" data-node-type="output" title="Add Output Node">📤 Output</button>
+                        </div>
+                        <div class="logic-actions">
+                            <button id="clear-logic-btn" class="btn btn-sm btn-danger">Clear All</button>
+                            <button id="auto-layout-btn" class="btn btn-sm btn-secondary">Auto Layout</button>
+                        </div>
+                    </div>
+                    <div id="logic-canvas" class="logic-canvas">
+                        <svg id="connections-svg" class="connections-layer"></svg>
+                        <div id="nodes-container" class="nodes-container"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Layout Tab removed - merged into Template Designer -->
+
+            <!-- Data Config Tab -->
+            <div id="tab-data" class="tab-panel hidden">
+                <div class="panel-grid two-col">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>Primary Key</h3>
+                        </div>
+                        <div class="panel-body">
+                            <p class="help-text">Select which field uniquely identifies each data entry:</p>
+                            <select id="primary-key-select" class="full-width">
+                                <option value="">-- Select Primary Key --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>Merge Rules</h3>
+                        </div>
+                        <div class="panel-body">
+                            <p class="help-text">Define how fields should be updated when importing new data:</p>
+                            <div id="merge-rules-list" class="merge-rules-list">
+                                <p class="empty-message">Add fields first to configure merge rules.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="panel full-width">
+                    <div class="panel-header">
+                        <h3>Current Data Entries</h3>
+                        <div class="data-actions">
+                            <button id="clear-data-btn" class="btn btn-sm btn-danger">Clear All Data</button>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div id="data-entries-list" class="data-entries-list">
+                            <p class="empty-message">No data entries yet. Use the template to import data.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Use Mode View -->
+        <div id="use-mode-view" class="use-mode-container hidden">
+            <!-- Data Selector Bar -->
+            <div class="use-mode-bar">
+                <div class="data-selector-group">
+                    <label for="data-entry-selector">Data Entry:</label>
+                    <select id="data-entry-selector" class="data-dropdown">
+                        <option value="">-- No Data --</option>
+                    </select>
+                    <button id="new-data-entry-btn" class="btn btn-sm btn-primary" title="New Entry">+ New</button>
+                </div>
+                <div class="use-mode-actions">
+                    <button id="import-raw-btn" class="btn btn-secondary">
+                        <span class="btn-icon">📥</span> Import Raw Data
+                    </button>
+                    <button id="copy-output-btn" class="btn btn-success" disabled>
+                        <span class="btn-icon">📋</span> Copy BBCode
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main Use Layout -->
+            <div id="use-layout" class="use-layout two-columns">
+                <!-- Left Column: Input & Modules -->
+                <div class="use-column use-inputs">
+                    <!-- Input Drop Zone -->
+                    <div class="use-panel input-panel">
+                        <div class="panel-header">
+                            <h3>📥 Import Data</h3>
+                        </div>
+                        <div class="panel-body">
+                            <div id="use-file-drop-zone" class="file-drop-zone">
+                                <p>Drag & drop .txt files here, or click to select</p>
+                                <input type="file" id="use-file-input" multiple accept=".txt" class="hidden">
+                            </div>
+                            <div class="input-divider">or paste content below</div>
+                            <textarea id="use-text-input" class="raw-input"
+                                placeholder="Paste raw data here..."></textarea>
+                            <button id="process-input-btn" class="btn btn-primary full-width">Process Input</button>
+                        </div>
+                    </div>
+
+                    <!-- Modules Panel -->
+                    <div class="use-panel modules-panel">
+                        <div class="panel-header">
+                            <h3>⚙️ Edit Data</h3>
+                        </div>
+                        <div class="panel-body">
+                            <div id="use-modules-container">
+                                <!-- Modules rendered here based on template -->
+                                <p class="empty-message">No modules configured. Edit template to add modules.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Output -->
+                <div class="use-column use-output">
+                    <div class="use-panel output-panel full-height">
+                        <div class="panel-header">
+                            <h3>📤 Output</h3>
+                            <div class="output-tabs">
+                                <button id="preview-tab" class="tab-btn active">Preview</button>
+                                <button id="code-tab" class="tab-btn">BBCode</button>
+                            </div>
+                        </div>
+                        <div class="panel-body preview-body">
+                            <div id="use-output-preview" class="output-preview">
+                                <p class="empty-message">Output will appear here...</p>
+                            </div>
+                            <textarea id="use-output-code" class="full-textarea code-output hidden" readonly></textarea>
+                        </div>
+                        <div class="panel-footer">
+                            <button id="copy-bbcode-btn" class="btn btn-success full-width" disabled>
+                                📋 Copy BBCode
+                            </button>
+                            <button id="download-bbcode-btn" class="btn btn-secondary full-width" disabled>
+                                💾 Download .txt
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modals -->
+    <!-- New/Rename Template Modal -->
+    <div id="template-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2 id="template-modal-title">New Template</h2>
+            <form id="template-form">
+                <div class="form-group">
+                    <label for="template-name-input">Template Name:</label>
+                    <input type="text" id="template-name-input" required placeholder="e.g., Game Formatter">
+                </div>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <button type="button" class="btn btn-secondary modal-cancel">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Field Modal -->
+    <div id="field-modal" class="modal hidden">
+        <div class="modal-content modal-large">
+            <span class="modal-close">&times;</span>
+            <h2>Add Field</h2>
+            <form id="field-form">
+                <!-- Sample text in modal for selection -->
+                <div class="form-group">
+                    <label>Select from Sample Text:</label>
+                    <p class="help-text">Highlight the text you want to extract to auto-detect the pattern:</p>
+                    <textarea id="modal-sample-text" class="modal-sample-text" rows="5" readonly
+                        placeholder="Sample text will appear here..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Selected Text:</label>
+                    <div id="selected-text-preview" class="selected-preview">
+                        <em class="help-text">Select text from above to auto-detect extraction pattern</em>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="field-name">Field ID:</label>
+                        <input type="text" id="field-name" required placeholder="e.g., gameName"
+                            pattern="[a-zA-Z_][a-zA-Z0-9_]*">
+                        <span class="help-text">Used in templates as {fieldId}</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="field-label">Display Label:</label>
+                        <input type="text" id="field-label" required placeholder="e.g., Game Name">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Pattern Detection:</label>
+                    <div id="pattern-preview" class="pattern-preview">
+                        <p class="help-text">Pattern will be auto-detected based on selection.</p>
+                    </div>
+                </div>
+                <div class="form-group primary-key-section">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="field-is-primary">
+                        <span>Use as Primary Key</span>
+                    </label>
+                    <div id="primary-key-info" class="primary-key-info"></div>
+                    <div class="primary-key-explanation">
+                        <strong>What is a Primary Key?</strong>
+                        <p>The Primary Key is the field that uniquely identifies each entry (like a game's name).
+                            When you import new data with the same Primary Key value, it will update the existing
+                            entry instead of creating a duplicate.</p>
+                    </div>
+                </div>
+                <details class="advanced-settings">
+                    <summary>Advanced Pattern Settings</summary>
+                    <div class="form-group">
+                        <label for="pattern-mode">Pattern Mode:</label>
+                        <select id="pattern-mode">
+                            <option value="auto" selected>Auto-detect (Smart)</option>
+                            <option value="nth">Nth Occurrence (e.g., 4th "[" to "]")</option>
+                            <option value="simple">Simple Before/After</option>
+                            <option value="regex">Custom Regex</option>
+                        </select>
+                        <span class="help-text">Choose how the parser finds this field</span>
+                    </div>
+                    <div id="pattern-nth-settings">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="pattern-before">Delimiter Before:</label>
+                                <input type="text" id="pattern-before" placeholder="e.g., [b] or [">
+                                <span class="help-text">Pattern before the value</span>
+                            </div>
+                            <div class="form-group">
+                                <label for="pattern-occurrence">Occurrence #:</label>
+                                <input type="number" id="pattern-occurrence" value="1" min="1" placeholder="1">
+                                <span class="help-text">Which occurrence (e.g., 4th)</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="pattern-after">Stop At:</label>
+                            <input type="text" id="pattern-after" placeholder="e.g., ] or [/b]">
+                            <span class="help-text">Pattern after the value</span>
+                        </div>
+                    </div>
+                    <div id="pattern-regex-settings" class="hidden">
+                        <div class="form-group">
+                            <label for="pattern-regex">Regex Pattern:</label>
+                            <input type="text" id="pattern-regex" placeholder="e.g., \[Build (\d+)\]">
+                            <span class="help-text">Use capture group (1) for the value</span>
+                        </div>
+                    </div>
+                </details>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary">Save Field</button>
+                    <button type="button" class="btn btn-secondary modal-cancel">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Module Config Modal -->
+    <div id="module-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2>Configure Module</h2>
+            <form id="module-form">
+                <div class="form-group">
+                    <label for="module-label">Module Label:</label>
+                    <input type="text" id="module-label" required>
+                </div>
+                <div class="form-group">
+                    <label for="module-linked-field">Linked Template Variable:</label>
+                    <select id="module-linked-field">
+                        <option value="">-- Select Field --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="module-default">Default Value:</label>
+                    <input type="text" id="module-default">
+                </div>
+                <div id="module-specific-options"></div>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <button type="button" class="btn btn-secondary modal-cancel">Cancel</button>
+                    <button type="button" id="delete-module-btn" class="btn btn-danger">Delete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Variant Rules Modal -->
+    <div id="variant-rules-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2>Variant Detection Rules</h2>
+            <p class="modal-description">
+                Define patterns to auto-detect when this parser variant should be used.
+                When input text matches these rules, this variant will be automatically selected.
+            </p>
+            <div id="rules-list" class="rules-list">
+                <!-- Rules will be rendered here -->
+            </div>
+            <button id="add-rule-btn" class="btn btn-success btn-sm">+ Add Detection Rule</button>
+            <div class="modal-actions">
+                <button id="save-rules-btn" class="btn btn-primary">Save Rules</button>
+                <button type="button" class="btn btn-secondary modal-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Delete Modal -->
+    <div id="confirm-modal" class="modal hidden">
+        <div class="modal-content modal-small">
+            <h2>Confirm Delete</h2>
+            <p id="confirm-message">Are you sure you want to delete this?</p>
+            <div class="modal-actions">
+                <button id="confirm-yes" class="btn btn-danger">Delete</button>
+                <button id="confirm-no" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Local Sync Modal -->
+    <div id="syncModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2>Local File Sync</h2>
+            <div class="form-group">
+                <button id="exportData" class="btn btn-primary full-width">Export All Data</button>
+            </div>
+            <div class="form-group">
+                <label>Import Data:</label>
+                <input type="file" id="importData" accept=".json" class="file-input">
+            </div>
+            <div id="syncStatus" class="sync-status"></div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary modal-cancel">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2>Settings</h2>
+            <div class="settings-content">
+                <p>Settings options will go here.</p>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary modal-cancel">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auth Modals (reuse existing pattern) -->
+    <div id="loginModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2>Login</h2>
+            <form id="loginForm">
+                <div class="form-group"><label>Username:</label><input type="text" id="loginUsername" required></div>
+                <div class="form-group"><label>Password:</label><input type="password" id="loginPassword" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Login</button>
+                <button type="button" class="btn btn-secondary modal-cancel">Cancel</button>
+                <div id="loginError" class="error-message"></div>
+            </form>
+        </div>
+    </div>
+
+    <div id="registerModal" class="modal hidden">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2>Register</h2>
+            <form id="registerForm">
+                <div class="form-group"><label>Username:</label><input type="text" id="registerUsername" required></div>
+                <div class="form-group"><label>Password:</label><input type="password" id="registerPassword" required
+                        minlength="4"></div>
+                <div class="form-group"><label>Confirm:</label><input type="password" id="registerConfirmPassword"
+                        required minlength="4"></div>
+                <button type="submit" class="btn btn-primary">Register</button>
+                <button type="button" class="btn btn-secondary modal-cancel">Cancel</button>
+                <div id="registerError" class="error-message"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Hidden file input for template import -->
+    <input type="file" id="template-file-input" accept=".json" style="display: none;">
+
+    <script src="/auth.js"></script>
+    <script src="js/data-store.js"></script>
+    <script src="js/template-manager.js"></script>
+    <script src="js/parser-engine.js"></script>
+    <script src="js/variable-registry.js"></script>
+    <script src="js/output-engine.js"></script>
+    <script src="js/modules/base-module.js"></script>
+    <script src="js/logic-editor.js"></script>
+    <script src="js/layout-manager.js"></script>
+    <script src="js/use-mode.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>

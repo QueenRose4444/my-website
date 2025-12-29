@@ -1,0 +1,2 @@
+so as you can see we used the title, the notes, multiple update sections, 1 url grouping, ect in the old-data.txt file 
+so we would need to be able to parse all of that and have it output data like, yup group 1 urls added with this title, url, data, ect, update 1 added with title, file name ect, notes added with note of, ect, ect, ect 
