@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <link rel="icon" type="image/png" href="/images/favicon-96x96.png" sizes="96x96" />
     <link rel="icon" type="image/svg+xml" href="/images/favicon.svg" />
@@ -10,27 +11,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DLSS 4.5 Comparison Test</title>
-    <meta name="description" content="Test your ability to identify different DLSS upscaling modes. Compare Ultra Performance, Performance, Balanced, Quality, and DLAA against a reference image.">
+    <meta name="description"
+        content="Test your ability to identify different DLSS upscaling modes. Compare Ultra Performance, Performance, Balanced, Quality, and DLAA against a reference image.">
     <link rel="stylesheet" href="style.css">
     <link rel="canonical" href="https://rosestuffs.org/wip/experiments/comapair_images/" />
 </head>
+
 <body>
 
     <!-- Top Navigation Bar -->
     <header class="top-bar">
         <nav class="nav-container">
             <div class="nav-left">
-              <ul class="nav-links">
-                <li><a href="../../home/">Home</a></li>
-                <li><a href="../">Experiments</a></li>
-                <li><a href="#" class="active-link">DLSS Test</a></li>
-            </ul>
             </div>
             <div class="nav-center">
-              <!-- Center content if needed -->
+                <button id="viewResultsBtn" class="btn-secondary">View Community Results</button>
             </div>
             <div class="nav-right">
-              <button id="viewResultsBtn" class="btn-secondary">View Community Results</button>
             </div>
         </nav>
     </header>
@@ -40,10 +37,10 @@
         <section id="introSection" class="intro-section">
             <h1>DLSS 4.5 Comparison Test</h1>
             <p class="intro-text">
-                Can you tell the difference between DLSS upscaling modes? 
+                Can you tell the difference between DLSS upscaling modes?
                 Compare 5 images against a reference (DLSS disabled) and guess which mode each one uses.
             </p>
-            
+
             <div class="mode-info">
                 <h3>DLSS Modes to Identify:</h3>
                 <ul class="mode-list">
@@ -85,7 +82,8 @@
             <div class="progress-bar">
                 <div class="progress-fill" id="progressFill"></div>
             </div>
-            <p class="progress-text"><span id="answeredCount">0</span> / <span id="totalCount">15</span> guesses made</p>
+            <p class="progress-text"><span id="answeredCount">0</span> / <span id="totalCount">15</span> guesses made
+            </p>
 
             <!-- Scene Content -->
             <div id="sceneContent" class="scene-content">
@@ -93,7 +91,8 @@
                 <div class="reference-section">
                     <h2>Reference Image <span class="reference-badge">DLSS Disabled</span></h2>
                     <div class="reference-image-container">
-                        <img id="referenceImage" src="" alt="Reference image with DLSS disabled" class="reference-image clickable-image">
+                        <img id="referenceImage" src="" alt="Reference image with DLSS disabled"
+                            class="reference-image clickable-image">
                     </div>
                 </div>
 
@@ -194,4 +193,5 @@
     <script src="app.js"></script>
 
 </body>
+
 </html>
