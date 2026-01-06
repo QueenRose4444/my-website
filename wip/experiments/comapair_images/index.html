@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" href="/images/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/images/favicon.svg" />
+    <link rel="shortcut icon" href="/images/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="RoseStuffs" />
+    <link rel="manifest" href="/images/site.webmanifest" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DLSS 4.5 Comparison Test</title>
+    <meta name="description" content="Test your ability to identify different DLSS upscaling modes. Compare Ultra Performance, Performance, Balanced, Quality, and DLAA against a reference image.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="canonical" href="https://rosestuffs.org/wip/experiments/comapair_images/" />
+</head>
+<body>
+
+    <!-- Top Navigation Bar -->
+    <header class="top-bar">
+        <nav class="nav-container">
+            <div class="nav-left">
+              <ul class="nav-links">
+                <li><a href="../../home/">Home</a></li>
+                <li><a href="../">Experiments</a></li>
+                <li><a href="#" class="active-link">DLSS Test</a></li>
+            </ul>
+            </div>
+            <div class="nav-center">
+              <!-- Center content if needed -->
+            </div>
+            <div class="nav-right">
+              <button id="viewResultsBtn" class="btn-secondary">View Community Results</button>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container">
+        <!-- Introduction Section -->
+        <section id="introSection" class="intro-section">
+            <h1>DLSS 4.5 Comparison Test</h1>
+            <p class="intro-text">
+                Can you tell the difference between DLSS upscaling modes? 
+                Compare 5 images against a reference (DLSS disabled) and guess which mode each one uses.
+            </p>
+            
+            <div class="mode-info">
+                <h3>DLSS Modes to Identify:</h3>
+                <ul class="mode-list">
+                    <li><strong>Ultra Performance</strong> - Lowest quality, highest FPS boost</li>
+                    <li><strong>Performance</strong> - Low quality, high FPS boost</li>
+                    <li><strong>Balanced</strong> - Middle ground</li>
+                    <li><strong>Quality</strong> - High quality, moderate FPS boost</li>
+                    <li><strong>DLAA</strong> - Anti-aliasing only, native resolution</li>
+                </ul>
+            </div>
+
+            <div class="reveal-mode-selector">
+                <h3>Choose Your Mode:</h3>
+                <div class="mode-buttons">
+                    <button id="revealPerScene" class="btn-mode">
+                        <span class="mode-icon">🎯</span>
+                        <span class="mode-title">Scene by Scene</span>
+                        <span class="mode-desc">See results after each scene</span>
+                    </button>
+                    <button id="revealAllAtOnce" class="btn-mode">
+                        <span class="mode-icon">🏆</span>
+                        <span class="mode-title">All at Once</span>
+                        <span class="mode-desc">See results after all 3 scenes</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Game Section (hidden initially) -->
+        <section id="gameSection" class="game-section" style="display: none;">
+            <!-- Scene Tabs -->
+            <div class="scene-tabs">
+                <button class="scene-tab active" data-scene="1">Scene 1</button>
+                <button class="scene-tab" data-scene="2">Scene 2</button>
+                <button class="scene-tab" data-scene="3">Scene 3</button>
+            </div>
+
+            <!-- Progress Indicator -->
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <p class="progress-text"><span id="answeredCount">0</span> / <span id="totalCount">15</span> guesses made</p>
+
+            <!-- Scene Content -->
+            <div id="sceneContent" class="scene-content">
+                <!-- Reference Image -->
+                <div class="reference-section">
+                    <h2>Reference Image <span class="reference-badge">DLSS Disabled</span></h2>
+                    <div class="reference-image-container">
+                        <img id="referenceImage" src="" alt="Reference image with DLSS disabled" class="reference-image clickable-image">
+                    </div>
+                </div>
+
+                <!-- Comparison Images -->
+                <div class="comparison-section">
+                    <h2>Comparison Images <span class="hint">(Click to enlarge)</span></h2>
+                    <div class="comparison-grid">
+                        <!-- Images 1-5 will be generated by JS -->
+                    </div>
+                </div>
+
+                <!-- Guessing Section -->
+                <div class="guessing-section">
+                    <h2>Your Guesses</h2>
+                    <div class="guess-grid" id="guessGrid">
+                        <!-- Guess dropdowns will be generated by JS -->
+                    </div>
+                </div>
+
+                <!-- Scene Actions -->
+                <div class="scene-actions">
+                    <button id="prevSceneBtn" class="btn-nav" style="display: none;">← Previous Scene</button>
+                    <button id="nextSceneBtn" class="btn-nav">Next Scene →</button>
+                    <button id="submitSceneBtn" class="btn-submit" style="display: none;">Submit Scene & Reveal</button>
+                    <button id="submitAllBtn" class="btn-submit" style="display: none;">Submit All & Reveal</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Results Section (hidden initially) -->
+        <section id="resultsSection" class="results-section" style="display: none;">
+            <h2>Your Results</h2>
+            <div class="score-display">
+                <span class="score-number" id="scoreNumber">0</span>
+                <span class="score-total">/ 15 correct</span>
+            </div>
+            <div id="resultsBreakdown" class="results-breakdown">
+                <!-- Results will be generated by JS -->
+            </div>
+            <div class="results-actions">
+                <button id="tryAgainBtn" class="btn-primary">Try Again</button>
+                <button id="viewCommunityBtn" class="btn-secondary">View Community Results</button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Image Lightbox Modal -->
+    <div id="lightboxModal" class="lightbox-modal">
+        <div class="lightbox-content">
+            <span class="lightbox-close">&times;</span>
+            <div class="lightbox-header">
+                <span id="lightboxTitle" class="lightbox-title">Image 1</span>
+                <div class="zoom-controls">
+                    <button id="zoomOut" class="zoom-btn">−</button>
+                    <span id="zoomLevel">100%</span>
+                    <button id="zoomIn" class="zoom-btn">+</button>
+                    <button id="zoomReset" class="zoom-btn">Reset</button>
+                </div>
+            </div>
+            <div class="lightbox-image-container" id="lightboxImageContainer">
+                <img id="lightboxImage" src="" alt="Enlarged comparison image">
+            </div>
+            <p class="lightbox-hint">Scroll to zoom • Drag to pan</p>
+        </div>
+    </div>
+
+    <!-- Community Results Modal -->
+    <div id="communityModal" class="modal">
+        <div class="modal-content wide-modal">
+            <span class="close-modal">&times;</span>
+            <h2>Community Results</h2>
+            <div id="communityLoading" class="loading-spinner">Loading results...</div>
+            <div id="communityResults" class="community-results" style="display: none;">
+                <div class="stats-summary" id="statsSummary">
+                    <!-- Stats will be generated by JS -->
+                </div>
+                <div class="results-table-container">
+                    <table id="communityTable" class="results-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Score</th>
+                                <th>Scene 1</th>
+                                <th>Scene 2</th>
+                                <th>Scene 3</th>
+                                <th>Submitted</th>
+                            </tr>
+                        </thead>
+                        <tbody id="communityTableBody">
+                            <!-- Rows will be generated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+
+</body>
+</html>
