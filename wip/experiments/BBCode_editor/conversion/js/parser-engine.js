@@ -1229,6 +1229,187 @@ const ParserEngine = (function() {
         };
     }
     
+    /**
+     * MULTI-ENTRY PARSING
+     * Parses text containing multiple game entries and groups them by primary key
+     * Supports multiple platforms per game (like the original application)
+     */
+    function parseMultipleEntries(text, template) {
+        if (!template || !template.parser) {
+            console.log('parseMultipleEntries: No template or parser');
+            return [];
+        }
+        
+        const primaryKey = template.dataConfig?.primaryKey || 'gameName';
+        const variant = detectVariant(text, template);
+        if (!variant || !variant.fields || variant.fields.length === 0) {
+            console.log('parseMultipleEntries: No variant or fields');
+            return [];
+        }
+        
+        // Split text into chunks - each chunk is one platform entry
+        // Common patterns: each entry starts with [url=] or has double newlines between entries
+        const chunks = splitIntoEntryChunks(text);
+        console.log(`parseMultipleEntries: Split into ${chunks.length} chunks`);
+        
+        // Map to group by primary key
+        const entriesMap = new Map();
+        
+        chunks.forEach((chunk, idx) => {
+            if (!chunk.trim()) return;
+            
+            // Parse this chunk
+            const parsed = {};
+            for (const field of variant.fields) {
+                parsed[field.id] = extractField(chunk, field);
+            }
+            
+            // Skip if primary key not found
+            const keyValue = parsed[primaryKey];
+            if (!keyValue) {
+                console.log(`parseMultipleEntries: Chunk ${idx} has no primary key value`);
+                return;
+            }
+            
+            // Sanitize the key (same as original app)
+            const sanitizedKey = sanitizeTitle(keyValue);
+            
+            if (entriesMap.has(sanitizedKey)) {
+                // Existing game - add platform to platforms array
+                const existing = entriesMap.get(sanitizedKey);
+                
+                // Create platform object with per-platform fields
+                const platformData = extractPlatformFields(parsed, template);
+                
+                // Check if this platform already exists (by platform + branch)
+                const existingPlatformIdx = existing.platforms.findIndex(p => 
+                    p.platform === platformData.platform && p.branch === platformData.branch
+                );
+                
+                if (existingPlatformIdx !== -1) {
+                    // Update existing platform
+                    existing.platforms[existingPlatformIdx] = {
+                        ...existing.platforms[existingPlatformIdx],
+                        ...platformData
+                    };
+                } else {
+                    // Add new platform
+                    existing.platforms.push(platformData);
+                }
+            } else {
+                // New game entry
+                const platformData = extractPlatformFields(parsed, template);
+                
+                // Create entry with game-level fields and platforms array
+                const entry = {
+                    id: sanitizedKey, // Use sanitized name as ID
+                    [primaryKey]: keyValue,
+                    platforms: [platformData]
+                };
+                
+                // Copy game-level fields (non-platform fields)
+                for (const field of variant.fields) {
+                    if (!isPlatformField(field.id)) {
+                        entry[field.id] = parsed[field.id];
+                    }
+                }
+                
+                entriesMap.set(sanitizedKey, entry);
+            }
+        });
+        
+        // Sort platforms within each entry: Win > Linux > Mac
+        entriesMap.forEach(entry => {
+            if (entry.platforms) {
+                entry.platforms.sort((a, b) => {
+                    const order = { 'Win': 0, 'Linux': 1, 'Mac': 2 };
+                    const getOrder = (p) => {
+                        if (!p.platform) return 99;
+                        if (p.platform.includes('Win')) return order.Win;
+                        if (p.platform.includes('Linux')) return order.Linux;
+                        if (p.platform.includes('Mac')) return order.Mac;
+                        return 99;
+                    };
+                    return getOrder(a) - getOrder(b);
+                });
+            }
+        });
+        
+        const result = Array.from(entriesMap.values());
+        console.log(`parseMultipleEntries: Created ${result.length} entries`, result);
+        return result;
+    }
+    
+    /**
+     * Split input text into individual entry chunks
+     * Each chunk represents one platform/file entry
+     */
+    function splitIntoEntryChunks(text) {
+        // Try splitting by [url=] which starts each entry in raw Steam data
+        if (text.includes('[url=]')) {
+            // Split keeping the delimiter at the start of each chunk
+            return text.split(/(?=\[url=\])/).filter(c => c.trim());
+        }
+        
+        // Alternative: split by double newlines
+        const byNewlines = text.split(/\n\s*\n/).filter(c => c.trim());
+        if (byNewlines.length > 1) {
+            return byNewlines;
+        }
+        
+        // Fallback: treat whole text as single entry
+        return [text];
+    }
+    
+    /**
+     * Extract platform-specific fields from parsed data
+     */
+    function extractPlatformFields(parsed, template) {
+        const platformFields = ['platform', 'branch', 'buildId', 'fullDate', 'shortDate', 
+                               'patchNoteUrl', 'cleanUrl', 'crackedUrl', 'cleanFileSize', 
+                               'crackedFileSize', 'crackType'];
+        
+        const result = {};
+        for (const field of platformFields) {
+            if (parsed[field] !== undefined && parsed[field] !== '') {
+                result[field] = parsed[field];
+            }
+        }
+        
+        // Generate patchNoteUrl if we have buildId
+        if (result.buildId && !result.patchNoteUrl) {
+            result.patchNoteUrl = `https://steamdb.info/patchnotes/${result.buildId}/`;
+        }
+        
+        // Generate shortDate from fullDate if needed
+        if (result.fullDate && !result.shortDate) {
+            result.shortDate = result.fullDate.split(' - ')[0];
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Check if a field is platform-specific
+     */
+    function isPlatformField(fieldId) {
+        const platformFields = ['platform', 'branch', 'buildId', 'fullDate', 'shortDate', 
+                               'patchNoteUrl', 'cleanUrl', 'crackedUrl', 'cleanFileSize',
+                               'crackedFileSize', 'crackType', 'version'];
+        return platformFields.includes(fieldId);
+    }
+    
+    /**
+     * Sanitize title (same logic as original app)
+     */
+    function sanitizeTitle(title) {
+        if (!title) return '';
+        return title
+            .replace(/\s*\[.*?\]\s*/g, '') // Remove [Platform] etc
+            .replace(/\s*\(.*?\)\s*/g, '') // Remove (Clean Steam Files) etc
+            .trim();
+    }
+    
     return {
         init,
         parse,
@@ -1237,6 +1418,7 @@ const ParserEngine = (function() {
         detectVariant,
         countSubstringOccurrences,
         getActiveVariant,
+        parseMultipleEntries,
         // Alias for UseMode compatibility  
         parseInput: parse
     };

@@ -1,0 +1,341 @@
+{
+    "exportedAt": 1735963200000,
+    "version": 1,
+    "template": {
+        "id": "game_cracker_template",
+        "name": "Game Cracker BBCode Template",
+        "description": "Complete template replicating the original BBCode editor for game crack posts. Includes multi-platform support, custom groups, updates, and patch notes.",
+        "version": 1,
+        "createdAt": 1735963200000,
+        "updatedAt": 1735963200000,
+        "modules": [
+            {
+                "id": "mod_file_drop",
+                "type": "file-drop",
+                "label": "📂 Drop Raw Data Files",
+                "zone": "left"
+            },
+            {
+                "id": "mod_raw_text",
+                "type": "raw-text-input",
+                "label": "Or Paste Raw Data",
+                "zone": "left"
+            },
+            {
+                "id": "mod_game_version",
+                "type": "text-input",
+                "label": "Game Version",
+                "linkedField": "gameVersion",
+                "zone": "left"
+            },
+            {
+                "id": "mod_show_version_label",
+                "type": "toggle",
+                "label": "Show Version Label",
+                "linkedField": "showVersionLabel",
+                "defaultValue": true,
+                "zone": "left"
+            },
+            {
+                "id": "mod_clean_url_color",
+                "type": "color-picker",
+                "label": "Clean URL Color",
+                "linkedField": "cleanUrlColor",
+                "defaultValue": "#00aa00",
+                "zone": "left"
+            },
+            {
+                "id": "mod_cracked_url_color",
+                "type": "color-picker",
+                "label": "Cracked URL Color",
+                "linkedField": "crackedUrlColor",
+                "defaultValue": "#00babd",
+                "zone": "left"
+            },
+            {
+                "id": "mod_section_title_color",
+                "type": "color-picker",
+                "label": "Section Title Color",
+                "linkedField": "sectionTitleColor",
+                "defaultValue": "#ee11d5",
+                "zone": "left"
+            },
+            {
+                "id": "mod_main_group_title",
+                "type": "text-input",
+                "label": "Main Group Title",
+                "linkedField": "mainGroupTitle",
+                "defaultValue": "Proton Drive Links",
+                "zone": "left"
+            },
+            {
+                "id": "mod_custom_groups",
+                "type": "clone-group",
+                "label": "Custom Groups (Spoilers)",
+                "linkedField": "customGroups",
+                "zone": "left",
+                "options": {
+                    "childFields": [
+                        {
+                            "id": "title",
+                            "label": "Group Title",
+                            "type": "text-input"
+                        },
+                        {
+                            "id": "footer",
+                            "label": "Footer Text",
+                            "type": "text-input"
+                        }
+                    ]
+                }
+            },
+            {
+                "id": "mod_updates",
+                "type": "clone-group",
+                "label": "Updates (Spoilers)",
+                "linkedField": "updates",
+                "zone": "left",
+                "options": {
+                    "childFields": [
+                        {
+                            "id": "title",
+                            "label": "Update Title",
+                            "type": "text-input"
+                        },
+                        {
+                            "id": "fileSize",
+                            "label": "File Size",
+                            "type": "text-input"
+                        }
+                    ]
+                }
+            },
+            {
+                "id": "mod_patchnotes_title",
+                "type": "text-input",
+                "label": "Patch Notes Title",
+                "linkedField": "patchNotesTitle",
+                "zone": "left"
+            },
+            {
+                "id": "mod_show_patchnotes_version",
+                "type": "toggle",
+                "label": "Show Patch Notes Version Label",
+                "linkedField": "showPatchNotesVersionLabel",
+                "defaultValue": true,
+                "zone": "left"
+            },
+            {
+                "id": "mod_end_note",
+                "type": "textarea",
+                "label": "End Note / Footer",
+                "linkedField": "endNote",
+                "zone": "left"
+            },
+            {
+                "id": "mod_include_crack",
+                "type": "toggle",
+                "label": "Include Cracked Version",
+                "linkedField": "includeCrack",
+                "defaultValue": true,
+                "zone": "left"
+            },
+            {
+                "id": "mod_crack_type",
+                "type": "dropdown",
+                "label": "Crack Type",
+                "linkedField": "crackType",
+                "defaultValue": "Detanup01 Goldberg Fork + Steamless",
+                "zone": "left",
+                "options": {
+                    "choices": [
+                        "Detanup01 Goldberg Fork + Steamless",
+                        "Online-Fix + Steamless",
+                        "Goldberg Emu + Steamless",
+                        "ALI213 + Steamless",
+                        "Custom"
+                    ]
+                }
+            },
+            {
+                "id": "mod_crack_filename",
+                "type": "text-input",
+                "label": "Crack File Name",
+                "linkedField": "crackFileName",
+                "zone": "left",
+                "options": {
+                    "copyButton": {
+                        "enabled": true,
+                        "pattern": "{gameTitle}.{platform}.{crackType}",
+                        "label": "📋 Copy Crack Filename"
+                    }
+                }
+            },
+            {
+                "id": "mod_update_filename",
+                "type": "text-input",
+                "label": "Update File Name",
+                "linkedField": "updateFileName",
+                "zone": "left",
+                "options": {
+                    "copyButton": {
+                        "enabled": true,
+                        "pattern": "{gameTitle}.Update.{gameVersion}",
+                        "label": "📋 Copy Update Filename"
+                    }
+                }
+            }
+        ],
+        "parser": {
+            "defaultVariant": "raw_bbcode",
+            "variants": [
+                {
+                    "id": "raw_bbcode",
+                    "name": "Raw BBCode Format",
+                    "detectionRules": [
+                        {
+                            "type": "contains",
+                            "value": "[url="
+                        },
+                        {
+                            "type": "contains",
+                            "value": "[Branch:"
+                        }
+                    ],
+                    "fields": [
+                        {
+                            "id": "gameTitle",
+                            "label": "Game Title",
+                            "isPrimaryKey": true,
+                            "pattern": {
+                                "mode": "regex",
+                                "regex": "\\[b\\](.*?)\\s*\\[(?:Win|Linux|Mac)"
+                            }
+                        },
+                        {
+                            "id": "platform",
+                            "label": "Platform",
+                            "isPlatformField": true,
+                            "pattern": {
+                                "mode": "regex",
+                                "regex": "\\[(Win64|Win32|Linux64|Linux32|Mac)\\]"
+                            }
+                        },
+                        {
+                            "id": "branch",
+                            "label": "Branch",
+                            "isPlatformField": true,
+                            "pattern": {
+                                "mode": "simple",
+                                "before": "[Branch: ",
+                                "after": "]",
+                                "occurrence": 1
+                            }
+                        },
+                        {
+                            "id": "fullDate",
+                            "label": "Full Date",
+                            "isPlatformField": true,
+                            "pattern": {
+                                "mode": "simple",
+                                "before": "[i]",
+                                "after": " [Build",
+                                "occurrence": 1
+                            }
+                        },
+                        {
+                            "id": "buildId",
+                            "label": "Build ID",
+                            "isPlatformField": true,
+                            "pattern": {
+                                "mode": "simple",
+                                "before": "[Build ",
+                                "after": "]",
+                                "occurrence": 1
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        "dataConfig": {
+            "primaryKey": "gameTitle",
+            "platformFields": [
+                "platform",
+                "branch",
+                "fullDate",
+                "buildId",
+                "cleanUrl",
+                "crackedUrl",
+                "cleanFileSize",
+                "crackedFileSize"
+            ],
+            "platformSort": [
+                "Win64",
+                "Win32",
+                "Linux64",
+                "Linux32",
+                "Mac"
+            ],
+            "computedFields": [
+                {
+                    "id": "patchNoteUrl",
+                    "compute": "`https://steamdb.info/patchnotes/${item.buildId}/`"
+                },
+                {
+                    "id": "sanitizedGameName",
+                    "compute": "(item.gameTitle || '').replace(/[^a-zA-Z0-9]/g, '.')"
+                }
+            ]
+        },
+        "output": {
+            "template": "<!--IF:gameVersion--><!--IF:showVersionLabel-->Version: <!--/IF:showVersionLabel-->{gameVersion}\n\n<!--/IF:gameVersion--><!--IF:customGroups-->{mainGroupTitle}\n<!--/IF:customGroups-->[color={sectionTitleColor}]Clean Steam Files:[/color]\n<!--LOOP:platforms-->[url={item.cleanUrl}][color={cleanUrlColor}][b]{gameTitle} [{item.platform}] [Branch: {item.branch}] (Clean Steam Files)[/b][/color][/url]<!--IF:item.cleanFileSize--> [{item.cleanFileSize}]<!--/IF:item.cleanFileSize-->\n[size=85][color=white][b] [{item.platform}] [{item.branch}] Version:[/b] [i]{item.shortDate} [Build {item.buildId}][/i][/color][/size]\n\n<!--/LOOP:platforms--><!--IF:crackedExists-->[color={sectionTitleColor}]Cracked:[/color]\n<!--LOOP:crackedFiles-->[url={item.crackedUrl}][color={crackedUrlColor}][b]{gameTitle} [{item.platform}] [Branch: {item.branch}] ({item.crackType})[/b][/color][/url]<!--IF:item.crackedFileSize--> [{item.crackedFileSize}]<!--/IF:item.crackedFileSize-->\n[size=85][color=white][b] [{item.platform}] [{item.branch}] Version:[/b] [i]{item.shortDate} [Build {item.buildId}][/i][/color][/size]\n\n<!--/LOOP:crackedFiles--><!--/IF:crackedExists--><!--LOOP:customGroups-->[spoiler=\"{item.title}\"][color={sectionTitleColor}]Clean Steam Files:[/color]\n<!--LOOP:item.files-->[url={file.cleanUrl}][color={cleanUrlColor}][b]{gameTitle} [{file.platform}] [Branch: {file.branch}] (Clean Steam Files)[/b][/color][/url]<!--IF:file.cleanFileSize--> [{file.cleanFileSize}]<!--/IF:file.cleanFileSize-->\n[size=85][color=white][b] [{file.platform}] [{file.branch}] Version:[/b] [i]{file.shortDate} [Build {file.buildId}][/i][/color][/size]\n\n<!--/LOOP:item.files--><!--IF:item.footer-->[size=85]{item.footer}[/size]\n<!--/IF:item.footer-->[/spoiler]\n<!--/LOOP:customGroups--><!--LOOP:updates-->[spoiler=\"{item.title}<!--IF:item.fileSize--> [{item.fileSize}]<!--/IF:item.fileSize-->\"]<!--LOOP:item.sections-->[color={sectionTitleColor}]{section.miniTitle}[/color]\n<!--LOOP:section.links-->[url={link.url}][color={crackedUrlColor}][b]{link.name}[/b][/color][/url]<!--IF:item.fileSize--> [{item.fileSize}]<!--/IF:item.fileSize-->\n<!--/LOOP:section.links-->\n<!--/LOOP:item.sections-->[/spoiler]\n<!--/LOOP:updates-->[color={sectionTitleColor}]Patch notes:[/color]\n<!--LOOP:patchNotes-->[size=88][color=white][b] <!--IF:patchNotesTitle-->{patchNotesTitle} <!--/IF:patchNotesTitle--><!--IF:showPatchNotesVersionLabel-->Version:<!--/IF:showPatchNotesVersionLabel-->[/b] [i]{item.fullDate} [Build {item.buildId}][/i][/color][/size]\n[url={item.patchNoteUrl}]{item.patchNoteUrl}[/url]\n<!--/LOOP:patchNotes--><!--IF:endNote-->\n\n[color={sectionTitleColor}]note:[/color]\n{endNote}\n<!--/IF:endNote-->"
+        },
+        "layout": {
+            "columns": 2,
+            "zones": {
+                "left": [
+                    "mod_file_drop",
+                    "mod_raw_text",
+                    "mod_game_version",
+                    "mod_show_version_label",
+                    "mod_include_crack",
+                    "mod_crack_type",
+                    "mod_crack_filename",
+                    "mod_update_filename",
+                    "mod_clean_url_color",
+                    "mod_cracked_url_color",
+                    "mod_section_title_color",
+                    "mod_main_group_title",
+                    "mod_custom_groups",
+                    "mod_updates",
+                    "mod_patchnotes_title",
+                    "mod_show_patchnotes_version",
+                    "mod_end_note"
+                ],
+                "right": []
+            }
+        },
+        "mergeConfig": {
+            "primaryKey": "gameTitle",
+            "rules": [
+                {
+                    "field": "platforms",
+                    "action": "merge-arrays"
+                },
+                {
+                    "field": "customGroups",
+                    "action": "merge-arrays"
+                },
+                {
+                    "field": "updates",
+                    "action": "merge-arrays"
+                },
+                {
+                    "field": "gameVersion",
+                    "action": "replace"
+                }
+            ]
+        }
+    }
+}

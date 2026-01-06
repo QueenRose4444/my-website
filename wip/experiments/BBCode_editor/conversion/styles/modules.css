@@ -766,3 +766,444 @@
     color: var(--text-muted);
     margin-top: 4px;
 }
+
+/* ===== CLONE GROUP / DYNAMIC LIST STYLES ===== */
+.clone-group-module {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+}
+
+.clone-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-md);
+}
+
+.clone-group-header label {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.add-item-btn {
+    background: var(--success-color);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.add-item-btn:hover {
+    background: var(--success-hover);
+}
+
+.clone-items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.clone-item {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: var(--spacing-sm);
+}
+
+.clone-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-sm);
+    padding-bottom: var(--spacing-xs);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.item-number {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.remove-item-btn {
+    background: var(--danger-color);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.remove-item-btn:hover {
+    background: var(--danger-hover);
+}
+
+.clone-item-fields {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.clone-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.clone-field label {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.clone-field input {
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.clone-field input:focus {
+    border-color: var(--primary-color);
+    outline: none;
+}
+
+/* ===== IMAGE URL WITH PREVIEW ===== */
+.image-module .image-preview {
+    margin-top: var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    max-width: 200px;
+}
+
+.image-module .image-preview img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* ===== STATIC LABEL ===== */
+.static-label {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.static-label .static-text {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+/* ===== CHILD FIELD CONFIG (IN CONFIG PANEL) ===== */
+.child-fields-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
+}
+
+.child-field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 80px 24px;
+    gap: 4px;
+    align-items: center;
+}
+
+.child-field-row input,
+.child-field-row select {
+    padding: 4px 6px;
+    font-size: 11px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+    color: var(--text-primary);
+}
+
+.child-field-row select {
+    cursor: pointer;
+}
+
+.remove-child-btn {
+    background: var(--danger-color);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    font-size: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.remove-child-btn:hover {
+    background: var(--danger-hover);
+}
+
+/* ===== FILE DROP ZONE MODULE ===== */
+.file-drop-module .file-drop-zone {
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-xl);
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: var(--bg-tertiary);
+}
+
+.file-drop-module .file-drop-zone:hover {
+    border-color: var(--primary-color);
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.file-drop-module .file-drop-zone.drag-over {
+    border-color: var(--success-color);
+    background: rgba(34, 197, 94, 0.1);
+}
+
+.file-drop-module .file-drop-zone p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+/* ===== RAW TEXT INPUT MODULE ===== */
+.raw-text-module .raw-input-area {
+    width: 100%;
+    min-height: 150px;
+    padding: var(--spacing-md);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-family: monospace;
+    font-size: 12px;
+    resize: vertical;
+    margin-bottom: var(--spacing-sm);
+}
+
+.raw-text-module .raw-input-area:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+/* Use mode drop zone styling */
+.use-mode-drop {
+    min-height: 100px;
+}
+
+/* ===== COLLAPSIBLE SECTIONS ===== */
+.collapsible-section {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    margin-bottom: var(--spacing-md);
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-md);
+    background: var(--bg-secondary);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s ease;
+}
+
+.section-header:hover {
+    background: var(--bg-hover);
+}
+
+.section-header h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.chevron-icon {
+    width: 20px;
+    height: 20px;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.collapsible-section.collapsed .chevron-icon {
+    transform: rotate(-90deg);
+}
+
+.section-content {
+    padding: var(--spacing-md);
+    border-top: 1px solid var(--border-color);
+}
+
+.collapsible-section.collapsed .section-content {
+    display: none;
+}
+
+/* Expand/Collapse All Buttons */
+.collapse-controls {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+}
+
+.collapse-controls button {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s;
+}
+
+.collapse-controls button:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.collapse-controls .separator {
+    color: var(--border-color);
+}
+
+/* ===== USE MODE LAYOUT IMPROVEMENTS ===== */
+.use-mode-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+}
+
+.use-mode-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-md);
+}
+
+.data-entry-controls {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+}
+
+.data-entry-selector {
+    min-width: 200px;
+}
+
+/* Modules organized in sections */
+.use-modules-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+/* Platform-specific input groups */
+.platform-group {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
+}
+
+.platform-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-sm);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.platform-group-header h4 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.platform-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-sm);
+}
+
+/* Color grid for color pickers */
+.color-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-md);
+}
+
+.color-grid .rendered-module {
+    margin-bottom: 0;
+}
+
+/* Small inputs in a row */
+.inline-inputs {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: flex-end;
+}
+
+.inline-inputs .rendered-module {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+/* Toggle in header style */
+.toggle-header-control {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.toggle-header-control label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* File drop area in section */
+.section-content .file-drop-zone {
+    margin-bottom: var(--spacing-md);
+}
+
+/* Process button styling */
+.process-data-btn {
+    width: 100%;
+    background: var(--accent-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: var(--spacing-sm);
+}
+
+.process-data-btn:hover {
+    background: var(--accent-primary-hover);
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
+}

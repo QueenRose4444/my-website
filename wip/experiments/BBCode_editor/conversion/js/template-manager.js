@@ -85,7 +85,7 @@ const TemplateManager = (function() {
     }
     
     // Refresh template dropdown
-    function refreshTemplateList() {
+    function refreshTemplateList(autoSelectFirst = true) {
         const selector = elements.selector();
         if (!selector) return;
         
@@ -105,6 +105,18 @@ const TemplateManager = (function() {
         });
         
         updateUIState();
+        
+        // Auto-select first template if none currently loaded and templates exist
+        if (autoSelectFirst && !currentTemplateId && templates.length > 0) {
+            // Check localStorage for last used template
+            const lastUsedId = localStorage.getItem('templateBuilder_lastTemplateId');
+            const templateToLoad = lastUsedId && templates.find(t => t.id === lastUsedId)
+                ? lastUsedId 
+                : templates[0].id;
+            
+            selector.value = templateToLoad;
+            loadTemplate(templateToLoad);
+        }
     }
     
     // Handle template selection change
@@ -123,6 +135,10 @@ const TemplateManager = (function() {
         if (template) {
             currentTemplateId = templateId;
             currentTemplate = template;
+            
+            // Remember last used template
+            localStorage.setItem('templateBuilder_lastTemplateId', templateId);
+            
             updateUIState();
             
             // Dispatch event for other modules
@@ -150,11 +166,18 @@ const TemplateManager = (function() {
         elements.renameBtn().disabled = !hasTemplate;
         elements.deleteBtn().disabled = !hasTemplate;
         
-        // Toggle views
+        // Check if currently in Use mode (don't override if user is on Use page)
+        const useModeView = document.getElementById('use-mode-view');
+        const isInUseMode = useModeView && !useModeView.classList.contains('hidden');
+        
+        // Toggle views - only change if NOT in Use mode
         if (hasTemplate) {
             elements.noTemplateView()?.classList.add('hidden');
-            elements.editorTabs()?.classList.remove('hidden');
-            elements.editorContent()?.classList.remove('hidden');
+            // Only show editor tabs if not in use mode
+            if (!isInUseMode) {
+                elements.editorTabs()?.classList.remove('hidden');
+                elements.editorContent()?.classList.remove('hidden');
+            }
         } else {
             elements.noTemplateView()?.classList.remove('hidden');
             elements.editorTabs()?.classList.add('hidden');
