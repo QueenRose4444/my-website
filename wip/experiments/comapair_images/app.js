@@ -4,7 +4,7 @@
  * CONFIGURATION & DATA
  *************************************/
 const CONFIG = {
-    API_BASE: 'https://main-backend-wip.rosestuffs.workers.dev',
+    API_BASE: 'https://main-backend-wip.rosiesite.workers.dev',
     DLSS_MODES: ['Ultra Performance', 'Performance', 'Balanced', 'Quality', 'DLAA'],
     SCENES: [1, 2, 3],
     IMAGES_PER_SCENE: 5
