@@ -208,11 +208,18 @@ const App = (function() {
             elements.editorTabs()?.classList.remove('hidden');
             elements.editorContent()?.classList.remove('hidden');
             elements.useModeView()?.classList.add('hidden');
+            // Notify UseMode that we're leaving
+            if (typeof UseMode !== 'undefined' && UseMode.switchMode) {
+                UseMode.switchMode(false);
+            }
         } else {
             elements.editorTabs()?.classList.add('hidden');
             elements.editorContent()?.classList.add('hidden');
             elements.useModeView()?.classList.remove('hidden');
-            renderUseMode();
+            // Let UseMode handle all Use Mode rendering
+            if (typeof UseMode !== 'undefined' && UseMode.switchMode) {
+                UseMode.switchMode(true);
+            }
         }
     }
     

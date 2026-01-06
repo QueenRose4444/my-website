@@ -360,10 +360,15 @@ const OutputEngine = (function() {
                 
                 // Add item properties with both direct and prefixed access
                 if (typeof item === 'object') {
+                    itemContext['item'] = item; // Critical for resolveValue to work with "item.prop"
                     Object.keys(item).forEach(key => {
                         itemContext[key] = item[key];
-                        itemContext[`item.${key}`] = item[key];
+                        // itemContext[`item.${key}`] = item[key]; // Redundant if we have item object
                     });
+                } else {
+                    // For simple arrays (strings)
+                    itemContext['item'] = item;
+                    itemContext['value'] = item;
                 }
                 
                 let itemResult = content;
@@ -463,6 +468,11 @@ const OutputEngine = (function() {
         bbcodeToHtml,
         // Aliases for UseMode compatibility
         generateOutput: render,
+        generateBatchOutput: (template, entries) => {
+            if (!template || !entries || entries.length === 0) return '';
+            const separator = template.output?.separator || '\n\n';
+            return entries.map(entry => render(template.output.template, entry)).join(separator);
+        },
         renderBBCodeToHTML: bbcodeToHtml
     };
 })();

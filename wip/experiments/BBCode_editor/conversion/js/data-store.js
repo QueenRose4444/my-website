@@ -328,6 +328,43 @@ const DataStore = (function() {
         throw new Error('Failed to save template');
     }
     
+    // ======== DATA ENTRY METHODS (used by Use Mode) ========
+    
+    // Get all data entries for a template (returns array)
+    function getDataEntries(templateId) {
+        const data = getTemplateData(templateId);
+        return data.entries || [];
+    }
+    
+    // Get single data entry by ID
+    function getDataEntry(templateId, entryId) {
+        const entries = getDataEntries(templateId);
+        return entries.find(e => e.id === entryId);
+    }
+    
+    // Save a data entry (creates if new, updates if exists)
+    function saveDataEntry(templateId, entry) {
+        const data = getTemplateData(templateId);
+        
+        // Ensure entry has an ID
+        if (!entry.id) {
+            entry.id = generateId();
+        }
+        
+        // Find existing entry
+        const existingIndex = data.entries.findIndex(e => e.id === entry.id);
+        
+        if (existingIndex >= 0) {
+            // Update existing
+            data.entries[existingIndex] = entry;
+        } else {
+            // Add new
+            data.entries.push(entry);
+        }
+        
+        return saveTemplateData(templateId, data);
+    }
+    
     return {
         generateId,
         getTemplates,
@@ -338,6 +375,9 @@ const DataStore = (function() {
         renameTemplate,
         getTemplateData,
         saveTemplateData,
+        getDataEntries,
+        getDataEntry,
+        saveDataEntry,
         upsertEntry,
         deleteEntry,
         clearTemplateData,

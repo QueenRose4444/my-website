@@ -244,6 +244,10 @@
                                     <span class="module-icon">🔗</span>
                                     <span class="module-name">URL</span>
                                 </div>
+                                <div class="module-item" draggable="true" data-module-type="image-url">
+                                    <span class="module-icon">🖼️</span>
+                                    <span class="module-name">Image URL</span>
+                                </div>
                                 <div class="module-item" draggable="true" data-module-type="number-input">
                                     <span class="module-icon">🔢</span>
                                     <span class="module-name">Number</span>
@@ -270,6 +274,10 @@
                                 <div class="module-item" draggable="true" data-module-type="copy-button">
                                     <span class="module-icon">📋</span>
                                     <span class="module-name">Copy</span>
+                                </div>
+                                <div class="module-item" draggable="true" data-module-type="static-label">
+                                    <span class="module-icon">🏷️</span>
+                                    <span class="module-name">Label</span>
                                 </div>
                             </div>
                             <div class="palette-section">
@@ -455,9 +463,6 @@
                     <button id="new-data-entry-btn" class="btn btn-sm btn-primary" title="New Entry">+ New</button>
                 </div>
                 <div class="use-mode-actions">
-                    <button id="import-raw-btn" class="btn btn-secondary">
-                        <span class="btn-icon">📥</span> Import Raw Data
-                    </button>
                     <button id="copy-output-btn" class="btn btn-success" disabled>
                         <span class="btn-icon">📋</span> Copy BBCode
                     </button>
@@ -704,6 +709,42 @@
                 <button id="confirm-yes" class="btn btn-danger">Delete</button>
                 <button id="confirm-no" class="btn btn-secondary">Cancel</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Import Raw Data Modal -->
+    <div id="import-raw-modal" class="modal hidden">
+        <div class="modal-content modal-large">
+            <span class="modal-close">&times;</span>
+            <h2>📥 Import Raw Data</h2>
+            <p class="help-text">Drag & drop multiple .txt files or paste raw data below. Multiple entries will be
+                automatically separated by the primary key.</p>
+
+            <div class="form-group">
+                <div id="import-file-drop-zone" class="file-drop-zone">
+                    <p>Drag & drop .txt files here, or click to select</p>
+                    <input type="file" id="import-modal-file-input" multiple accept=".txt" class="hidden">
+                </div>
+            </div>
+
+            <div class="input-divider">or paste raw data below:</div>
+
+            <div class="form-group">
+                <textarea id="import-raw-textarea" rows="10" class="full-textarea"
+                    placeholder="Paste raw BBCode data here...&#10;&#10;Multiple entries (different games or platforms) will be auto-detected and grouped."></textarea>
+            </div>
+
+            <div id="import-preview" class="import-preview hidden">
+                <h4>Preview:</h4>
+                <div id="import-preview-list"></div>
+            </div>
+
+            <div class="modal-actions">
+                <button id="do-import-btn" class="btn btn-primary">🚀 Import & Parse</button>
+                <button type="button" class="btn btn-secondary modal-cancel">Cancel</button>
+            </div>
+
+            <div id="import-status" class="import-status"></div>
         </div>
     </div>
 

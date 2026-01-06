@@ -1375,3 +1375,114 @@ input[type="number"]#pattern-occurrence {
     padding: var(--spacing-lg);
     font-style: italic;
 }
+
+/* ===== IMPORT RAW DATA MODAL ===== */
+
+.input-divider {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 12px;
+    margin: var(--spacing-md) 0;
+    position: relative;
+}
+
+.input-divider::before,
+.input-divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 40%;
+    height: 1px;
+    background: var(--border-color);
+}
+
+.input-divider::before {
+    left: 0;
+}
+
+.input-divider::after {
+    right: 0;
+}
+
+.import-status {
+    margin-top: var(--spacing-md);
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    display: none;
+}
+
+.import-status:not(:empty) {
+    display: block;
+}
+
+.import-status.info {
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    color: var(--accent-primary-hover);
+}
+
+.import-status.success {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    color: var(--accent-success);
+}
+
+.import-status.error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: var(--accent-danger);
+}
+
+.import-preview {
+    margin-top: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.import-preview h4 {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-sm);
+}
+
+.import-preview-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.import-preview-item {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: var(--bg-primary);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+}
+
+/* Platform Badges in Clone Group */
+.platform-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.platform-badge.win {
+    background: rgba(0, 120, 215, 0.2);
+    color: #4fc3f7;
+}
+
+.platform-badge.linux {
+    background: rgba(255, 170, 0, 0.2);
+    color: #ffb74d;
+}
+
+.platform-badge.mac {
+    background: rgba(160, 160, 160, 0.2);
+    color: #bdbdbd;
+}

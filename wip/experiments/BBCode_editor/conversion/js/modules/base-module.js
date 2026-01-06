@@ -12,6 +12,7 @@ const ModuleSystem = (function() {
         'dropdown': { icon: '📋', name: 'Dropdown', defaultLabel: 'Select', category: 'inputs' },
         'toggle': { icon: '🔘', name: 'Toggle', defaultLabel: 'Toggle', category: 'inputs' },
         'url-input': { icon: '🔗', name: 'URL Input', defaultLabel: 'URL', category: 'inputs' },
+        'image-url': { icon: '🖼️', name: 'Image URL', defaultLabel: 'Image', category: 'inputs', description: 'URL input with image preview' },
         'number-input': { icon: '🔢', name: 'Number Input', defaultLabel: 'Number', category: 'inputs' },
         'file-input': { icon: '📁', name: 'File Input', defaultLabel: 'File Upload', category: 'inputs' },
         // System Modules (auto-added based on zone purpose)
@@ -21,6 +22,7 @@ const ModuleSystem = (function() {
         'live-preview': { icon: '👁️', name: 'Live Preview', defaultLabel: 'Preview', category: 'system' },
         // Controls
         'copy-button': { icon: '📋', name: 'Copy Button', defaultLabel: 'Copy', category: 'controls' },
+        'static-label': { icon: '🏷️', name: 'Static Label', defaultLabel: 'Label', category: 'controls', description: 'Read-only text/boilerplate' },
         // Containers
         'group': { icon: '📦', name: 'Group', defaultLabel: 'Section', category: 'containers', isContainer: true },
         'repeater': { icon: '🔄', name: 'Repeater', defaultLabel: 'List', category: 'containers', isContainer: true, isArray: true },
@@ -31,7 +33,8 @@ const ModuleSystem = (function() {
             defaultLabel: 'Add Item', 
             category: 'dynamic',
             isCloner: true,
-            description: 'Copies structure from a source array with specified fields blanked'
+            isArray: true,
+            description: 'Dynamic list - add/remove items at runtime'
         },
         'nested-list': { 
             icon: '📝📝', 
@@ -247,8 +250,87 @@ const ModuleSystem = (function() {
         const fields = template.parser?.fields || [];
         console.log('[ModuleSystem] Rendering config for module:', module.label, 'with', fields.length, 'fields');
         
-        // Check if this is a clone-group type - show specialized settings
-        if (module.type === 'clone-group' || module.type === 'nested-list') {
+        // Check if this is a clone-group type - show simplified settings with child fields
+        if (module.type === 'clone-group' || module.type === 'repeater') {
+            const opts = module.options || {};
+            const childFields = opts.childFields || [{ id: 'value', label: 'Value', type: 'text-input' }];
+            
+            configPanel.innerHTML = `
+                <div class="config-module-type">
+                    <span class="type-icon">${typeDef?.icon || '❓'}</span>
+                    <span class="type-name">${typeDef?.name || 'Unknown'}</span>
+                </div>
+                <p class="config-description">${typeDef?.description || 'Dynamic list - add/remove items at runtime'}</p>
+                
+                <div class="config-section">
+                    <label>Section Label</label>
+                    <input type="text" id="config-label" value="${escapeHtml(module.label || 'Items')}" placeholder="e.g., Mirror Links" />
+                </div>
+                
+                <div class="config-section">
+                    <label>Array Variable Name</label>
+                    <input type="text" id="config-linked-field" value="${escapeHtml(module.linkedField || opts.targetArray || '')}" placeholder="e.g., mirrors" />
+                    <small class="config-hint">Use in LOOP: &lt;!--LOOP:variableName--&gt;</small>
+                </div>
+                
+                <div class="config-section">
+                    <label>Child Fields (per item)</label>
+                    <div id="child-fields-list" class="child-fields-list">
+                        ${childFields.map((f, i) => `
+                            <div class="child-field-row" data-index="${i}">
+                                <input type="text" class="child-field-id" value="${escapeHtml(f.id)}" placeholder="ID" />
+                                <input type="text" class="child-field-label" value="${escapeHtml(f.label)}" placeholder="Label" />
+                                <select class="child-field-type">
+                                    <option value="text-input" ${f.type === 'text-input' ? 'selected' : ''}>Text</option>
+                                    <option value="url-input" ${f.type === 'url-input' || f.type === 'url' ? 'selected' : ''}>URL</option>
+                                </select>
+                                <button type="button" class="remove-child-btn" onclick="this.parentElement.remove()">✕</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button type="button" id="add-child-field-btn" class="btn btn-sm btn-secondary">+ Add Field</button>
+                </div>
+                
+                <div class="config-actions">
+                    <button type="button" class="btn btn-primary full-width" id="save-config-btn">Save Changes</button>
+                    <button type="button" class="btn btn-danger full-width" id="delete-config-btn">Delete Module</button>
+                </div>
+            `;
+            
+            // Bind Add Child Field button
+            document.getElementById('add-child-field-btn')?.addEventListener('click', () => {
+                const childFieldsList = document.getElementById('child-fields-list');
+                const index = childFieldsList.querySelectorAll('.child-field-row').length;
+                const newRow = document.createElement('div');
+                newRow.className = 'child-field-row';
+                newRow.dataset.index = index;
+                newRow.innerHTML = `
+                    <input type="text" class="child-field-id" value="" placeholder="ID" />
+                    <input type="text" class="child-field-label" value="" placeholder="Label" />
+                    <select class="child-field-type">
+                        <option value="text-input">Text</option>
+                        <option value="url-input">URL</option>
+                    </select>
+                    <button type="button" class="remove-child-btn" onclick="this.parentElement.remove()">✕</button>
+                `;
+                childFieldsList.appendChild(newRow);
+            });
+            
+            // Bind save
+            document.getElementById('save-config-btn')?.addEventListener('click', () => {
+                saveModuleConfig(moduleId);
+            });
+            
+            // Bind delete
+            document.getElementById('delete-config-btn')?.addEventListener('click', () => {
+                deleteModule(moduleId);
+            });
+            
+            return;
+        }
+        
+        // Handle nested-list separately (uses old clone mechanism)
+        if (module.type === 'nested-list') {
             // Get arrays from fields (filter to array type fields)
             const arrayFields = fields.filter(f => f.type === 'array' || f.isArray);
             const opts = module.options || {};
@@ -288,25 +370,13 @@ const ModuleSystem = (function() {
                     <small class="config-hint">Where cloned items will be stored</small>
                 </div>
                 
-                <div class="config-section">
-                    <label>Fields to Blank (comma-separated)</label>
-                    <input type="text" id="config-blank-fields" value="${escapeHtml((opts.blankFields || []).join(', '))}" placeholder="e.g., url, link" />
-                    <small class="config-hint">These fields will be empty in clones</small>
-                </div>
-                
-                <div class="config-section">
-                    <label>Group Title Field (optional)</label>
-                    <input type="text" id="config-title-field" value="${escapeHtml(opts.titleField || 'title')}" placeholder="e.g., title" />
-                    <small class="config-hint">Field for naming each clone</small>
-                </div>
-                
                 <div class="config-actions">
                     <button type="button" class="btn btn-primary full-width" id="save-config-btn">Save Changes</button>
                     <button type="button" class="btn btn-danger full-width" id="delete-config-btn">Delete Module</button>
                 </div>
             `;
             
-            // Bind save for clone-group
+            // Bind save for nested-list
             document.getElementById('save-config-btn')?.addEventListener('click', () => {
                 saveCloneGroupConfig(moduleId);
             });
@@ -348,6 +418,48 @@ const ModuleSystem = (function() {
                         <span>Enabled by default</span>
                     </label>
                     <input type="hidden" id="config-default" value="${checked ? 'true' : 'false'}" />
+                </div>
+            `;
+        } else if (module.type === 'clone-group' || module.type === 'repeater') {
+            // Clone Group config - define child fields
+            const childFields = module.options?.childFields || [{ id: 'value', label: 'Value', type: 'text-input' }];
+            const childFieldsJson = JSON.stringify(childFields);
+            defaultValueHtml = `
+                <div class="config-section">
+                    <label>Array Variable Name</label>
+                    <input type="text" id="config-linked-field" value="${escapeHtml(module.linkedField || '')}" placeholder="e.g., mirrors" />
+                    <small class="config-hint">Use in LOOP: &lt;!--LOOP:variableName--&gt;</small>
+                </div>
+                <div class="config-section">
+                    <label>Child Fields (per item)</label>
+                    <div id="child-fields-list" class="child-fields-list">
+                        ${childFields.map((f, i) => `
+                            <div class="child-field-row" data-index="${i}">
+                                <input type="text" class="child-field-id" value="${escapeHtml(f.id)}" placeholder="ID" />
+                                <input type="text" class="child-field-label" value="${escapeHtml(f.label)}" placeholder="Label" />
+                                <select class="child-field-type">
+                                    <option value="text-input" ${f.type === 'text-input' ? 'selected' : ''}>Text</option>
+                                    <option value="url-input" ${f.type === 'url-input' ? 'selected' : ''}>URL</option>
+                                </select>
+                                <button type="button" class="remove-child-btn" onclick="this.parentElement.remove()">✕</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button type="button" id="add-child-field-btn" class="btn btn-sm btn-secondary">+ Add Field</button>
+                </div>
+                <input type="hidden" id="config-default" value="" />
+            `;
+        } else if (module.type === 'dropdown') {
+            // Dropdown config - define choices
+            const choices = module.options?.choices || [];
+            defaultValueHtml = `
+                <div class="config-section">
+                    <label>Options (one per line)</label>
+                    <textarea id="config-dropdown-choices" rows="4" placeholder="Option 1&#10;Option 2&#10;Option 3">${escapeHtml(choices.join('\n'))}</textarea>
+                </div>
+                <div class="config-section">
+                    <label>Default Value</label>
+                    <input type="text" id="config-default" value="${escapeHtml(module.defaultValue || '')}" />
                 </div>
             `;
         } else {
@@ -418,6 +530,28 @@ const ModuleSystem = (function() {
                 toggleHidden.value = e.target.checked ? 'true' : 'false';
             });
         }
+        
+        // Bind Add Child Field button (for clone-group)
+        const addChildBtn = document.getElementById('add-child-field-btn');
+        const childFieldsList = document.getElementById('child-fields-list');
+        if (addChildBtn && childFieldsList) {
+            addChildBtn.addEventListener('click', () => {
+                const index = childFieldsList.querySelectorAll('.child-field-row').length;
+                const newRow = document.createElement('div');
+                newRow.className = 'child-field-row';
+                newRow.dataset.index = index;
+                newRow.innerHTML = `
+                    <input type="text" class="child-field-id" value="" placeholder="ID" />
+                    <input type="text" class="child-field-label" value="" placeholder="Label" />
+                    <select class="child-field-type">
+                        <option value="text-input">Text</option>
+                        <option value="url-input">URL</option>
+                    </select>
+                    <button type="button" class="remove-child-btn" onclick="this.parentElement.remove()">✕</button>
+                `;
+                childFieldsList.appendChild(newRow);
+            });
+        }
     }
     
     // Save clone-group specific config
@@ -467,15 +601,37 @@ const ModuleSystem = (function() {
             module.linkedField = linkedField || '';
             module.defaultValue = defaultValue || '';
             
+            if (!module.options) module.options = {};
+            
             // Save color variable name for color-picker modules
             if (module.type === 'color-picker') {
-                if (!module.options) module.options = {};
                 const colorVariable = document.getElementById('config-color-variable')?.value;
                 if (colorVariable) {
                     module.options.variableName = colorVariable;
                     // Also set linkedField to the variable name for consistency
                     module.linkedField = colorVariable;
                 }
+            }
+            
+            // Save clone-group child fields
+            if (module.type === 'clone-group' || module.type === 'repeater') {
+                const childFieldRows = document.querySelectorAll('#child-fields-list .child-field-row');
+                const childFields = [];
+                childFieldRows.forEach(row => {
+                    const id = row.querySelector('.child-field-id')?.value?.trim();
+                    const fieldLabel = row.querySelector('.child-field-label')?.value?.trim();
+                    const fieldType = row.querySelector('.child-field-type')?.value || 'text-input';
+                    if (id) {
+                        childFields.push({ id, label: fieldLabel || id, type: fieldType });
+                    }
+                });
+                module.options.childFields = childFields.length > 0 ? childFields : [{ id: 'value', label: 'Value', type: 'text-input' }];
+            }
+            
+            // Save dropdown choices
+            if (module.type === 'dropdown') {
+                const choicesText = document.getElementById('config-dropdown-choices')?.value || '';
+                module.options.choices = choicesText.split('\n').map(c => c.trim()).filter(c => c);
             }
             
             TemplateManager.saveCurrentTemplate();
