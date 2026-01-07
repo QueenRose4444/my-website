@@ -552,7 +552,21 @@ function resetGame() {
 function openLightbox(src, title) {
     const elements = getElements();
     
-    state.lightbox = { zoom: 1, panX: 0, panY: 0, isDragging: false, startX: 0, startY: 0 };
+    state.lightbox = { 
+        zoom: 1, 
+        panX: 0, 
+        panY: 0, 
+        isDragging: false, 
+        startX: 0, 
+        startY: 0,
+        lastPanX: 0,
+        lastPanY: 0,
+        // Touch-specific
+        initialPinchDistance: 0,
+        initialZoom: 1,
+        lastTouchX: 0,
+        lastTouchY: 0
+    };
     
     elements.lightboxImage.src = src;
     elements.lightboxTitle.textContent = title;
@@ -560,8 +574,14 @@ function openLightbox(src, title) {
     
     // Center the image after it loads
     elements.lightboxImage.onload = () => {
-        centerImage();
+        fitImageToContainer();
     };
+    
+    // Add touch event listeners
+    const container = elements.lightboxImageContainer;
+    container.addEventListener('touchstart', handleTouchStart, { passive: false });
+    container.addEventListener('touchmove', handleTouchMove, { passive: false });
+    container.addEventListener('touchend', handleTouchEnd, { passive: false });
     
     updateZoomDisplay();
     document.body.style.overflow = 'hidden';
@@ -571,9 +591,41 @@ function closeLightbox() {
     const elements = getElements();
     elements.lightboxModal.style.display = 'none';
     document.body.style.overflow = '';
+    
+    // Remove touch event listeners
+    const container = elements.lightboxImageContainer;
+    container.removeEventListener('touchstart', handleTouchStart);
+    container.removeEventListener('touchmove', handleTouchMove);
+    container.removeEventListener('touchend', handleTouchEnd);
 }
 
-function centerImage() {
+function fitImageToContainer() {
+    const elements = getElements();
+    const container = elements.lightboxImageContainer;
+    const img = elements.lightboxImage;
+    
+    const containerRect = container.getBoundingClientRect();
+    const imgNaturalWidth = img.naturalWidth;
+    const imgNaturalHeight = img.naturalHeight;
+    
+    // Calculate zoom to fit image in container
+    const scaleX = containerRect.width / imgNaturalWidth;
+    const scaleY = containerRect.height / imgNaturalHeight;
+    const fitZoom = Math.min(scaleX, scaleY, 1); // Don't upscale past 100%
+    
+    state.lightbox.zoom = fitZoom;
+    
+    // Center the image
+    const imgWidth = imgNaturalWidth * fitZoom;
+    const imgHeight = imgNaturalHeight * fitZoom;
+    state.lightbox.panX = (containerRect.width - imgWidth) / 2;
+    state.lightbox.panY = (containerRect.height - imgHeight) / 2;
+    
+    updateZoomDisplay();
+    updateImageTransform();
+}
+
+function constrainPan() {
     const elements = getElements();
     const container = elements.lightboxImageContainer;
     const img = elements.lightboxImage;
@@ -582,22 +634,69 @@ function centerImage() {
     const imgWidth = img.naturalWidth * state.lightbox.zoom;
     const imgHeight = img.naturalHeight * state.lightbox.zoom;
     
-    state.lightbox.panX = (containerRect.width - imgWidth) / 2;
-    state.lightbox.panY = (containerRect.height - imgHeight) / 2;
+    // If image is smaller than container, center it
+    if (imgWidth <= containerRect.width) {
+        state.lightbox.panX = (containerRect.width - imgWidth) / 2;
+    } else {
+        // Constrain so image edges don't go past container edges
+        const minX = containerRect.width - imgWidth;
+        const maxX = 0;
+        state.lightbox.panX = Math.max(minX, Math.min(maxX, state.lightbox.panX));
+    }
     
+    if (imgHeight <= containerRect.height) {
+        state.lightbox.panY = (containerRect.height - imgHeight) / 2;
+    } else {
+        const minY = containerRect.height - imgHeight;
+        const maxY = 0;
+        state.lightbox.panY = Math.max(minY, Math.min(maxY, state.lightbox.panY));
+    }
+}
+
+function zoomAtPoint(newZoom, pointX, pointY) {
+    const elements = getElements();
+    const container = elements.lightboxImageContainer;
+    const img = elements.lightboxImage;
+    
+    const containerRect = container.getBoundingClientRect();
+    const oldZoom = state.lightbox.zoom;
+    
+    // Clamp zoom
+    newZoom = Math.max(0.1, Math.min(5, newZoom));
+    
+    // Calculate the point relative to the image
+    const imgX = pointX - containerRect.left - state.lightbox.panX;
+    const imgY = pointY - containerRect.top - state.lightbox.panY;
+    
+    // Calculate how much the image point will move due to zoom
+    const scale = newZoom / oldZoom;
+    const newImgX = imgX * scale;
+    const newImgY = imgY * scale;
+    
+    // Adjust pan to keep the point under the cursor
+    state.lightbox.panX -= (newImgX - imgX);
+    state.lightbox.panY -= (newImgY - imgY);
+    state.lightbox.zoom = newZoom;
+    
+    constrainPan();
+    updateZoomDisplay();
     updateImageTransform();
 }
 
 function adjustZoom(delta) {
-    state.lightbox.zoom = Math.max(0.25, Math.min(5, state.lightbox.zoom + delta));
-    updateZoomDisplay();
-    centerImage();
+    const elements = getElements();
+    const container = elements.lightboxImageContainer;
+    const containerRect = container.getBoundingClientRect();
+    
+    // Zoom toward center of container
+    const centerX = containerRect.left + containerRect.width / 2;
+    const centerY = containerRect.top + containerRect.height / 2;
+    
+    zoomAtPoint(state.lightbox.zoom + delta, centerX, centerY);
 }
 
 function resetZoom() {
-    state.lightbox.zoom = 1;
-    updateZoomDisplay();
-    centerImage();
+    fitImageToContainer();
 }
 
 function updateZoomDisplay() {
@@ -609,24 +708,36 @@ function updateImageTransform() {
     const elements = getElements();
     const { zoom, panX, panY } = state.lightbox;
     
-    elements.lightboxImage.style.width = `${elements.lightboxImage.naturalWidth * zoom}px`;
-    elements.lightboxImage.style.height = `${elements.lightboxImage.naturalHeight * zoom}px`;
-    elements.lightboxImage.style.left = `${panX}px`;
-    elements.lightboxImage.style.top = `${panY}px`;
+    const img = elements.lightboxImage;
+    img.style.width = `${img.naturalWidth * zoom}px`;
+    img.style.height = `${img.naturalHeight * zoom}px`;
+    img.style.left = `${panX}px`;
+    img.style.top = `${panY}px`;
 }
 
+// Mouse event handlers
 function startDrag(e) {
+    if (e.button !== 0) return; // Only left click
+    e.preventDefault();
+    
     state.lightbox.isDragging = true;
-    state.lightbox.startX = e.clientX - state.lightbox.panX;
-    state.lightbox.startY = e.clientY - state.lightbox.panY;
+    state.lightbox.startX = e.clientX;
+    state.lightbox.startY = e.clientY;
+    state.lightbox.lastPanX = state.lightbox.panX;
+    state.lightbox.lastPanY = state.lightbox.panY;
 }
 
 function drag(e) {
     if (!state.lightbox.isDragging) return;
     e.preventDefault();
     
-    state.lightbox.panX = e.clientX - state.lightbox.startX;
-    state.lightbox.panY = e.clientY - state.lightbox.startY;
+    const deltaX = e.clientX - state.lightbox.startX;
+    const deltaY = e.clientY - state.lightbox.startY;
+    
+    state.lightbox.panX = state.lightbox.lastPanX + deltaX;
+    state.lightbox.panY = state.lightbox.lastPanY + deltaY;
+    
+    constrainPan();
     updateImageTransform();
 }
 
@@ -636,10 +747,82 @@ function endDrag() {
 
 function handleWheel(e) {
     e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    state.lightbox.zoom = Math.max(0.25, Math.min(5, state.lightbox.zoom + delta));
-    updateZoomDisplay();
-    updateImageTransform();
+    
+    // Zoom at cursor position
+    const delta = e.deltaY > 0 ? -0.15 : 0.15;
+    const newZoom = state.lightbox.zoom * (1 + delta);
+    
+    zoomAtPoint(newZoom, e.clientX, e.clientY);
+}
+
+// Touch event handlers for mobile
+function getTouchDistance(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+function getTouchCenter(touches) {
+    return {
+        x: (touches[0].clientX + touches[1].clientX) / 2,
+        y: (touches[0].clientY + touches[1].clientY) / 2
+    };
+}
+
+function handleTouchStart(e) {
+    if (e.touches.length === 1) {
+        // Single touch - start pan
+        e.preventDefault();
+        state.lightbox.isDragging = true;
+        state.lightbox.lastTouchX = e.touches[0].clientX;
+        state.lightbox.lastTouchY = e.touches[0].clientY;
+    } else if (e.touches.length === 2) {
+        // Two fingers - start pinch zoom
+        e.preventDefault();
+        state.lightbox.isDragging = false;
+        state.lightbox.initialPinchDistance = getTouchDistance(e.touches);
+        state.lightbox.initialZoom = state.lightbox.zoom;
+    }
+}
+
+function handleTouchMove(e) {
+    if (e.touches.length === 1 && state.lightbox.isDragging) {
+        // Single touch - pan
+        e.preventDefault();
+        
+        const deltaX = e.touches[0].clientX - state.lightbox.lastTouchX;
+        const deltaY = e.touches[0].clientY - state.lightbox.lastTouchY;
+        
+        state.lightbox.panX += deltaX;
+        state.lightbox.panY += deltaY;
+        
+        state.lightbox.lastTouchX = e.touches[0].clientX;
+        state.lightbox.lastTouchY = e.touches[0].clientY;
+        
+        constrainPan();
+        updateImageTransform();
+    } else if (e.touches.length === 2) {
+        // Pinch zoom
+        e.preventDefault();
+        
+        const currentDistance = getTouchDistance(e.touches);
+        const scale = currentDistance / state.lightbox.initialPinchDistance;
+        const newZoom = state.lightbox.initialZoom * scale;
+        
+        const center = getTouchCenter(e.touches);
+        zoomAtPoint(newZoom, center.x, center.y);
+    }
+}
+
+function handleTouchEnd(e) {
+    if (e.touches.length === 0) {
+        state.lightbox.isDragging = false;
+    } else if (e.touches.length === 1) {
+        // Went from 2 fingers to 1 - restart pan
+        state.lightbox.isDragging = true;
+        state.lightbox.lastTouchX = e.touches[0].clientX;
+        state.lightbox.lastTouchY = e.touches[0].clientY;
+    }
 }
 
 function handleKeydown(e) {
