@@ -257,34 +257,94 @@ body {
     gap: 16px;
 }
 
-.search-box {
-    position: relative;
+.tool-btn {
+    background: none;
+    border: none;
+    color: var(--interactive-normal);
+    cursor: pointer;
+    padding: 0;
+    line-height: 0;
+}
+
+.tool-btn:hover {
+    color: var(--interactive-hover);
+}
+
+.spinning svg {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.search-container {
+    display: flex;
     background-color: #1e1f22;
     border-radius: 4px;
-    padding: 0 8px;
-    transition: width 0.2s;
-    width: 144px;
     height: 24px;
+    align-items: center;
+}
+
+.search-box {
+    position: relative;
+    padding: 0 8px;
+    width: 144px;
+    /* Default width */
+    height: 100%;
     display: flex;
     align-items: center;
 }
 
-.search-box:focus-within {
-    width: 240px;
+.search-options select {
+    background-color: #1e1f22;
+    color: var(--text-muted);
+    border: none;
+    border-left: 1px solid #333;
+    font-size: 12px;
+    height: 24px;
+    outline: none;
+    cursor: pointer;
+    padding: 0 4px;
 }
 
-.search-box input {
-    background: transparent;
-    border: none;
+.search-options select:hover {
     color: var(--text-normal);
-    width: 100%;
-    outline: none;
-    font-size: 14px;
 }
 
 .search-icon {
     color: var(--text-muted);
     cursor: pointer;
+}
+
+/* Deleted/Edited Styles */
+.message-deleted {
+    opacity: 0.7;
+}
+
+.deleted-tag {
+    color: #f23f42;
+    font-size: 10px;
+    font-weight: bold;
+    margin-right: 6px;
+}
+
+.deleted-text {
+    font-style: italic;
+    color: var(--text-muted);
+}
+
+.message-edited {
+    color: var(--text-muted);
+    font-size: 10px;
+    margin-left: 4px;
+    cursor: pointer;
+}
+
+.message-edited:hover {
+    text-decoration: underline;
 }
 
 #statsButton {
@@ -794,24 +854,6 @@ button[type="submit"]:hover {
     max-width: 300px;
 }
 
-/* Edit History */
-.edit-history-btn {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    font-size: 11px;
-    cursor: pointer;
-    margin-left: 8px;
-    padding: 2px 6px;
-    border-radius: 4px;
-    background-color: rgba(0, 0, 0, 0.2);
-}
-
-.edit-history-btn:hover {
-    color: var(--text-normal);
-    background-color: rgba(0, 0, 0, 0.4);
-}
-
 .edit-history-container {
     margin-top: 8px;
     padding: 8px;
@@ -843,27 +885,19 @@ button[type="submit"]:hover {
 }
 
 /* Deleted Messages */
-/* Dim the whole message container if deleted */
-.message-deleted-dimmed {
+.message-deleted {
     opacity: 0.6;
 }
 
 .message-deleted-badge {
-    color: #f23f42;
-    /* Red */
-    font-size: 10px;
+    color: var(--danger-color);
+    font-size: 11px;
     font-weight: bold;
-    margin-left: 5px;
-    text-transform: uppercase;
-    border: 1px solid #f23f42;
-    padding: 1px 4px;
-    border-radius: 3px;
-    display: inline-block;
+    margin-right: 8px;
 }
 
-.deleted-content-placeholder {
+.deleted-content {
     color: var(--text-muted);
-    font-style: italic;
 }
 
 /* Channel Categories */

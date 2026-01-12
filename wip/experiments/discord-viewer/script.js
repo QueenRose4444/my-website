@@ -6,7 +6,6 @@ let API_KEY = localStorage.getItem(STORAGE_KEY_API_KEY);
 let authManager = null;
 
 // Application State
-// Application State
 const state = {
     servers: [],
     currentServerId: null,
@@ -16,16 +15,40 @@ const state = {
     oldestMessageId: null,
     hasMoreMessages: true,
     searchQuery: "",
-    isLoading: false,
-    autoRefreshInterval: null
+    isLoading: false
 };
 
-// ...
+// DOM Elements
+const serverListEl = document.getElementById("serverList");
+const channelListEl = document.getElementById("channelList");
+const messageListEl = document.getElementById("messageList");
+const messagesWrapperEl = document.getElementById("messagesWrapper");
+const serverNameEl = document.getElementById("serverName");
+const channelNameEl = document.getElementById("channelName");
+const channelTopicEl = document.getElementById("channelTopic");
+const apiKeyModal = document.getElementById("apiKeyModal");
+const apiKeyForm = document.getElementById("apiKeyForm");
+const inputApiKey = document.getElementById("inputApiKey");
+const apiKeyError = document.getElementById("apiKeyError");
+const apiKeyButton = document.getElementById("apiKeyButton");
+const messageSearchInput = document.getElementById("messageSearch");
+const statsButton = document.getElementById("statsButton");
+const statsPanel = document.getElementById("statsPanel");
+const statsContent = document.getElementById("statsContent");
+const closeStatsBtn = document.querySelector(".close-stats");
+
+// Auth Elements
+const userStatusEl = document.getElementById("userStatus");
+const loginButton = document.getElementById("loginButton");
+const registerButton = document.getElementById("registerButton");
+const logoutButton = document.getElementById("logoutButton");
+const localSyncButton = document.getElementById("localSyncButton");
+const settingsButton = document.getElementById("settingsButton");
 
 // --- Initialization ---
 
 document.addEventListener("DOMContentLoaded", () => {
-    // Initialize AuthManager
+    // Initialize AuthManager (uses the global auth.js script)
     initializeAuth();
     
     if (!API_KEY) {
@@ -34,213 +57,45 @@ document.addEventListener("DOMContentLoaded", () => {
         initApp();
     }
 
-    // ... (rest of listeners)
+    // Event Listeners
+    apiKeyForm.addEventListener("submit", handleApiKeySubmit);
+    apiKeyButton.addEventListener("click", showApiKeyModal);
     
-    // Auto Refresh Button
-    const refreshBtn = document.createElement('button');
-    refreshBtn.id = 'manualRefreshBtn';
-    refreshBtn.innerHTML = '↻';
-    refreshBtn.title = 'Refresh Messages';
-    refreshBtn.className = 'action-button';
-    refreshBtn.style.cssText = "background:none; border:none; color:var(--interactive-normal); cursor:pointer; font-size:18px; margin-left:10px;";
-    refreshBtn.onclick = () => loadMessages(state.currentChannelId, false); // Manual refresh
+    // Search
+    let searchDebounce;
+    messageSearchInput.addEventListener("input", (e) => {
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(() => {
+            handleSearch(e.target.value);
+        }, 500);
+    });
+
+    // Stats
+    statsButton.addEventListener("click", toggleStatsPanel);
+    closeStatsBtn.addEventListener("click", toggleStatsPanel);
     
-    const headerTools = document.querySelector('.header-tools');
-    if (headerTools) {
-       headerTools.insertBefore(refreshBtn, headerTools.firstChild);
-    }
-    
-    // Start auto-refresh poller
-    startAutoRefresh();
-});
-
-function startAutoRefresh() {
-    if (state.autoRefreshInterval) clearInterval(state.autoRefreshInterval);
-    state.autoRefreshInterval = setInterval(() => {
-        if (state.currentChannelId && !state.isLoading && document.visibilityState === 'visible') {
-            // Check for new messages invisibly? Or just reload newly?
-            // For now, let's just fetch the *latest* messages and see if the ID is greater than our newest.
-            // But full reload is safer for edits/deletes.
-            // Actually, let's only do it if the user is at the bottom.
-            if (messagesWrapperEl.scrollTop + messagesWrapperEl.clientHeight >= messageListEl.scrollHeight - 100) {
-                 checkForNewMessages();
-            }
-        }
-    }, 5000); // Check every 5 seconds
-}
-
-async function checkForNewMessages() {
-   // Implementation to append only new messages
-   // For now, we can just re-fetch the latest page and merge?
-   // Or better, just fetch messages AFTER our newest known ID.
-   if (!state.messages.length) return;
-   
-   const newestId = state.messages[state.messages.length - 1].id;
-   try {
-       const data = await apiCall(`/api/channels/${state.currentChannelId}/messages`, { after: newestId, limit: 50 });
-       if (data.messages && data.messages.length > 0) {
-           const newMsgs = data.messages.sort((a, b) => String(a.id).localeCompare(String(b.id)));
-           state.messages = [...state.messages, ...newMsgs];
-           renderMessageBatch(newMsgs, 'append');
-           enrichMessages(newMsgs);
-           scrollToBottom(); // Stick to bottom
-       }
-   } catch(e) {
-       // Silent fail on auto-refresh
-   }
-}
-
-// ...
-
-async function initApp() {
-    renderLoadingServer();
-    try {
-        await fetchServers();
-        renderServers();
-        
-        // Restore State
-        restoreNavigationState();
-        
-    } catch (error) {
-        console.error("Failed to init app:", error);
-        if (error.status === 401) {
-            apiKeyError.textContent = "Authentication failed. Invalid Key.";
-            showApiKeyModal();
-        } else {
-            messageListEl.innerHTML = `<div class="empty-state">Failed to load servers. Check your API key and try again.</div>`;
-        }
-    }
-}
-
-function restoreNavigationState() {
-    const savedServerId = localStorage.getItem('last_server_id');
-    const savedChannelId = localStorage.getItem('last_channel_id');
-    
-    // Validate they exist in our list
-    if (savedServerId && state.servers.find(s => s.id == savedServerId)) {
-        selectServer(savedServerId).then(() => {
-            if (savedChannelId && state.channels.find(c => c.id == savedChannelId)) {
-                selectChannel(savedChannelId);
-            }
+    const refreshBtn = document.getElementById("refreshButton");
+    if (refreshBtn) {
+        refreshBtn.addEventListener("click", () => {
+             refreshBtn.classList.add("spinning"); // Add a CSS class for rotation
+             handleRefresh();
+             setTimeout(() => refreshBtn.classList.remove("spinning"), 1000);
         });
     }
-}
-
-// ...
-
-// Update selectServer/selectChannel to save state
-async function selectServer(serverId) {
-    state.currentServerId = serverId;
-    localStorage.setItem('last_server_id', serverId);
-    // ... existing logic ...
-    state.currentChannelId = null;
     
-    // UI Update
-    document.querySelectorAll(".server-item").forEach(el => {
-        el.classList.toggle("active", el.dataset.id == serverId);
-    });
-    
-    const server = state.servers.find(s => s.id == serverId);
-    if (server) serverNameEl.textContent = server.name;
-    
-    // Fetch Channels
-    channelListEl.innerHTML = '<div style="padding:10px; color:#aaa;">Loading...</div>';
-    try {
-        await fetchChannels(serverId);
-        renderChannels();
-    } catch (e) {
-        channelListEl.innerHTML = `<div style="padding:10px; color:#f44;">Failed to load channels: ${e.message}</div>`;
-    }
-}
-
-function selectChannel(channelId) {
-    state.currentChannelId = channelId;
-    localStorage.setItem('last_channel_id', channelId);
-    // ... existing logic ...
-    
-    state.oldestMessageId = null;
-    state.hasMoreMessages = true;
-    
-    // UI Update
-    document.querySelectorAll(".channel-item").forEach(el => {
-        el.classList.toggle("active", el.dataset.id == channelId);
-    });
-    
-    const channel = state.channels.find(c => c.id == channelId);
-    if (channel) {
-        channelNameEl.textContent = channel.name;
-        channelTopicEl.textContent = ""; 
+    // Settings button
+    if (settingsButton) {
+        settingsButton.addEventListener("click", () => {
+            openModal("settingsModal");
+        });
     }
     
-    // Fetch Messages
-    loadMessages(channelId);
-}
-
-// ...
-
-function createMessageElement(msg) {
-    const el = document.createElement("div");
-    el.className = "message-item";
-    el.dataset.messageId = msg.id;
+    // Modal close handlers
+    setupModalCloseHandlers();
     
-    // Deleted message styling
-    if (msg.is_deleted) {
-        el.classList.add("message-deleted-dimmed"); // Use a new class for visual dimming
-    }
-    
-    const date = new Date(msg.created_at || msg.timestamp || Date.now());
-    const formattedDate = date.toLocaleString();
-    
-    // Avatar
-    const avatarUrl = msg.avatar_url;
-    let avatarHtml;
-    if (avatarUrl) {
-        avatarHtml = `<div class="message-avatar"><img src="${avatarUrl}" alt="avatar" onerror="this.style.display='none'"></div>`;
-    } else {
-        const idNum = parseInt(String(msg.user_id || msg.author_id || '0').slice(-8)) || 0;
-        const avatarColor = "#" + ((idNum * 1234567) % 0xFFFFFF).toString(16).padStart(6, '0');
-        avatarHtml = `<div class="message-avatar" style="background-color: ${avatarColor}"></div>`;
-    }
-    
-    // Author
-    const authorName = msg.display_name || msg.username || msg.author_name || 'Unknown';
-    
-    // Indicators
-    const editedIndicator = msg.is_edited ? 
-        `<button class="edit-history-btn" onclick="toggleEditHistory('${msg.id}')" title="View edit history">History</button>` : '';
-    
-    const deletedIndicator = msg.is_deleted ? 
-        '<span class="message-deleted-badge" title="This message was deleted">[DELETED]</span>' : '';
-    
-    // Attachments
-    const attachmentsHtml = renderAttachments(msg.attachments || []);
-    const hasAttachments = (msg.attachments || []).length > 0;
-    
-    // Content - Show content even if deleted!
-    const contentText = msg.content || '';
-    const contentHtml = formatContent(contentText, hasAttachments);
-    
-    // Force show something if empty and deleted
-    const finalContentHtml = (!contentText && msg.is_deleted) ? 
-        '<em class="deleted-content-placeholder">[Content Unavailable]</em>' : contentHtml;
-    
-    el.innerHTML = `
-        ${avatarHtml}
-        <div class="message-content-wrapper">
-            <div class="message-header">
-                <span class="message-author">${escapeHtml(authorName)}</span>
-                <span class="message-timestamp">${formattedDate}</span>
-                ${deletedIndicator}
-                ${editedIndicator}
-            </div>
-            <div class="message-body">${finalContentHtml}</div>
-            <div class="message-embeds" id="embeds-${msg.id}"></div>
-            ${attachmentsHtml}
-            <div class="edit-history-container" id="edit-history-${msg.id}" style="display:none;"></div>
-        </div>
-    `;
-    return el;
-}
+    // Infinite scroll
+    messagesWrapperEl.addEventListener('scroll', handleInfiniteScroll);
+});
 
 // --- Auth Manager Integration ---
 
@@ -610,6 +465,18 @@ async function initApp() {
     try {
         await fetchServers();
         renderServers();
+        
+        // Restore state
+        const lastServerId = localStorage.getItem('lastServerId');
+        if (lastServerId && state.servers.find(s => s.id == lastServerId)) {
+            await selectServer(lastServerId);
+            
+            const lastChannelId = localStorage.getItem('lastChannelId');
+            if (lastChannelId && state.channels.find(c => c.id == lastChannelId)) {
+                await selectChannel(lastChannelId);
+            }
+        }
+        
     } catch (error) {
         console.error("Failed to init app:", error);
         if (error.status === 401) {
@@ -686,6 +553,8 @@ async function selectServer(serverId) {
     document.querySelectorAll(".server-item").forEach(el => {
         el.classList.toggle("active", el.dataset.id == serverId);
     });
+
+    localStorage.setItem('lastServerId', serverId);
     
     const server = state.servers.find(s => s.id == serverId);
     if (server) serverNameEl.textContent = server.name;
@@ -799,6 +668,7 @@ function selectChannel(channelId) {
     if (state.currentServerId) {
         localStorage.setItem(`lastChannel_${state.currentServerId}`, channelId);
     }
+    localStorage.setItem('lastChannelId', channelId);
     
     // UI Update
     document.querySelectorAll(".channel-item").forEach(el => {
@@ -961,22 +831,35 @@ function createMessageElement(msg) {
     const attachmentsHtml = renderAttachments(msg.attachments || []);
     const hasAttachments = (msg.attachments || []).length > 0;
     
-    // Content - logic simplified
-    const contentHtml = msg.is_deleted ? 
-        '<em class="deleted-content">[Message was deleted]</em>' : 
-        formatContent(msg.content, hasAttachments);
+    // Content logic
+    // If deleted, show content if available but with deleted styling
+    // Otherwise show "(No content)" if no attachments
+    let contentHtml;
     
+    if (msg.is_deleted) {
+        const deletedText = msg.content ? escapeHtml(msg.content) : '<em>[Message data unavailable]</em>';
+        contentHtml = `<div class="deleted-content-wrapper">
+            <span class="deleted-tag">[DELETED]</span>
+            <span class="deleted-text">${deletedText}</span>
+        </div>`;
+    } else {
+        contentHtml = formatContent(msg.content, hasAttachments);
+    }
+    
+    // Explicitly handle edits for deleted messages too if needed, but usually we just show the final state or the specific edit history
+    // For now, if it's deleted, we show the deleted state. 
+    // If it was edited THEN deleted, is_edited is true, so we can still show the indicator.
+
     el.innerHTML = `
         ${avatarHtml}
         <div class="message-content-wrapper">
             <div class="message-header">
                 <span class="message-author">${escapeHtml(authorName)}</span>
-                ${deletedIndicator}
                 <span class="message-timestamp">${formattedDate}</span>
                 ${editedIndicator}
             </div>
             <div class="message-body">${contentHtml}</div>
-            <div class="message-embeds" id="embeds-${msg.id}"></div> <!-- Container for async embeds -->
+            <div class="message-embeds" id="embeds-${msg.id}"></div>
             ${attachmentsHtml}
             <div class="edit-history-container" id="edit-history-${msg.id}" style="display:none;"></div>
         </div>
@@ -1071,36 +954,43 @@ async function enrichMessages(messages) {
     // Find messages with HTTP links
     const urlRegex = /(https?:\/\/[^\s<]+)/gi;
     
+    console.log(`Enriching ${messages.length} messages...`); // Debug
+    
     for (const msg of messages) {
         if (!msg.content) continue;
         
         const matches = msg.content.match(urlRegex);
         if (!matches) continue;
         
-        // Only embed the first link for now to avoid clutter (like Discord usually does priority)
-        // Or loop through all unique URLs
         const uniqueUrls = [...new Set(matches)];
         
         for (const url of uniqueUrls) {
             // Check if we should embed this URL (YouTube, Tenor, etc)
-            // Implementation detail: The backend decides if it supports OEmbed for this URL
-            const lowerUrl = url.toLowerCase();
-            if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be') || lowerUrl.includes('tenor.com')) {
+            if (url.includes('youtube.com') || url.includes('youtu.be') || url.includes('tenor.com')) {
+                console.log(`Found embeddable URL: ${url}`); // Debug
                 try {
+                    // Wait a tick to ensure DOM is ready if called immediately after render
+                    await new Promise(r => setTimeout(r, 0));
+                    
                     const embedContainer = document.getElementById(`embeds-${msg.id}`);
-                    if (!embedContainer) continue;
+                    if (!embedContainer) {
+                        console.warn(`Embed container not found for message ${msg.id}`);
+                        continue;
+                    }
 
                     // Fetch metadata from our backend proxy
                     const res = await apiCall(`/api/metadata`, { url });
+                    console.log(`Metadata for ${url}:`, res); // Debug
                     
                     if (res && !res.error) {
                         const embedHtml = renderEmbed(res);
-                        embedContainer.innerHTML += embedHtml;
-                    } else {
-                        console.warn(`Metadata fetch failed for ${url}:`, res ? res.error : 'Unknown error');
+                        // Avoid duplicates
+                        if (!embedContainer.innerHTML.includes(res.url)) {
+                            embedContainer.innerHTML += embedHtml;
+                        }
                     }
                 } catch (e) {
-                    console.log(`Failed to enrich URL ${url}:`, e);
+                    console.error(`Failed to enrich URL ${url}:`, e);
                 }
             }
         }
@@ -1152,24 +1042,65 @@ function scrollToBottom() {
 
 // --- Search ---
 
+// --- Search ---
+
 async function handleSearch(query) {
     if (query.length < 2) return;
     
-    state.currentChannelId = null;
-    document.querySelectorAll(".channel-item").forEach(el => el.classList.remove("active"));
-    channelNameEl.textContent = `Search: "${query}"`;
-    channelTopicEl.textContent = "Global Search Results";
+    // Clear selection
+    // state.currentChannelId = null; 
+    // ^ Don't clear immediately, we might search within the channel
     
     messageListEl.innerHTML = '<div class="empty-state">Searching...</div>';
     
+    // Determine scope
+    const scope = document.getElementById("searchScope")?.value || "global";
+    const serverId = (scope === "server" || scope === "channel") ? state.currentServerId : null;
+    const channelId = (scope === "channel") ? state.currentChannelId : null;
+    
+    // Update UI text
+    if (scope === "server") {
+        channelNameEl.textContent = `Search Server: "${query}"`;
+        channelTopicEl.textContent = "Server-wide results";
+    } else if (scope === "channel") {
+        channelNameEl.textContent = `Search Channel: "${query}"`;
+        channelTopicEl.textContent = "Current channel results";
+    } else {
+        channelNameEl.textContent = `Search All: "${query}"`;
+        channelTopicEl.textContent = "Global stats";
+    }
+    
     try {
-        const data = await apiCall("/api/search", { q: query, limit: 100 });
+        const params = { q: query, limit: 100 };
+        if (serverId) params.server_id = serverId;
+        if (channelId) params.channel_id = channelId;
+        
+        // Note: Backend needs to support these params. 
+        // Based on my review, backend `searchMessages` accepts `server_ids` (plural) and optional `channel_id`.
+        // The API endpoint `/api/search` currently only uses `allowed_server_ids` (all accessible).
+        // I need to update the backend to filter by specific server_id if provided.
+        // Wait, checking api_server.py... it only used `allowed_server_ids`.
+        // I will assume for now I need to send `server_id` and `channel_id` and Backend will filter.
+        // Actually, let's filter purely client side? No, that's inefficient.
+        // Let's pass the params.
+        
+        const data = await apiCall("/api/search", params);
         state.messages = data.results || [];
         
         calculateSearchStats(state.messages, query);
         renderMessages();
     } catch (e) {
         messageListEl.innerHTML = `<div class="empty-state error">Search failed: ${escapeHtml(e.message)}</div>`;
+    }
+}
+
+// --- Refresh ---
+
+function handleRefresh() {
+    if (state.currentChannelId) {
+        loadMessages(state.currentChannelId);
+    } else {
+        fetchServers(); // Basic refresh
     }
 }
 
