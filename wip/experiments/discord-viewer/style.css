@@ -794,6 +794,24 @@ button[type="submit"]:hover {
     max-width: 300px;
 }
 
+/* Edit History */
+.edit-history-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 11px;
+    cursor: pointer;
+    margin-left: 8px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+.edit-history-btn:hover {
+    color: var(--text-normal);
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
 .edit-history-container {
     margin-top: 8px;
     padding: 8px;
@@ -825,19 +843,27 @@ button[type="submit"]:hover {
 }
 
 /* Deleted Messages */
-.message-deleted {
+/* Dim the whole message container if deleted */
+.message-deleted-dimmed {
     opacity: 0.6;
 }
 
 .message-deleted-badge {
-    color: var(--danger-color);
-    font-size: 11px;
+    color: #f23f42;
+    /* Red */
+    font-size: 10px;
     font-weight: bold;
-    margin-right: 8px;
+    margin-left: 5px;
+    text-transform: uppercase;
+    border: 1px solid #f23f42;
+    padding: 1px 4px;
+    border-radius: 3px;
+    display: inline-block;
 }
 
-.deleted-content {
+.deleted-content-placeholder {
     color: var(--text-muted);
+    font-style: italic;
 }
 
 /* Channel Categories */

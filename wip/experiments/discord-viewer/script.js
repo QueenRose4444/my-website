@@ -6,6 +6,7 @@ let API_KEY = localStorage.getItem(STORAGE_KEY_API_KEY);
 let authManager = null;
 
 // Application State
+// Application State
 const state = {
     servers: [],
     currentServerId: null,
@@ -15,40 +16,16 @@ const state = {
     oldestMessageId: null,
     hasMoreMessages: true,
     searchQuery: "",
-    isLoading: false
+    isLoading: false,
+    autoRefreshInterval: null
 };
 
-// DOM Elements
-const serverListEl = document.getElementById("serverList");
-const channelListEl = document.getElementById("channelList");
-const messageListEl = document.getElementById("messageList");
-const messagesWrapperEl = document.getElementById("messagesWrapper");
-const serverNameEl = document.getElementById("serverName");
-const channelNameEl = document.getElementById("channelName");
-const channelTopicEl = document.getElementById("channelTopic");
-const apiKeyModal = document.getElementById("apiKeyModal");
-const apiKeyForm = document.getElementById("apiKeyForm");
-const inputApiKey = document.getElementById("inputApiKey");
-const apiKeyError = document.getElementById("apiKeyError");
-const apiKeyButton = document.getElementById("apiKeyButton");
-const messageSearchInput = document.getElementById("messageSearch");
-const statsButton = document.getElementById("statsButton");
-const statsPanel = document.getElementById("statsPanel");
-const statsContent = document.getElementById("statsContent");
-const closeStatsBtn = document.querySelector(".close-stats");
-
-// Auth Elements
-const userStatusEl = document.getElementById("userStatus");
-const loginButton = document.getElementById("loginButton");
-const registerButton = document.getElementById("registerButton");
-const logoutButton = document.getElementById("logoutButton");
-const localSyncButton = document.getElementById("localSyncButton");
-const settingsButton = document.getElementById("settingsButton");
+// ...
 
 // --- Initialization ---
 
 document.addEventListener("DOMContentLoaded", () => {
-    // Initialize AuthManager (uses the global auth.js script)
+    // Initialize AuthManager
     initializeAuth();
     
     if (!API_KEY) {
@@ -57,36 +34,213 @@ document.addEventListener("DOMContentLoaded", () => {
         initApp();
     }
 
-    // Event Listeners
-    apiKeyForm.addEventListener("submit", handleApiKeySubmit);
-    apiKeyButton.addEventListener("click", showApiKeyModal);
+    // ... (rest of listeners)
     
-    // Search
-    let searchDebounce;
-    messageSearchInput.addEventListener("input", (e) => {
-        clearTimeout(searchDebounce);
-        searchDebounce = setTimeout(() => {
-            handleSearch(e.target.value);
-        }, 500);
-    });
-
-    // Stats
-    statsButton.addEventListener("click", toggleStatsPanel);
-    closeStatsBtn.addEventListener("click", toggleStatsPanel);
+    // Auto Refresh Button
+    const refreshBtn = document.createElement('button');
+    refreshBtn.id = 'manualRefreshBtn';
+    refreshBtn.innerHTML = '↻';
+    refreshBtn.title = 'Refresh Messages';
+    refreshBtn.className = 'action-button';
+    refreshBtn.style.cssText = "background:none; border:none; color:var(--interactive-normal); cursor:pointer; font-size:18px; margin-left:10px;";
+    refreshBtn.onclick = () => loadMessages(state.currentChannelId, false); // Manual refresh
     
-    // Settings button
-    if (settingsButton) {
-        settingsButton.addEventListener("click", () => {
-            openModal("settingsModal");
-        });
+    const headerTools = document.querySelector('.header-tools');
+    if (headerTools) {
+       headerTools.insertBefore(refreshBtn, headerTools.firstChild);
     }
     
-    // Modal close handlers
-    setupModalCloseHandlers();
-    
-    // Infinite scroll
-    messagesWrapperEl.addEventListener('scroll', handleInfiniteScroll);
+    // Start auto-refresh poller
+    startAutoRefresh();
 });
+
+function startAutoRefresh() {
+    if (state.autoRefreshInterval) clearInterval(state.autoRefreshInterval);
+    state.autoRefreshInterval = setInterval(() => {
+        if (state.currentChannelId && !state.isLoading && document.visibilityState === 'visible') {
+            // Check for new messages invisibly? Or just reload newly?
+            // For now, let's just fetch the *latest* messages and see if the ID is greater than our newest.
+            // But full reload is safer for edits/deletes.
+            // Actually, let's only do it if the user is at the bottom.
+            if (messagesWrapperEl.scrollTop + messagesWrapperEl.clientHeight >= messageListEl.scrollHeight - 100) {
+                 checkForNewMessages();
+            }
+        }
+    }, 5000); // Check every 5 seconds
+}
+
+async function checkForNewMessages() {
+   // Implementation to append only new messages
+   // For now, we can just re-fetch the latest page and merge?
+   // Or better, just fetch messages AFTER our newest known ID.
+   if (!state.messages.length) return;
+   
+   const newestId = state.messages[state.messages.length - 1].id;
+   try {
+       const data = await apiCall(`/api/channels/${state.currentChannelId}/messages`, { after: newestId, limit: 50 });
+       if (data.messages && data.messages.length > 0) {
+           const newMsgs = data.messages.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+           state.messages = [...state.messages, ...newMsgs];
+           renderMessageBatch(newMsgs, 'append');
+           enrichMessages(newMsgs);
+           scrollToBottom(); // Stick to bottom
+       }
+   } catch(e) {
+       // Silent fail on auto-refresh
+   }
+}
+
+// ...
+
+async function initApp() {
+    renderLoadingServer();
+    try {
+        await fetchServers();
+        renderServers();
+        
+        // Restore State
+        restoreNavigationState();
+        
+    } catch (error) {
+        console.error("Failed to init app:", error);
+        if (error.status === 401) {
+            apiKeyError.textContent = "Authentication failed. Invalid Key.";
+            showApiKeyModal();
+        } else {
+            messageListEl.innerHTML = `<div class="empty-state">Failed to load servers. Check your API key and try again.</div>`;
+        }
+    }
+}
+
+function restoreNavigationState() {
+    const savedServerId = localStorage.getItem('last_server_id');
+    const savedChannelId = localStorage.getItem('last_channel_id');
+    
+    // Validate they exist in our list
+    if (savedServerId && state.servers.find(s => s.id == savedServerId)) {
+        selectServer(savedServerId).then(() => {
+            if (savedChannelId && state.channels.find(c => c.id == savedChannelId)) {
+                selectChannel(savedChannelId);
+            }
+        });
+    }
+}
+
+// ...
+
+// Update selectServer/selectChannel to save state
+async function selectServer(serverId) {
+    state.currentServerId = serverId;
+    localStorage.setItem('last_server_id', serverId);
+    // ... existing logic ...
+    state.currentChannelId = null;
+    
+    // UI Update
+    document.querySelectorAll(".server-item").forEach(el => {
+        el.classList.toggle("active", el.dataset.id == serverId);
+    });
+    
+    const server = state.servers.find(s => s.id == serverId);
+    if (server) serverNameEl.textContent = server.name;
+    
+    // Fetch Channels
+    channelListEl.innerHTML = '<div style="padding:10px; color:#aaa;">Loading...</div>';
+    try {
+        await fetchChannels(serverId);
+        renderChannels();
+    } catch (e) {
+        channelListEl.innerHTML = `<div style="padding:10px; color:#f44;">Failed to load channels: ${e.message}</div>`;
+    }
+}
+
+function selectChannel(channelId) {
+    state.currentChannelId = channelId;
+    localStorage.setItem('last_channel_id', channelId);
+    // ... existing logic ...
+    
+    state.oldestMessageId = null;
+    state.hasMoreMessages = true;
+    
+    // UI Update
+    document.querySelectorAll(".channel-item").forEach(el => {
+        el.classList.toggle("active", el.dataset.id == channelId);
+    });
+    
+    const channel = state.channels.find(c => c.id == channelId);
+    if (channel) {
+        channelNameEl.textContent = channel.name;
+        channelTopicEl.textContent = ""; 
+    }
+    
+    // Fetch Messages
+    loadMessages(channelId);
+}
+
+// ...
+
+function createMessageElement(msg) {
+    const el = document.createElement("div");
+    el.className = "message-item";
+    el.dataset.messageId = msg.id;
+    
+    // Deleted message styling
+    if (msg.is_deleted) {
+        el.classList.add("message-deleted-dimmed"); // Use a new class for visual dimming
+    }
+    
+    const date = new Date(msg.created_at || msg.timestamp || Date.now());
+    const formattedDate = date.toLocaleString();
+    
+    // Avatar
+    const avatarUrl = msg.avatar_url;
+    let avatarHtml;
+    if (avatarUrl) {
+        avatarHtml = `<div class="message-avatar"><img src="${avatarUrl}" alt="avatar" onerror="this.style.display='none'"></div>`;
+    } else {
+        const idNum = parseInt(String(msg.user_id || msg.author_id || '0').slice(-8)) || 0;
+        const avatarColor = "#" + ((idNum * 1234567) % 0xFFFFFF).toString(16).padStart(6, '0');
+        avatarHtml = `<div class="message-avatar" style="background-color: ${avatarColor}"></div>`;
+    }
+    
+    // Author
+    const authorName = msg.display_name || msg.username || msg.author_name || 'Unknown';
+    
+    // Indicators
+    const editedIndicator = msg.is_edited ? 
+        `<button class="edit-history-btn" onclick="toggleEditHistory('${msg.id}')" title="View edit history">History</button>` : '';
+    
+    const deletedIndicator = msg.is_deleted ? 
+        '<span class="message-deleted-badge" title="This message was deleted">[DELETED]</span>' : '';
+    
+    // Attachments
+    const attachmentsHtml = renderAttachments(msg.attachments || []);
+    const hasAttachments = (msg.attachments || []).length > 0;
+    
+    // Content - Show content even if deleted!
+    const contentText = msg.content || '';
+    const contentHtml = formatContent(contentText, hasAttachments);
+    
+    // Force show something if empty and deleted
+    const finalContentHtml = (!contentText && msg.is_deleted) ? 
+        '<em class="deleted-content-placeholder">[Content Unavailable]</em>' : contentHtml;
+    
+    el.innerHTML = `
+        ${avatarHtml}
+        <div class="message-content-wrapper">
+            <div class="message-header">
+                <span class="message-author">${escapeHtml(authorName)}</span>
+                <span class="message-timestamp">${formattedDate}</span>
+                ${deletedIndicator}
+                ${editedIndicator}
+            </div>
+            <div class="message-body">${finalContentHtml}</div>
+            <div class="message-embeds" id="embeds-${msg.id}"></div>
+            ${attachmentsHtml}
+            <div class="edit-history-container" id="edit-history-${msg.id}" style="display:none;"></div>
+        </div>
+    `;
+    return el;
+}
 
 // --- Auth Manager Integration ---
 
@@ -930,7 +1084,8 @@ async function enrichMessages(messages) {
         for (const url of uniqueUrls) {
             // Check if we should embed this URL (YouTube, Tenor, etc)
             // Implementation detail: The backend decides if it supports OEmbed for this URL
-            if (url.includes('youtube.com') || url.includes('youtu.be') || url.includes('tenor.com')) {
+            const lowerUrl = url.toLowerCase();
+            if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be') || lowerUrl.includes('tenor.com')) {
                 try {
                     const embedContainer = document.getElementById(`embeds-${msg.id}`);
                     if (!embedContainer) continue;
@@ -941,6 +1096,8 @@ async function enrichMessages(messages) {
                     if (res && !res.error) {
                         const embedHtml = renderEmbed(res);
                         embedContainer.innerHTML += embedHtml;
+                    } else {
+                        console.warn(`Metadata fetch failed for ${url}:`, res ? res.error : 'Unknown error');
                     }
                 } catch (e) {
                     console.log(`Failed to enrich URL ${url}:`, e);
