@@ -653,3 +653,157 @@ button[type="submit"]:hover {
     margin-bottom: 20px;
     text-align: center;
 }
+
+/* Attachments */
+.message-attachments {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.attachment-image img {
+    max-width: 400px;
+    max-height: 300px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.attachment-image img:hover {
+    opacity: 0.9;
+}
+
+.attachment-video video {
+    max-width: 400px;
+    max-height: 300px;
+    border-radius: 4px;
+}
+
+.attachment-file {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 8px 12px;
+    border-radius: 4px;
+}
+
+.attachment-file a {
+    color: #00b0f4;
+    text-decoration: none;
+}
+
+.attachment-file a:hover {
+    text-decoration: underline;
+}
+
+/* YouTube Embed */
+.embed-youtube {
+    margin: 8px 0;
+    max-width: 400px;
+}
+
+.embed-youtube iframe {
+    width: 100%;
+    aspect-ratio: 16/9;
+    border-radius: 4px;
+}
+
+/* Tenor Link */
+.tenor-link {
+    color: #00b0f4;
+    background: rgba(88, 101, 242, 0.1);
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+/* Edit History */
+.message-edited {
+    color: var(--text-muted);
+    font-size: 10px;
+    cursor: pointer;
+    margin-left: 8px;
+}
+
+.message-edited:hover {
+    color: var(--text-normal);
+    text-decoration: underline;
+}
+
+.edit-history-container {
+    margin-top: 8px;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    border-left: 2px solid var(--brand-color);
+}
+
+.edit-history {
+    font-size: 13px;
+}
+
+.edit-entry {
+    margin: 8px 0;
+    padding: 6px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+}
+
+.edit-timestamp {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.edit-old-content {
+    color: #999;
+    margin-top: 4px;
+    white-space: pre-wrap;
+}
+
+/* Deleted Messages */
+.message-deleted {
+    opacity: 0.6;
+}
+
+.message-deleted-badge {
+    color: var(--danger-color);
+    font-size: 11px;
+    font-weight: bold;
+    margin-right: 8px;
+}
+
+.deleted-content {
+    color: var(--text-muted);
+}
+
+/* Channel Categories */
+.channel-category {
+    padding: 16px 8px 4px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.channel-category:hover {
+    color: var(--text-normal);
+}
+
+.category-arrow {
+    font-size: 10px;
+    transition: transform 0.2s;
+}
+
+.category-collapsed .category-arrow {
+    transform: rotate(-90deg);
+}
+
+/* Loading indicator */
+.loading-more {
+    text-align: center;
+    padding: 10px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
