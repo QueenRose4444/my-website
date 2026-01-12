@@ -35,13 +35,13 @@
             </div>
             <div class="nav-right">
                 <div class="user-account">
-                    <span id="userStatus" style="color: #ccc; align-self: center; margin-right: 15px;">Guest</span>
+                    <span id="userStatus" style="color: #ccc; align-self: center; margin-right: 15px;">Loading...</span>
                     <button id="apiKeyButton">API Key</button>
-                    <!-- Auth buttons for the optional sync system -->
                     <button id="loginButton" style="display: none;">Login</button>
                     <button id="registerButton" style="display: none;">Register</button>
                     <button id="logoutButton" style="display: none;">Logout</button>
                     <button id="localSyncButton">Local Sync</button>
+                    <button id="settingsButton">Settings</button>
                 </div>
             </div>
         </nav>
@@ -190,6 +190,71 @@
             </div>
             <div id="syncStatus" style="min-height: 1em; margin-top: 15px;"></div>
             <button type="button" class="close-sync-modal-button" data-modal-id="syncModal">Close</button>
+        </div>
+    </div>
+
+    <!-- Sync Choice Modal -->
+    <div id="syncChoiceModal" class="auth-modal sync-choice-modal">
+        <div class="auth-modal-content">
+            <h2>Data Sync Conflict</h2>
+            <p style="text-align: center; color: #ccc;">Your local data is different from your server data. Choose which
+                version you want to keep.</p>
+            <div class="comparison-container">
+                <div class="data-column">
+                    <h3>Local Data<br>(This Browser)</h3>
+                    <p><strong>Last Update:</strong> <span id="localLastUpdate">N/A</span></p>
+                    <p><strong>Entries:</strong> <span id="localEntryCount">N/A</span></p>
+                </div>
+                <div class="data-column">
+                    <h3>Server Data<br>(Your Account)</h3>
+                    <p><strong>Last Update:</strong> <span id="serverLastUpdate">N/A</span></p>
+                    <p><strong>Entries:</strong> <span id="serverEntryCount">N/A</span></p>
+                </div>
+            </div>
+            <div class="sync-choice-actions">
+                <button id="useLocalDataBtn" class="btn-upload">Use Local Data (Upload)</button>
+                <button id="useServerDataBtn" class="btn-download">Use Server Data (Download)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="changePasswordModal" class="auth-modal">
+        <div class="auth-modal-content">
+            <span class="close-auth-modal" data-modal-id="changePasswordModal">&times;</span>
+            <h2>Change Password</h2>
+            <form id="changePasswordForm">
+                <div class="input-group">
+                    <label for="currentPassword">Current Password:</label>
+                    <input type="password" id="currentPassword" required>
+                </div>
+                <div class="input-group">
+                    <label for="newPassword">New Password:</label>
+                    <input type="password" id="newPassword" required minlength="4">
+                </div>
+                <div class="input-group">
+                    <label for="confirmNewPassword">Confirm New Password:</label>
+                    <input type="password" id="confirmNewPassword" required minlength="4">
+                </div>
+                <button type="submit">Update Password</button>
+                <button type="button" class="close-auth-modal-button"
+                    data-modal-id="changePasswordModal">Cancel</button>
+                <div id="changePasswordError" class="error-message"></div>
+                <div id="changePasswordSuccess" class="error-message" style="color: #28a745;"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" data-modal-id="settingsModal">&times;</span>
+            <h2>Settings</h2>
+            <p>No configurable settings are available.</p>
+            <div style="margin-top: 20px;">
+                <button id="changePasswordButton" style="display: none;">Change Password</button>
+                <button type="button" class="close-modal-button" data-modal-id="settingsModal">Close</button>
+            </div>
         </div>
     </div>
 
