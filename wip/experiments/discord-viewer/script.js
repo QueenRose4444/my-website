@@ -1,5 +1,9 @@
 const API_BASE_URL = "https://discord-messages-api-rosie-stuffs.rosestuffs.org";
-let API_KEY = localStorage.getItem("discord_api_key");
+const STORAGE_KEY_API_KEY = "discord_api_key";
+const APP_NAME = "discord-viewer";
+
+let API_KEY = localStorage.getItem(STORAGE_KEY_API_KEY);
+let authManager = null;
 
 // Application State
 const state = {
@@ -31,9 +35,20 @@ const statsPanel = document.getElementById("statsPanel");
 const statsContent = document.getElementById("statsContent");
 const closeStatsBtn = document.querySelector(".close-stats");
 
+// Auth Elements
+const userStatusEl = document.getElementById("userStatus");
+const loginButton = document.getElementById("loginButton");
+const registerButton = document.getElementById("registerButton");
+const logoutButton = document.getElementById("logoutButton");
+const localSyncButton = document.getElementById("localSyncButton");
+const settingsButton = document.getElementById("settingsButton");
+
 // --- Initialization ---
 
 document.addEventListener("DOMContentLoaded", () => {
+    // Initialize AuthManager (uses the global auth.js script)
+    initializeAuth();
+    
     if (!API_KEY) {
         showApiKeyModal();
     } else {
@@ -56,10 +71,356 @@ document.addEventListener("DOMContentLoaded", () => {
     // Stats
     statsButton.addEventListener("click", toggleStatsPanel);
     closeStatsBtn.addEventListener("click", toggleStatsPanel);
+    
+    // Settings button
+    if (settingsButton) {
+        settingsButton.addEventListener("click", () => {
+            openModal("settingsModal");
+        });
+    }
+    
+    // Modal close handlers
+    setupModalCloseHandlers();
 });
 
+// --- Auth Manager Integration ---
+
+function initializeAuth() {
+    // Check if AuthManager is loaded (from /auth.js)
+    if (typeof AuthManager !== 'undefined') {
+        authManager = new AuthManager(APP_NAME, 'wip');
+        
+        // Listen for auth events
+        window.addEventListener('auth:login', handleAuthLogin);
+        window.addEventListener('auth:logout', handleAuthLogout);
+        window.addEventListener('auth:session-restored', handleSessionRestored);
+        window.addEventListener('auth:no-session', handleNoSession);
+        
+        // Initialize session
+        authManager.initialize();
+    } else {
+        console.warn('AuthManager not loaded. Auth features disabled.');
+        updateUIForGuest();
+    }
+    
+    // Set up button handlers regardless
+    if (loginButton) loginButton.addEventListener("click", () => openModal("loginModal"));
+    if (registerButton) registerButton.addEventListener("click", () => openModal("registerModal"));
+    if (logoutButton) logoutButton.addEventListener("click", handleLogout);
+    
+    // Form handlers
+    const loginForm = document.getElementById("loginForm");
+    const registerForm = document.getElementById("registerForm");
+    const changePasswordForm = document.getElementById("changePasswordForm");
+    
+    if (loginForm) loginForm.addEventListener("submit", handleLoginSubmit);
+    if (registerForm) registerForm.addEventListener("submit", handleRegisterSubmit);
+    if (changePasswordForm) changePasswordForm.addEventListener("submit", handleChangePasswordSubmit);
+    
+    // Change password button in settings
+    const changePasswordButton = document.getElementById("changePasswordButton");
+    if (changePasswordButton) {
+        changePasswordButton.addEventListener("click", () => {
+            closeModal("settingsModal");
+            openModal("changePasswordModal");
+        });
+    }
+    
+    // Local sync button
+    if (localSyncButton) {
+        localSyncButton.addEventListener("click", () => openModal("syncModal"));
+    }
+    
+    // Export/Import handlers
+    const exportDataBtn = document.getElementById("exportData");
+    const importDataInput = document.getElementById("importData");
+    
+    if (exportDataBtn) exportDataBtn.addEventListener("click", exportAllData);
+    if (importDataInput) importDataInput.addEventListener("change", importData);
+    
+    // Sync choice buttons
+    const useLocalDataBtn = document.getElementById("useLocalDataBtn");
+    const useServerDataBtn = document.getElementById("useServerDataBtn");
+    
+    if (useLocalDataBtn) useLocalDataBtn.addEventListener("click", () => resolveSync("local"));
+    if (useServerDataBtn) useServerDataBtn.addEventListener("click", () => resolveSync("server"));
+}
+
+function handleAuthLogin(event) {
+    const user = event.detail.user;
+    updateUIForLoggedIn(user);
+    syncDataAfterLogin();
+}
+
+function handleAuthLogout() {
+    updateUIForGuest();
+}
+
+function handleSessionRestored(event) {
+    const user = event.detail.user;
+    updateUIForLoggedIn(user);
+}
+
+function handleNoSession() {
+    updateUIForGuest();
+}
+
+function updateUIForLoggedIn(user) {
+    if (userStatusEl) userStatusEl.textContent = user.username || 'Logged In';
+    if (loginButton) loginButton.style.display = 'none';
+    if (registerButton) registerButton.style.display = 'none';
+    if (logoutButton) logoutButton.style.display = 'block';
+    
+    // Show change password in settings
+    const changePasswordButton = document.getElementById("changePasswordButton");
+    if (changePasswordButton) changePasswordButton.style.display = 'block';
+}
+
+function updateUIForGuest() {
+    if (userStatusEl) userStatusEl.textContent = 'Guest';
+    if (loginButton) loginButton.style.display = 'block';
+    if (registerButton) registerButton.style.display = 'block';
+    if (logoutButton) logoutButton.style.display = 'none';
+    
+    // Hide change password in settings
+    const changePasswordButton = document.getElementById("changePasswordButton");
+    if (changePasswordButton) changePasswordButton.style.display = 'none';
+}
+
+async function handleLoginSubmit(e) {
+    e.preventDefault();
+    const username = document.getElementById("loginUsername").value;
+    const password = document.getElementById("loginPassword").value;
+    const errorEl = document.getElementById("loginError");
+    
+    try {
+        await authManager.login(username, password);
+        closeModal("loginModal");
+        errorEl.textContent = "";
+    } catch (err) {
+        errorEl.textContent = err.message || "Login failed";
+    }
+}
+
+async function handleRegisterSubmit(e) {
+    e.preventDefault();
+    const username = document.getElementById("registerUsername").value;
+    const password = document.getElementById("registerPassword").value;
+    const confirmPassword = document.getElementById("registerConfirmPassword").value;
+    const errorEl = document.getElementById("registerError");
+    
+    if (password !== confirmPassword) {
+        errorEl.textContent = "Passwords do not match";
+        return;
+    }
+    
+    try {
+        await authManager.register(username, password);
+        closeModal("registerModal");
+        errorEl.textContent = "";
+        // Auto login after register
+        await authManager.login(username, password);
+    } catch (err) {
+        errorEl.textContent = err.message || "Registration failed";
+    }
+}
+
+async function handleChangePasswordSubmit(e) {
+    e.preventDefault();
+    const currentPassword = document.getElementById("currentPassword").value;
+    const newPassword = document.getElementById("newPassword").value;
+    const confirmNewPassword = document.getElementById("confirmNewPassword").value;
+    const errorEl = document.getElementById("changePasswordError");
+    const successEl = document.getElementById("changePasswordSuccess");
+    
+    errorEl.textContent = "";
+    successEl.textContent = "";
+    
+    if (newPassword !== confirmNewPassword) {
+        errorEl.textContent = "New passwords do not match";
+        return;
+    }
+    
+    try {
+        await authManager.changePassword(currentPassword, newPassword);
+        successEl.textContent = "Password changed successfully!";
+        document.getElementById("changePasswordForm").reset();
+    } catch (err) {
+        errorEl.textContent = err.message || "Failed to change password";
+    }
+}
+
+async function handleLogout() {
+    if (authManager) {
+        await authManager.logout();
+    }
+}
+
+// --- Data Sync ---
+
+async function syncDataAfterLogin() {
+    if (!authManager || !authManager.isLoggedIn()) return;
+    
+    try {
+        const serverData = await authManager.fetchWithAuth(authManager.endpoints.data);
+        const serverJson = await serverData.json();
+        
+        // Get local data
+        const localData = getLocalData();
+        
+        // Check if we need to sync
+        if (serverJson.apiKey && serverJson.apiKey !== API_KEY) {
+            // Server has different data
+            if (localData.apiKey && localData.apiKey !== serverJson.apiKey) {
+                // Conflict - show choice modal
+                showSyncChoiceModal(localData, serverJson);
+            } else {
+                // Server has data, we don't (or it's the same)
+                applyServerData(serverJson);
+            }
+        }
+    } catch (err) {
+        console.log("Sync check completed (no server data or error):", err.message);
+    }
+}
+
+function getLocalData() {
+    return {
+        apiKey: localStorage.getItem(STORAGE_KEY_API_KEY),
+        lastUpdated: localStorage.getItem("discord_viewer_last_updated") || new Date().toISOString()
+    };
+}
+
+function showSyncChoiceModal(localData, serverData) {
+    document.getElementById("localLastUpdate").textContent = localData.lastUpdated || 'N/A';
+    document.getElementById("localEntryCount").textContent = localData.apiKey ? '1 API Key' : '0';
+    document.getElementById("serverLastUpdate").textContent = serverData.lastUpdated || 'N/A';
+    document.getElementById("serverEntryCount").textContent = serverData.apiKey ? '1 API Key' : '0';
+    
+    window._syncLocalData = localData;
+    window._syncServerData = serverData;
+    
+    openModal("syncChoiceModal");
+}
+
+async function resolveSync(choice) {
+    closeModal("syncChoiceModal");
+    
+    if (choice === "local") {
+        // Upload local data to server
+        await uploadDataToServer(window._syncLocalData);
+    } else {
+        // Use server data
+        applyServerData(window._syncServerData);
+    }
+    
+    delete window._syncLocalData;
+    delete window._syncServerData;
+}
+
+function applyServerData(serverData) {
+    if (serverData.apiKey) {
+        localStorage.setItem(STORAGE_KEY_API_KEY, serverData.apiKey);
+        API_KEY = serverData.apiKey;
+        initApp();
+    }
+}
+
+async function uploadDataToServer(localData) {
+    if (!authManager || !authManager.isLoggedIn()) return;
+    
+    try {
+        await authManager.fetchWithAuth(authManager.endpoints.data, {
+            method: 'POST',
+            body: JSON.stringify({
+                apiKey: localData.apiKey,
+                lastUpdated: new Date().toISOString()
+            })
+        });
+    } catch (err) {
+        console.error("Failed to upload data:", err);
+    }
+}
+
+// --- Export/Import ---
+
+function exportAllData() {
+    const data = {
+        apiKey: API_KEY,
+        exportedAt: new Date().toISOString()
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `discord-viewer-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    const statusEl = document.getElementById("syncStatus");
+    if (statusEl) statusEl.textContent = "Data exported successfully!";
+}
+
+function importData(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const data = JSON.parse(e.target.result);
+            if (data.apiKey) {
+                localStorage.setItem(STORAGE_KEY_API_KEY, data.apiKey);
+                API_KEY = data.apiKey;
+                initApp();
+                
+                const statusEl = document.getElementById("syncStatus");
+                if (statusEl) statusEl.textContent = "Data imported successfully!";
+            }
+        } catch (err) {
+            const statusEl = document.getElementById("syncStatus");
+            if (statusEl) statusEl.textContent = "Error: Invalid file format";
+        }
+    };
+    reader.readAsText(file);
+}
+
+// --- Modal Helpers ---
+
+function setupModalCloseHandlers() {
+    // Close buttons with data-modal-id attribute
+    document.querySelectorAll('[data-modal-id]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const modalId = btn.dataset.modalId;
+            closeModal(modalId);
+        });
+    });
+    
+    // Click outside to close
+    document.querySelectorAll('.modal, .auth-modal, .sync-modal').forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+    });
+}
+
+function openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.style.display = 'none';
+}
+
+// --- API Key Handling ---
+
 function showApiKeyModal() {
-    apiKeyModal.style.display = "flex";
+    openModal("apiKeyModal");
     if (API_KEY) inputApiKey.value = API_KEY;
     inputApiKey.focus();
 }
@@ -73,10 +434,16 @@ function handleApiKeySubmit(e) {
     }
     
     API_KEY = key;
-    localStorage.setItem("discord_api_key", API_KEY);
-    apiKeyModal.style.display = "none";
+    localStorage.setItem(STORAGE_KEY_API_KEY, API_KEY);
+    localStorage.setItem("discord_viewer_last_updated", new Date().toISOString());
+    closeModal("apiKeyModal");
     apiKeyError.textContent = "";
     initApp();
+    
+    // Sync to server if logged in
+    if (authManager && authManager.isLoggedIn()) {
+        uploadDataToServer({ apiKey: API_KEY });
+    }
 }
 
 async function initApp() {
@@ -84,15 +451,13 @@ async function initApp() {
     try {
         await fetchServers();
         renderServers();
-        // If we have servers, select the first one? Or wait for user.
-        // Let's wait for user to select.
     } catch (error) {
         console.error("Failed to init app:", error);
         if (error.status === 401) {
             apiKeyError.textContent = "Authentication failed. Invalid Key.";
             showApiKeyModal();
         } else {
-            alert("Failed to load servers. Check console/network.");
+            messageListEl.innerHTML = `<div class="empty-state">Failed to load servers. Check your API key and try again.</div>`;
         }
     }
 }
@@ -133,8 +498,10 @@ function renderLoadingServer() {
 function renderServers() {
     serverListEl.innerHTML = "";
     
-    // Add "Home" or "Direct Messages" placeholder if we had them, 
-    // but for now just the server list.
+    if (state.servers.length === 0) {
+        serverListEl.innerHTML = '<div class="server-item" title="No servers">?</div>';
+        return;
+    }
     
     state.servers.forEach(server => {
         const el = document.createElement("div");
@@ -142,14 +509,10 @@ function renderServers() {
         el.title = server.name;
         el.dataset.id = server.id;
         
-        // If icon exists, use it (Discord icons are usually at specific CDN URLs)
-        // Since we don't have the CDN logic here, we'll try to make an acronym
-        const acronym = server.name.match(/\b(\w)/g).join('').slice(0, 3).toUpperCase();
+        // Make acronym from server name
+        const words = server.name.match(/\b(\w)/g) || [server.name.charAt(0)];
+        const acronym = words.join('').slice(0, 3).toUpperCase();
         el.textContent = acronym;
-        
-        // If the API provided an icon URL (it doesn't currently seem to return full CDN url, just ID maybe?)
-        // The current API schema for Server is likely just {id, name}. 
-        // We'll stick to acronyms for now.
         
         el.addEventListener("click", () => selectServer(server.id));
         serverListEl.appendChild(el);
@@ -158,7 +521,7 @@ function renderServers() {
 
 async function selectServer(serverId) {
     state.currentServerId = serverId;
-    state.currentChannelId = null; // Reset channel
+    state.currentChannelId = null;
     
     // UI Update
     document.querySelectorAll(".server-item").forEach(el => {
@@ -170,27 +533,34 @@ async function selectServer(serverId) {
     
     // Fetch Channels
     channelListEl.innerHTML = '<div style="padding:10px; color:#aaa;">Loading...</div>';
-    await fetchChannels(serverId);
-    renderChannels();
+    try {
+        await fetchChannels(serverId);
+        renderChannels();
+    } catch (e) {
+        channelListEl.innerHTML = `<div style="padding:10px; color:#f44;">Failed to load channels: ${e.message}</div>`;
+    }
 }
 
 // --- Channels ---
 
 async function fetchChannels(serverId) {
     const data = await apiCall(`/api/servers/${serverId}/channels`);
-    // Sort channels? Usually by position. API might not return position. 
-    // Fallback sort by name or ID.
     state.channels = (data.channels || []).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function renderChannels() {
     channelListEl.innerHTML = "";
     
+    if (state.channels.length === 0) {
+        channelListEl.innerHTML = '<div style="padding:10px; color:#aaa;">No channels found</div>';
+        return;
+    }
+    
     state.channels.forEach(channel => {
         const el = document.createElement("div");
         el.className = "channel-item";
         el.dataset.id = channel.id;
-        el.innerHTML = `<span class="channel-hash">#</span> ${channel.name}`;
+        el.innerHTML = `<span class="channel-hash">#</span> ${escapeHtml(channel.name)}`;
         
         el.addEventListener("click", () => selectChannel(channel.id));
         channelListEl.appendChild(el);
@@ -208,7 +578,6 @@ function selectChannel(channelId) {
     const channel = state.channels.find(c => c.id == channelId);
     if (channel) {
         channelNameEl.textContent = channel.name;
-        // Topic isn't in the basic list response usually, but we can clear it or set if we had it
         channelTopicEl.textContent = ""; 
     }
     
@@ -224,17 +593,14 @@ async function loadMessages(channelId) {
     
     try {
         const data = await apiCall(`/api/channels/${channelId}/messages`, { limit: 50 });
-        state.messages = (data.messages || []).reverse(); // API returns newest first usually, we want oldest at top for chat?
-        // Actually, if we use column-reverse, we want newest first (state.messages[0] is newest).
-        // Let's standard render: Top = Oldest. 
-        // API get_messages usually returns standard Query order (Oldest -> Newest) or Newest -> Oldest? 
-        // DB usually returns insert order. Let's assume we need to sort by ID/Timestamp.
+        state.messages = data.messages || [];
+        // Sort by ID to get chronological order
         state.messages.sort((a, b) => a.id - b.id);
         
         renderMessages();
         scrollToBottom();
     } catch (e) {
-        messageListEl.innerHTML = `<div class="empty-state error">Failed to load messages: ${e.message}</div>`;
+        messageListEl.innerHTML = `<div class="empty-state error">Failed to load messages: ${escapeHtml(e.message)}</div>`;
     } finally {
         state.isLoading = false;
     }
@@ -248,11 +614,7 @@ function renderMessages() {
         return;
     }
     
-    let lastAuthorId = null;
-    let currentGroup = null;
-    
     state.messages.forEach(msg => {
-        // Grouping logic could go here (compact mode), but let's stick to simple first
         const el = createMessageElement(msg);
         messageListEl.appendChild(el);
     });
@@ -262,19 +624,21 @@ function createMessageElement(msg) {
     const el = document.createElement("div");
     el.className = "message-item";
     
-    const date = new Date(msg.timestamp || Date.now()); // Fallback
+    const date = new Date(msg.created_at || msg.timestamp || Date.now());
     const formattedDate = date.toLocaleString();
     
-    // Avatar (random color based on ID?)
-    const avatarColor = "#" + ((msg.author_id * 1234567) % 0xFFFFFF).toString(16).padStart(6, '0');
+    // Generate avatar color from user ID
+    const idNum = parseInt(msg.user_id || msg.author_id || '0');
+    const avatarColor = "#" + ((idNum * 1234567) % 0xFFFFFF).toString(16).padStart(6, '0');
+    
+    // Get author name - handle different field names
+    const authorName = msg.display_name || msg.username || msg.author_name || 'Unknown';
     
     el.innerHTML = `
-        <div class="message-avatar" style="background-color: ${avatarColor}">
-            <!-- Img placeholder -->
-        </div>
+        <div class="message-avatar" style="background-color: ${avatarColor}"></div>
         <div class="message-content-wrapper">
             <div class="message-header">
-                <span class="message-author">${escapeHtml(msg.author_name || 'Unknown')}</span>
+                <span class="message-author">${escapeHtml(authorName)}</span>
                 <span class="message-timestamp">${formattedDate}</span>
             </div>
             <div class="message-body">${formatContent(msg.content)}</div>
@@ -285,13 +649,12 @@ function createMessageElement(msg) {
 
 function formatContent(content) {
     if (!content) return "<em>(No content)</em>";
-    // Basic formatting: URLs to links, newlines to <br>
     let escaped = escapeHtml(content);
     
-    // Grid/Newline replacement
+    // Newlines to <br>
     escaped = escaped.replace(/\n/g, '<br>');
     
-    // Link replacement (Simple regex)
+    // URLs to links
     escaped = escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
     
     return escaped;
@@ -316,10 +679,6 @@ function scrollToBottom() {
 async function handleSearch(query) {
     if (query.length < 2) return;
     
-    // If we are in a channel, maybe restrict? 
-    // API search is global (all accessible servers).
-    // Let's reset view to show "Search Results"
-    
     state.currentChannelId = null;
     document.querySelectorAll(".channel-item").forEach(el => el.classList.remove("active"));
     channelNameEl.textContent = `Search: "${query}"`;
@@ -331,12 +690,10 @@ async function handleSearch(query) {
         const data = await apiCall("/api/search", { q: query, limit: 100 });
         state.messages = data.results || [];
         
-        // Calculate Word Frequency stats for this result set
         calculateSearchStats(state.messages, query);
-        
         renderMessages();
     } catch (e) {
-        messageListEl.innerHTML = `<div class="empty-state error">Search failed: ${e.message}</div>`;
+        messageListEl.innerHTML = `<div class="empty-state error">Search failed: ${escapeHtml(e.message)}</div>`;
     }
 }
 
@@ -349,18 +706,10 @@ function calculateSearchStats(messages, query) {
     }
 
     const wordCounts = {};
-    const lowerQuery = query.toLowerCase();
     
     messages.forEach(msg => {
         if (!msg.content) return;
-        
-        // A simple approach: Count how many times the query itself appears? 
-        // User asked: "how often a word/phase/ect was said by all users... like 'hi' was said 452 times"
-        // So we count occurrences of the `query` term in these messages? 
-        // Or if the query is a specific word, we count authors?
-        
-        // Let's list top authors in this search result
-        const author = msg.author_name || "Unknown";
+        const author = msg.display_name || msg.username || msg.author_name || "Unknown";
         wordCounts[author] = (wordCounts[author] || 0) + 1;
     });
     
@@ -396,9 +745,6 @@ function updateStatsView(counts, query) {
         `;
         statsContent.appendChild(item);
     });
-    
-    // Auto show panel if hidden? Maybe not, could be annoying.
-    // statsPanel.style.display = "flex";
 }
 
 function toggleStatsPanel() {
