@@ -12,6 +12,8 @@ const state = {
     channels: [],
     currentChannelId: null,
     messages: [],
+    oldestMessageId: null,
+    hasMoreMessages: true,
     searchQuery: "",
     isLoading: false
 };
@@ -81,6 +83,9 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Modal close handlers
     setupModalCloseHandlers();
+    
+    // Infinite scroll
+    messagesWrapperEl.addEventListener('scroll', handleInfiniteScroll);
 });
 
 // --- Auth Manager Integration ---
@@ -539,13 +544,27 @@ async function selectServer(serverId) {
     } catch (e) {
         channelListEl.innerHTML = `<div style="padding:10px; color:#f44;">Failed to load channels: ${e.message}</div>`;
     }
+    
+    // Auto-select last viewed channel for this server
+    const lastChannelId = localStorage.getItem(`lastChannel_${serverId}`);
+    if (lastChannelId && state.channels.some(c => c.id == lastChannelId)) {
+        selectChannel(lastChannelId);
+    }
 }
 
 // --- Channels ---
 
 async function fetchChannels(serverId) {
     const data = await apiCall(`/api/servers/${serverId}/channels`);
-    state.channels = (data.channels || []).sort((a, b) => a.name.localeCompare(b.name));
+    // Sort by position (from API) which already considers parent_id ordering
+    state.channels = (data.channels || []).sort((a, b) => {
+        // First sort by parent_id (null first)
+        if (a.parent_id === null && b.parent_id !== null) return -1;
+        if (a.parent_id !== null && b.parent_id === null) return 1;
+        if (a.parent_id !== b.parent_id) return String(a.parent_id).localeCompare(String(b.parent_id));
+        // Then by position
+        return (a.position || 0) - (b.position || 0);
+    });
 }
 
 function renderChannels() {
@@ -556,19 +575,76 @@ function renderChannels() {
         return;
     }
     
+    // Group channels by parent (category)
+    const categories = new Map();
+    const uncategorized = [];
+    
     state.channels.forEach(channel => {
-        const el = document.createElement("div");
-        el.className = "channel-item";
-        el.dataset.id = channel.id;
-        el.innerHTML = `<span class="channel-hash">#</span> ${escapeHtml(channel.name)}`;
-        
-        el.addEventListener("click", () => selectChannel(channel.id));
-        channelListEl.appendChild(el);
+        if (channel.type === 'category') {
+            if (!categories.has(channel.id)) {
+                categories.set(channel.id, { name: channel.name, channels: [] });
+            }
+        } else if (channel.parent_id) {
+            if (!categories.has(channel.parent_id)) {
+                categories.set(channel.parent_id, { name: 'Unknown Category', channels: [] });
+            }
+            categories.get(channel.parent_id).channels.push(channel);
+        } else {
+            uncategorized.push(channel);
+        }
     });
+    
+    // Render uncategorized channels first
+    uncategorized.forEach(channel => {
+        channelListEl.appendChild(createChannelElement(channel));
+    });
+    
+    // Render categories with their channels
+    categories.forEach((cat, catId) => {
+        if (cat.channels.length > 0) {
+            // Category header
+            const catEl = document.createElement('div');
+            catEl.className = 'channel-category';
+            catEl.innerHTML = `<span class="category-arrow">▼</span> ${escapeHtml(cat.name)}`;
+            catEl.onclick = () => toggleCategory(catId);
+            channelListEl.appendChild(catEl);
+            
+            // Category channels container
+            const containerEl = document.createElement('div');
+            containerEl.id = `category-${catId}`;
+            cat.channels.forEach(channel => {
+                containerEl.appendChild(createChannelElement(channel));
+            });
+            channelListEl.appendChild(containerEl);
+        }
+    });
+}
+
+function createChannelElement(channel) {
+    const el = document.createElement("div");
+    el.className = "channel-item";
+    el.dataset.id = channel.id;
+    el.innerHTML = `<span class="channel-hash">#</span> ${escapeHtml(channel.name)}`;
+    el.addEventListener("click", () => selectChannel(channel.id));
+    return el;
+}
+
+function toggleCategory(catId) {
+    const container = document.getElementById(`category-${catId}`);
+    if (container) {
+        container.style.display = container.style.display === 'none' ? 'block' : 'none';
+    }
 }
 
 function selectChannel(channelId) {
     state.currentChannelId = channelId;
+    state.oldestMessageId = null;
+    state.hasMoreMessages = true;
+    
+    // Remember last channel for this server
+    if (state.currentServerId) {
+        localStorage.setItem(`lastChannel_${state.currentServerId}`, channelId);
+    }
     
     // UI Update
     document.querySelectorAll(".channel-item").forEach(el => {
@@ -587,22 +663,62 @@ function selectChannel(channelId) {
 
 // --- Messages ---
 
-async function loadMessages(channelId) {
-    messageListEl.innerHTML = '<div class="empty-state">Loading messages...</div>';
+async function loadMessages(channelId, append = false) {
+    if (!append) {
+        messageListEl.innerHTML = '<div class="empty-state">Loading messages...</div>';
+        state.oldestMessageId = null;
+        state.hasMoreMessages = true;
+    }
     state.isLoading = true;
     
     try {
-        const data = await apiCall(`/api/channels/${channelId}/messages`, { limit: 50 });
-        state.messages = data.messages || [];
-        // Sort by ID to get chronological order
-        state.messages.sort((a, b) => a.id - b.id);
+        const params = { limit: 50 };
+        if (append && state.oldestMessageId) {
+            params.before = state.oldestMessageId;
+        }
+        
+        const data = await apiCall(`/api/channels/${channelId}/messages`, params);
+        const newMessages = data.messages || [];
+        
+        // Track if there are more messages to load
+        state.hasMoreMessages = newMessages.length >= 50;
+        
+        if (append) {
+            // Prepend older messages
+            state.messages = [...newMessages.reverse(), ...state.messages];
+        } else {
+            // Sort by ID to get chronological order (newest last)
+            state.messages = newMessages.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+        }
+        
+        // Track oldest message for pagination
+        if (state.messages.length > 0) {
+            state.oldestMessageId = state.messages[0].id;
+        }
         
         renderMessages();
-        scrollToBottom();
+        if (!append) scrollToBottom();
     } catch (e) {
-        messageListEl.innerHTML = `<div class="empty-state error">Failed to load messages: ${escapeHtml(e.message)}</div>`;
+        if (!append) {
+            messageListEl.innerHTML = `<div class="empty-state error">Failed to load messages: ${escapeHtml(e.message)}</div>`;
+        }
     } finally {
         state.isLoading = false;
+    }
+}
+
+async function loadMoreMessages() {
+    if (!state.currentChannelId || state.isLoading || !state.hasMoreMessages) return;
+    
+    const scrollPos = messagesWrapperEl.scrollTop;
+    await loadMessages(state.currentChannelId, true);
+    // Restore scroll position after prepending
+    messagesWrapperEl.scrollTop = scrollPos + 200;
+}
+
+function handleInfiniteScroll() {
+    if (messagesWrapperEl.scrollTop < 200 && !state.isLoading && state.hasMoreMessages) {
+        loadMoreMessages();
     }
 }
 
@@ -623,28 +739,114 @@ function renderMessages() {
 function createMessageElement(msg) {
     const el = document.createElement("div");
     el.className = "message-item";
+    el.dataset.messageId = msg.id;
+    
+    // Deleted message styling
+    if (msg.is_deleted) {
+        el.classList.add("message-deleted");
+    }
     
     const date = new Date(msg.created_at || msg.timestamp || Date.now());
     const formattedDate = date.toLocaleString();
     
-    // Generate avatar color from user ID
-    const idNum = parseInt(msg.user_id || msg.author_id || '0');
-    const avatarColor = "#" + ((idNum * 1234567) % 0xFFFFFF).toString(16).padStart(6, '0');
+    // Avatar - use URL if available, otherwise generate color
+    const avatarUrl = msg.avatar_url;
+    let avatarHtml;
+    if (avatarUrl) {
+        avatarHtml = `<div class="message-avatar"><img src="${avatarUrl}" alt="avatar" onerror="this.style.display='none'"></div>`;
+    } else {
+        const idNum = parseInt(String(msg.user_id || msg.author_id || '0').slice(-8)) || 0;
+        const avatarColor = "#" + ((idNum * 1234567) % 0xFFFFFF).toString(16).padStart(6, '0');
+        avatarHtml = `<div class="message-avatar" style="background-color: ${avatarColor}"></div>`;
+    }
     
-    // Get author name - handle different field names
+    // Get author name
     const authorName = msg.display_name || msg.username || msg.author_name || 'Unknown';
     
+    // Edited indicator
+    const editedIndicator = msg.is_edited ? 
+        `<span class="message-edited" onclick="toggleEditHistory('${msg.id}')" title="Click to view edit history">(edited)</span>` : '';
+    
+    // Deleted indicator
+    const deletedIndicator = msg.is_deleted ? 
+        '<span class="message-deleted-badge">[DELETED]</span>' : '';
+    
+    // Attachments
+    const attachmentsHtml = renderAttachments(msg.attachments || []);
+    
+    // Content with embeds
+    const contentHtml = msg.is_deleted ? 
+        '<em class="deleted-content">[Message was deleted]</em>' : 
+        formatContent(msg.content);
+    
     el.innerHTML = `
-        <div class="message-avatar" style="background-color: ${avatarColor}"></div>
+        ${avatarHtml}
         <div class="message-content-wrapper">
             <div class="message-header">
                 <span class="message-author">${escapeHtml(authorName)}</span>
+                ${deletedIndicator}
                 <span class="message-timestamp">${formattedDate}</span>
+                ${editedIndicator}
             </div>
-            <div class="message-body">${formatContent(msg.content)}</div>
+            <div class="message-body">${contentHtml}</div>
+            ${attachmentsHtml}
+            <div class="edit-history-container" id="edit-history-${msg.id}" style="display:none;"></div>
         </div>
     `;
     return el;
+}
+
+function renderAttachments(attachments) {
+    if (!attachments || attachments.length === 0) return '';
+    
+    const items = attachments.map(att => {
+        const contentType = att.content_type || '';
+        const url = att.url;
+        const filename = att.filename || 'attachment';
+        
+        if (contentType.startsWith('image/')) {
+            return `<div class="attachment-image"><img src="${url}" alt="${escapeHtml(filename)}" loading="lazy" onclick="window.open('${url}', '_blank')"></div>`;
+        } else if (contentType.startsWith('video/')) {
+            return `<div class="attachment-video"><video src="${url}" controls preload="metadata"></video></div>`;
+        } else {
+            const sizeKb = att.size_bytes ? Math.round(att.size_bytes / 1024) : '?';
+            return `<div class="attachment-file"><a href="${url}" target="_blank" rel="noopener">📎 ${escapeHtml(filename)} (${sizeKb} KB)</a></div>`;
+        }
+    });
+    
+    return `<div class="message-attachments">${items.join('')}</div>`;
+}
+
+async function toggleEditHistory(messageId) {
+    const container = document.getElementById(`edit-history-${messageId}`);
+    if (!container) return;
+    
+    if (container.style.display === 'none') {
+        container.innerHTML = '<em>Loading edit history...</em>';
+        container.style.display = 'block';
+        
+        try {
+            const data = await apiCall(`/api/messages/${messageId}/edits`);
+            const history = data.edit_history || [];
+            
+            if (history.length === 0) {
+                container.innerHTML = '<em>No edit history available</em>';
+            } else {
+                const historyHtml = history.map((edit, i) => {
+                    const editDate = new Date(edit.edited_at).toLocaleString();
+                    return `<div class="edit-entry">
+                        <span class="edit-timestamp">${editDate}</span>
+                        <div class="edit-old-content">${escapeHtml(edit.old_content)}</div>
+                    </div>`;
+                }).join('');
+                container.innerHTML = `<div class="edit-history"><strong>Edit History:</strong>${historyHtml}</div>`;
+            }
+        } catch (e) {
+            container.innerHTML = `<em>Failed to load edit history</em>`;
+        }
+    } else {
+        container.style.display = 'none';
+    }
 }
 
 function formatContent(content) {
@@ -654,8 +856,25 @@ function formatContent(content) {
     // Newlines to <br>
     escaped = escaped.replace(/\n/g, '<br>');
     
-    // URLs to links
-    escaped = escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+    // YouTube embeds
+    escaped = escaped.replace(
+        /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/clip\/)([a-zA-Z0-9_-]+)(?:[^\s<]*)?/gi,
+        (match, videoId) => {
+            return `<div class="embed-youtube"><iframe src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen></iframe></div><a href="${match}" target="_blank">${match}</a>`;
+        }
+    );
+    
+    // Tenor GIF embeds (show as direct link for now - full embedding would need API)
+    escaped = escaped.replace(
+        /(https?:\/\/tenor\.com\/[^\s<]+)/gi,
+        '<a href="$1" target="_blank" class="tenor-link">🎬 $1</a>'
+    );
+    
+    // Other URLs to links
+    escaped = escaped.replace(
+        /(https?:\/\/(?!(?:www\.)?(?:youtube\.com|youtu\.be|tenor\.com))[^\s<]+)/gi,
+        '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+    );
     
     return escaped;
 }
