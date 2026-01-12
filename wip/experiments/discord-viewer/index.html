@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <link rel="icon" type="image/png" href="/images/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/images/favicon.svg" />
+    <link rel="shortcut icon" href="/images/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="RoseStuffs" />
+    <link rel="manifest" href="/images/site.webmanifest" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord Message Viewer</title>
+    <!-- Link to the specific CSS -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="canonical" href="https://rosestuffs.org/discord-viewer/" />
+</head>
+
+<body>
+
+    <!-- Top Navigation Bar (Experiments Layout) -->
+    <header class="top-bar">
+        <nav class="nav-container">
+            <div class="nav-left">
+                <ul class="nav-links">
+                    <li><a href="../../home/">Home</a></li>
+                    <li><a href="../../meds/">Meds</a></li>
+                    <li><a href="">WIP-PAGE</a></li>
+                    <li><a href="../">Experiments</a></li>
+                    <li><a href="#" class="active-link">Discord Viewer</a></li>
+                </ul>
+            </div>
+            <div class="nav-center">
+                <!-- Search bar for messages could go here eventually -->
+            </div>
+            <div class="nav-right">
+                <div class="user-account">
+                    <span id="userStatus" style="color: #ccc; align-self: center; margin-right: 15px;">Guest</span>
+                    <button id="apiKeyButton">API Key</button>
+                    <!-- Auth buttons for the optional sync system -->
+                    <button id="loginButton" style="display: none;">Login</button>
+                    <button id="registerButton" style="display: none;">Register</button>
+                    <button id="logoutButton" style="display: none;">Logout</button>
+                    <button id="localSyncButton">Local Sync</button>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="app-container">
+        <!-- Left Sidebar: Servers -->
+        <aside class="server-sidebar" id="serverList">
+            <!-- Server icons will be injected here -->
+            <div class="server-item placeholder" title="Loading..."></div>
+        </aside>
+
+        <!-- Middle Sidebar: Channels -->
+        <aside class="channel-sidebar">
+            <div class="sidebar-header">
+                <h2 id="serverName">Select a Server</h2>
+            </div>
+            <div class="channel-list" id="channelList">
+                <!-- Channels will be injected here -->
+            </div>
+        </aside>
+
+        <!-- Main Content: Messages -->
+        <section class="chat-area">
+            <div class="chat-header">
+                <div class="channel-info">
+                    <span class="channel-hash">#</span>
+                    <h3 id="channelName">Select a Channel</h3>
+                    <span class="channel-topic" id="channelTopic"></span>
+                </div>
+                <div class="header-tools">
+                    <div class="search-box">
+                        <input type="text" id="messageSearch" placeholder="Search" aria-label="Search">
+                        <svg class="search-icon" aria-hidden="true" role="img" width="16" height="16"
+                            viewBox="0 0 24 24">
+                            <path fill="currentColor"
+                                d="M21.707 20.293L16.314 14.9C17.403 13.504 18 11.799 18 10C18 5.589 14.411 2 10 2C5.589 2 2 5.589 2 10C2 14.411 5.589 18 10 18C11.799 18 13.504 17.404 14.9 16.314L20.293 21.707C20.488 21.902 20.744 22 21 22C21.256 22 21.512 21.902 21.707 21.707C22.098 21.316 22.098 20.684 21.707 20.293ZM10 16C6.691 16 4 13.309 4 10C4 6.691 6.691 4 10 4C13.309 4 16 6.691 16 10C16 13.309 13.309 16 10 16Z">
+                            </path>
+                        </svg>
+                    </div>
+                    <button id="statsButton" title="Channel Stats">
+                        <svg aria-hidden="true" role="img" width="24" height="24" viewBox="0 0 24 24">
+                            <path fill="currentColor"
+                                d="M2 20V4H4V20H2ZM6 20V9H8V20H6ZM10 20V13H12V20H10ZM14 20V2H16V20H14ZM18 20V15H20V20H18Z">
+                            </path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="messages-wrapper" id="messagesWrapper">
+                <div class="messages-list" id="messageList">
+                    <div class="empty-state">Select a server and channel to view messages.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Sidebar/Panel: Stats (Initially hidden or as overlay) -->
+        <aside class="stats-panel" id="statsPanel" style="display: none;">
+            <div class="sidebar-header">
+                <h2>Statistics</h2>
+                <button class="close-stats">&times;</button>
+            </div>
+            <div class="stats-content" id="statsContent">
+                <!-- Stats will be injected here -->
+            </div>
+        </aside>
+    </main>
+
+    <!-- Modals -->
+
+    <!-- API Key Modal -->
+    <div id="apiKeyModal" class="auth-modal">
+        <div class="auth-modal-content">
+            <span class="close-auth-modal" data-modal-id="apiKeyModal">&times;</span>
+            <h2>Bot API Access</h2>
+            <p>Please enter your API Key to access the message archives.</p>
+            <form id="apiKeyForm">
+                <div class="input-group">
+                    <label for="inputApiKey">API Key:</label>
+                    <input type="password" id="inputApiKey" required placeholder="Paste your key here...">
+                </div>
+                <button type="submit">Save Key</button>
+                <div id="apiKeyError" class="error-message"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Reusing Auth Modals from Template -->
+    <div id="loginModal" class="auth-modal">
+        <div class="auth-modal-content">
+            <span class="close-auth-modal" data-modal-id="loginModal">&times;</span>
+            <h2>Login (Sync)</h2>
+            <form id="loginForm">
+                <div class="input-group">
+                    <label for="loginUsername">Username:</label>
+                    <input type="text" id="loginUsername" required>
+                </div>
+                <div class="input-group">
+                    <label for="loginPassword">Password:</label>
+                    <input type="password" id="loginPassword" required>
+                </div>
+                <button type="submit">Login</button>
+                <button type="button" class="close-auth-modal-button" data-modal-id="loginModal">Cancel</button>
+                <div id="loginError" class="error-message"></div>
+            </form>
+        </div>
+    </div>
+
+    <div id="registerModal" class="auth-modal">
+        <div class="auth-modal-content">
+            <span class="close-auth-modal" data-modal-id="registerModal">&times;</span>
+            <h2>Register (Sync)</h2>
+            <form id="registerForm">
+                <div class="input-group">
+                    <label for="registerUsername">Username:</label>
+                    <input type="text" id="registerUsername" required>
+                </div>
+                <div class="input-group">
+                    <label for="registerPassword">Password:</label>
+                    <input type="password" id="registerPassword" required minlength="4">
+                </div>
+                <div class="input-group">
+                    <label for="registerConfirmPassword">Confirm Password:</label>
+                    <input type="password" id="registerConfirmPassword" required minlength="4">
+                </div>
+                <button type="submit">Register</button>
+                <button type="button" class="close-auth-modal-button" data-modal-id="registerModal">Cancel</button>
+                <div id="registerError" class="error-message"></div>
+            </form>
+        </div>
+    </div>
+
+    <div id="syncModal" class="sync-modal">
+        <div class="sync-modal-content">
+            <span class="close-sync-modal" data-modal-id="syncModal">&times;</span>
+            <h2>Local File Sync</h2>
+            <p style="font-size: 0.9em; color: #ccc; margin-bottom: 15px;">Export your current data to a file, or import
+                data
+                from a previously exported file. This only affects local browser storage.</p>
+            <div class="input-group">
+                <button id="exportData" class="btn-sync">Export All Data to File</button>
+            </div>
+            <div class="input-group">
+                <label for="importData">Import Data from File:</label>
+                <input type="file" id="importData" accept=".json" style="color:#ccc;">
+            </div>
+            <div id="syncStatus" style="min-height: 1em; margin-top: 15px;"></div>
+            <button type="button" class="close-sync-modal-button" data-modal-id="syncModal">Close</button>
+        </div>
+    </div>
+
+    <!-- Global Auth Manager -->
+    <script src="/auth.js"></script>
+    <!-- App Script -->
+    <script src="script.js"></script>
+
+</body>
+
+</html>
