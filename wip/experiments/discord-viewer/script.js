@@ -710,10 +710,15 @@ async function loadMessages(channelId, append = false) {
 async function loadMoreMessages() {
     if (!state.currentChannelId || state.isLoading || !state.hasMoreMessages) return;
     
-    const scrollPos = messagesWrapperEl.scrollTop;
+    const oldHeight = messageListEl.scrollHeight;
+    const oldScroll = messagesWrapperEl.scrollTop;
+    
     await loadMessages(state.currentChannelId, true);
-    // Restore scroll position after prepending
-    messagesWrapperEl.scrollTop = scrollPos + 200;
+    
+    // Calculate height difference and restore position
+    const newHeight = messageListEl.scrollHeight;
+    const heightDiff = newHeight - oldHeight;
+    messagesWrapperEl.scrollTop = oldScroll + heightDiff;
 }
 
 function handleInfiniteScroll() {
@@ -801,11 +806,21 @@ function renderAttachments(attachments) {
     
     const items = attachments.map(att => {
         const contentType = att.content_type || '';
-        const url = att.url;
         const filename = att.filename || 'attachment';
+        const messageId = att.message_id;
+        
+        // Use local API endpoint if local_path exists (Discord URLs expire)
+        let url;
+        if (att.local_path && messageId) {
+            // Extract just the filename from local_path for the API call
+            const localFilename = att.local_path.split('/').pop();
+            url = `${API_BASE_URL}/api/attachments/${messageId}/${encodeURIComponent(localFilename)}?token=${encodeURIComponent(API_KEY)}`;
+        } else {
+            url = att.url; // Fallback to Discord URL (may be expired)
+        }
         
         if (contentType.startsWith('image/')) {
-            return `<div class="attachment-image"><img src="${url}" alt="${escapeHtml(filename)}" loading="lazy" onclick="window.open('${url}', '_blank')"></div>`;
+            return `<div class="attachment-image"><img src="${url}" alt="${escapeHtml(filename)}" loading="lazy" onclick="window.open('${url}', '_blank')" onerror="this.parentElement.innerHTML='<span class=\\'attachment-error\\'>Image unavailable</span>'"></div>`;
         } else if (contentType.startsWith('video/')) {
             return `<div class="attachment-video"><video src="${url}" controls preload="metadata"></video></div>`;
         } else {

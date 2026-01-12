@@ -695,6 +695,13 @@ button[type="submit"]:hover {
     text-decoration: underline;
 }
 
+.attachment-error {
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 8px;
+    display: block;
+}
+
 /* YouTube Embed */
 .embed-youtube {
     margin: 8px 0;
