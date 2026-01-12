@@ -663,11 +663,14 @@ function selectChannel(channelId) {
 
 // --- Messages ---
 
+// --- Messages ---
+
 async function loadMessages(channelId, append = false) {
     if (!append) {
         messageListEl.innerHTML = '<div class="empty-state">Loading messages...</div>';
         state.oldestMessageId = null;
         state.hasMoreMessages = true;
+        state.messages = [];
     }
     state.isLoading = true;
     
@@ -683,25 +686,34 @@ async function loadMessages(channelId, append = false) {
         // Track if there are more messages to load
         state.hasMoreMessages = newMessages.length >= 50;
         
+        // Sort by ID to get chronological order (newest last)
+        const sortedNewMessages = newMessages.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+        
         if (append) {
             // Prepend older messages
-            state.messages = [...newMessages.reverse(), ...state.messages];
+            state.messages = [...sortedNewMessages, ...state.messages];
+            renderMessageBatch(sortedNewMessages, 'prepend');
         } else {
-            // Sort by ID to get chronological order (newest last)
-            state.messages = newMessages.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+            // New load
+            state.messages = sortedNewMessages;
+            renderMessageBatch(sortedNewMessages, 'replace');
         }
         
-        // Track oldest message for pagination
+        // Track oldest message for pagination (it's the first one in our local list)
         if (state.messages.length > 0) {
             state.oldestMessageId = state.messages[0].id;
         }
         
-        renderMessages();
         if (!append) scrollToBottom();
+        
+        // Fetch metadata for new messages
+        enrichMessages(sortedNewMessages);
+        
     } catch (e) {
         if (!append) {
             messageListEl.innerHTML = `<div class="empty-state error">Failed to load messages: ${escapeHtml(e.message)}</div>`;
         }
+        console.error("Load messages error:", e);
     } finally {
         state.isLoading = false;
     }
@@ -711,40 +723,50 @@ async function loadMoreMessages() {
     if (!state.currentChannelId || state.isLoading || !state.hasMoreMessages) return;
     
     const oldHeight = messageListEl.scrollHeight;
-    const oldScroll = messagesWrapperEl.scrollTop;
+    const oldScrollTop = messagesWrapperEl.scrollTop;
     
     await loadMessages(state.currentChannelId, true);
     
-    // Calculate height difference and restore position
+    // Adjust scroll position to maintain visual continuity
     const newHeight = messageListEl.scrollHeight;
     const heightDiff = newHeight - oldHeight;
-    messagesWrapperEl.scrollTop = oldScroll + heightDiff;
+    messagesWrapperEl.scrollTop = oldScrollTop + heightDiff;
 }
 
 let scrollDebounce = null;
 function handleInfiniteScroll() {
     if (messagesWrapperEl.scrollTop < 200 && !state.isLoading && state.hasMoreMessages) {
-        // Debounce to prevent rapid-fire requests
         if (scrollDebounce) return;
         scrollDebounce = setTimeout(() => {
             scrollDebounce = null;
-        }, 500);
+        }, 100); // Reduced debounce for smoother feel
         loadMoreMessages();
     }
 }
 
-function renderMessages() {
-    messageListEl.innerHTML = "";
+function renderMessageBatch(messages, mode = 'replace') {
+    if (mode === 'replace') {
+        messageListEl.innerHTML = "";
+    }
     
-    if (state.messages.length === 0) {
+    if (messages.length === 0 && mode === 'replace') {
         messageListEl.innerHTML = '<div class="empty-state">No messages found here.</div>';
         return;
     }
     
-    state.messages.forEach(msg => {
+    // Create DocumentFragment for performance
+    const fragment = document.createDocumentFragment();
+    
+    messages.forEach(msg => {
         const el = createMessageElement(msg);
-        messageListEl.appendChild(el);
+        fragment.appendChild(el);
     });
+    
+    if (mode === 'prepend') {
+        messageListEl.insertBefore(fragment, messageListEl.firstChild);
+    } else {
+        messageListEl.appendChild(fragment);
+    }
 }
 
 function createMessageElement(msg) {
@@ -760,7 +782,7 @@ function createMessageElement(msg) {
     const date = new Date(msg.created_at || msg.timestamp || Date.now());
     const formattedDate = date.toLocaleString();
     
-    // Avatar - use URL if available, otherwise generate color
+    // Avatar
     const avatarUrl = msg.avatar_url;
     let avatarHtml;
     if (avatarUrl) {
@@ -771,14 +793,13 @@ function createMessageElement(msg) {
         avatarHtml = `<div class="message-avatar" style="background-color: ${avatarColor}"></div>`;
     }
     
-    // Get author name
+    // Author
     const authorName = msg.display_name || msg.username || msg.author_name || 'Unknown';
     
-    // Edited indicator
+    // Indicators
     const editedIndicator = msg.is_edited ? 
         `<span class="message-edited" onclick="toggleEditHistory('${msg.id}')" title="Click to view edit history">(edited)</span>` : '';
     
-    // Deleted indicator
     const deletedIndicator = msg.is_deleted ? 
         '<span class="message-deleted-badge">[DELETED]</span>' : '';
     
@@ -786,7 +807,7 @@ function createMessageElement(msg) {
     const attachmentsHtml = renderAttachments(msg.attachments || []);
     const hasAttachments = (msg.attachments || []).length > 0;
     
-    // Content with embeds - don't show "(No content)" if there are attachments
+    // Content - logic simplified
     const contentHtml = msg.is_deleted ? 
         '<em class="deleted-content">[Message was deleted]</em>' : 
         formatContent(msg.content, hasAttachments);
@@ -801,6 +822,7 @@ function createMessageElement(msg) {
                 ${editedIndicator}
             </div>
             <div class="message-body">${contentHtml}</div>
+            <div class="message-embeds" id="embeds-${msg.id}"></div> <!-- Container for async embeds -->
             ${attachmentsHtml}
             <div class="edit-history-container" id="edit-history-${msg.id}" style="display:none;"></div>
         </div>
@@ -881,41 +903,80 @@ function formatContent(content, hasAttachments = false) {
     // Newlines to <br>
     escaped = escaped.replace(/\n/g, '<br>');
     
-    // YouTube - Discord-style widget embed (thumbnail + title link)
+    // Linkify URLs (simple regex, just makes them clickable)
+    // We do NOT generate embeds here anymore, that's handled by enrichMessages
     escaped = escaped.replace(
-        /(https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/clip\/)([a-zA-Z0-9_-]+)[^\s<]*)/gi,
-        (match, fullUrl, videoId) => {
-            const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
-            return `<div class="embed-youtube-widget">
-                <a href="${fullUrl}" target="_blank" rel="noopener" class="youtube-preview">
-                    <img src="${thumbnailUrl}" alt="YouTube video" class="youtube-thumbnail">
-                    <div class="youtube-play-button"></div>
-                </a>
-                <a href="${fullUrl}" target="_blank" class="youtube-link">${fullUrl}</a>
-            </div>`;
-        }
-    );
-    
-    // Tenor GIF embeds - extract GIF ID and show thumbnail
-    escaped = escaped.replace(
-        /(https?:\/\/tenor\.com\/(?:view|en-[A-Z]{2}\/view)\/[^\s<]+?-?(\d+))/gi,
-        (match, fullUrl, gifId) => {
-            // Use Tenor's media URL pattern for thumbnail
-            return `<div class="embed-tenor">
-                <a href="${fullUrl}" target="_blank" rel="noopener" class="tenor-preview">
-                    <img src="https://media.tenor.com/images/${gifId}/tenor.gif" alt="GIF" class="tenor-thumbnail" onerror="this.src='https://tenor.com/assets/img/tenor-logo.svg'; this.classList.add('tenor-fallback')">
-                </a>
-            </div>`;
-        }
-    );
-    
-    // Other URLs to links
-    escaped = escaped.replace(
-        /(https?:\/\/(?!(?:www\.)?(?:youtube\.com|youtu\.be|tenor\.com))[^\s<]+)/gi,
+        /(https?:\/\/[^\s<]+)/gi,
         '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
     );
     
     return escaped;
+}
+
+async function enrichMessages(messages) {
+    // Find messages with HTTP links
+    const urlRegex = /(https?:\/\/[^\s<]+)/gi;
+    
+    for (const msg of messages) {
+        if (!msg.content) continue;
+        
+        const matches = msg.content.match(urlRegex);
+        if (!matches) continue;
+        
+        // Only embed the first link for now to avoid clutter (like Discord usually does priority)
+        // Or loop through all unique URLs
+        const uniqueUrls = [...new Set(matches)];
+        
+        for (const url of uniqueUrls) {
+            // Check if we should embed this URL (YouTube, Tenor, etc)
+            // Implementation detail: The backend decides if it supports OEmbed for this URL
+            if (url.includes('youtube.com') || url.includes('youtu.be') || url.includes('tenor.com')) {
+                try {
+                    const embedContainer = document.getElementById(`embeds-${msg.id}`);
+                    if (!embedContainer) continue;
+
+                    // Fetch metadata from our backend proxy
+                    const res = await apiCall(`/api/metadata`, { url });
+                    
+                    if (res && !res.error) {
+                        const embedHtml = renderEmbed(res);
+                        embedContainer.innerHTML += embedHtml;
+                    }
+                } catch (e) {
+                    console.log(`Failed to enrich URL ${url}:`, e);
+                }
+            }
+        }
+    }
+}
+
+function renderEmbed(data) {
+    if (data.provider === 'YouTube') {
+        return renderYoutubeEmbed(data);
+    } else if (data.provider === 'Tenor') {
+        return `<div class="embed-card embed-gif-container">
+            <div class="embed-provider">Tenor</div>
+             <a href="${data.url}" target="_blank" class="embed-title">${escapeHtml(data.title)}</a>
+            <div class="embed-media">
+                <img src="${data.thumbnail_url}" alt="GIF" class="embed-image">
+            </div>
+        </div>`;
+    }
+    return '';
+}
+
+function renderYoutubeEmbed(data) {
+    return `
+        <div class="embed-card" style="max-width: 480px;">
+            <div class="embed-provider">YouTube</div>
+            <a href="${data.url}" target="_blank" class="embed-title">${escapeHtml(data.title)}</a>
+            <div class="embed-author">${escapeHtml(data.author)}</div>
+            <div class="embed-youtube-container" onclick="window.open('${data.url}', '_blank')">
+                <img src="${data.thumbnail_url}" alt="Thumbnail" class="embed-image">
+                <div class="youtube-play-overlay"></div>
+            </div>
+        </div>
+    `;
 }
 
 function escapeHtml(text) {
