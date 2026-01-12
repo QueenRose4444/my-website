@@ -721,8 +721,14 @@ async function loadMoreMessages() {
     messagesWrapperEl.scrollTop = oldScroll + heightDiff;
 }
 
+let scrollDebounce = null;
 function handleInfiniteScroll() {
     if (messagesWrapperEl.scrollTop < 200 && !state.isLoading && state.hasMoreMessages) {
+        // Debounce to prevent rapid-fire requests
+        if (scrollDebounce) return;
+        scrollDebounce = setTimeout(() => {
+            scrollDebounce = null;
+        }, 500);
         loadMoreMessages();
     }
 }
@@ -778,11 +784,12 @@ function createMessageElement(msg) {
     
     // Attachments
     const attachmentsHtml = renderAttachments(msg.attachments || []);
+    const hasAttachments = (msg.attachments || []).length > 0;
     
-    // Content with embeds
+    // Content with embeds - don't show "(No content)" if there are attachments
     const contentHtml = msg.is_deleted ? 
         '<em class="deleted-content">[Message was deleted]</em>' : 
-        formatContent(msg.content);
+        formatContent(msg.content, hasAttachments);
     
     el.innerHTML = `
         ${avatarHtml}
@@ -864,25 +871,42 @@ async function toggleEditHistory(messageId) {
     }
 }
 
-function formatContent(content) {
-    if (!content) return "<em>(No content)</em>";
+function formatContent(content, hasAttachments = false) {
+    if (!content) {
+        // Don't show "No content" if there are attachments
+        return hasAttachments ? '' : '<em>(No content)</em>';
+    }
     let escaped = escapeHtml(content);
     
     // Newlines to <br>
     escaped = escaped.replace(/\n/g, '<br>');
     
-    // YouTube embeds
+    // YouTube - Discord-style widget embed (thumbnail + title link)
     escaped = escaped.replace(
-        /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/clip\/)([a-zA-Z0-9_-]+)(?:[^\s<]*)?/gi,
-        (match, videoId) => {
-            return `<div class="embed-youtube"><iframe src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen></iframe></div><a href="${match}" target="_blank">${match}</a>`;
+        /(https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/clip\/)([a-zA-Z0-9_-]+)[^\s<]*)/gi,
+        (match, fullUrl, videoId) => {
+            const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+            return `<div class="embed-youtube-widget">
+                <a href="${fullUrl}" target="_blank" rel="noopener" class="youtube-preview">
+                    <img src="${thumbnailUrl}" alt="YouTube video" class="youtube-thumbnail">
+                    <div class="youtube-play-button"></div>
+                </a>
+                <a href="${fullUrl}" target="_blank" class="youtube-link">${fullUrl}</a>
+            </div>`;
         }
     );
     
-    // Tenor GIF embeds (show as direct link for now - full embedding would need API)
+    // Tenor GIF embeds - extract GIF ID and show thumbnail
     escaped = escaped.replace(
-        /(https?:\/\/tenor\.com\/[^\s<]+)/gi,
-        '<a href="$1" target="_blank" class="tenor-link">🎬 $1</a>'
+        /(https?:\/\/tenor\.com\/(?:view|en-[A-Z]{2}\/view)\/[^\s<]+?-?(\d+))/gi,
+        (match, fullUrl, gifId) => {
+            // Use Tenor's media URL pattern for thumbnail
+            return `<div class="embed-tenor">
+                <a href="${fullUrl}" target="_blank" rel="noopener" class="tenor-preview">
+                    <img src="https://media.tenor.com/images/${gifId}/tenor.gif" alt="GIF" class="tenor-thumbnail" onerror="this.src='https://tenor.com/assets/img/tenor-logo.svg'; this.classList.add('tenor-fallback')">
+                </a>
+            </div>`;
+        }
     );
     
     // Other URLs to links

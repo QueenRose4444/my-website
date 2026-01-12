@@ -702,24 +702,82 @@ button[type="submit"]:hover {
     display: block;
 }
 
-/* YouTube Embed */
-.embed-youtube {
+/* YouTube Widget Embed (Discord-style) */
+.embed-youtube-widget {
     margin: 8px 0;
     max-width: 400px;
 }
 
-.embed-youtube iframe {
+.youtube-preview {
+    position: relative;
+    display: block;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.youtube-thumbnail {
     width: 100%;
-    aspect-ratio: 16/9;
+    display: block;
     border-radius: 4px;
 }
 
-/* Tenor Link */
-.tenor-link {
+.youtube-play-button {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 68px;
+    height: 48px;
+    background: rgba(0, 0, 0, 0.8);
+    border-radius: 12px;
+}
+
+.youtube-play-button::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 55%;
+    transform: translate(-50%, -50%);
+    border-left: 18px solid white;
+    border-top: 10px solid transparent;
+    border-bottom: 10px solid transparent;
+}
+
+.youtube-preview:hover .youtube-play-button {
+    background: #ff0000;
+}
+
+.youtube-link {
+    display: block;
     color: #00b0f4;
-    background: rgba(88, 101, 242, 0.1);
-    padding: 2px 6px;
-    border-radius: 3px;
+    font-size: 12px;
+    margin-top: 4px;
+    word-break: break-all;
+}
+
+/* Tenor GIF Embed */
+.embed-tenor {
+    margin: 8px 0;
+    max-width: 300px;
+}
+
+.tenor-preview {
+    display: block;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.tenor-thumbnail {
+    max-width: 100%;
+    max-height: 300px;
+    border-radius: 4px;
+    display: block;
+}
+
+.tenor-fallback {
+    width: 100px;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.2);
 }
 
 /* Edit History */
