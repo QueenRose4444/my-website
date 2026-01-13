@@ -915,9 +915,11 @@ async function toggleEditHistory(messageId) {
             } else {
                 const historyHtml = history.map((edit, i) => {
                     const editDate = new Date(edit.edited_at).toLocaleString();
+                    // API returns 'content' field containing the old content before this edit
+                    const oldContent = edit.content || edit.old_content || '[Content unavailable]';
                     return `<div class="edit-entry">
                         <span class="edit-timestamp">${editDate}</span>
-                        <div class="edit-old-content">${escapeHtml(edit.old_content)}</div>
+                        <div class="edit-old-content">${escapeHtml(oldContent)}</div>
                     </div>`;
                 }).join('');
                 container.innerHTML = `<div class="edit-history"><strong>Edit History:</strong>${historyHtml}</div>`;
