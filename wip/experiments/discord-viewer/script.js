@@ -984,12 +984,25 @@ async function enrichMessages(messages) {
                     const res = await apiCall(`/api/metadata`, { url });
                     console.log(`Metadata for ${url}:`, res); // Debug
                     
-                    if (res && !res.error) {
+                    if (res && !res.error && res.type !== 'link') {
                         const embedHtml = renderEmbed(res);
                         // Avoid duplicates
-                        if (!embedContainer.innerHTML.includes(res.url)) {
+                        if (embedHtml && !embedContainer.innerHTML.includes(res.url)) {
                             embedContainer.innerHTML += embedHtml;
+                            
+                            // Hide the URL link in message content since embed is showing
+                            const messageEl = document.querySelector(`[data-message-id="${msg.id}"]`);
+                            if (messageEl) {
+                                const links = messageEl.querySelectorAll('.message-body a');
+                                links.forEach(link => {
+                                    if (link.href === url || link.textContent === url) {
+                                        link.style.display = 'none';
+                                    }
+                                });
+                            }
                         }
+                    } else if (res && res.error) {
+                        console.error(`Embed API error for ${url}:`, res.error);
                     }
                 } catch (e) {
                     console.error(`Failed to enrich URL ${url}:`, e);
