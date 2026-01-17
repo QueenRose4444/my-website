@@ -30,7 +30,7 @@ let userPreferences = {
     mobilePadding: 50,
     // NEW: Store sorts per view type
     sorts: {
-        tracked: 'name',    // Default for tracked: Alphabetical
+        tracked: 'updated',    // Default for tracked: Alphabetical
         all: 'popular'      // Default for catalog: Popularity
     }
 };
@@ -112,7 +112,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // If we have creds, load data.
     if (discordCreds) {
-        // Just start loading, switchView will handle sort application
+        // Initialize sort dropdown from saved preferences BEFORE loading games
+        const sortSelect = document.getElementById('sortSelect');
+        if (sortSelect && userPreferences.sorts && userPreferences.sorts['tracked']) {
+            sortSelect.value = userPreferences.sorts['tracked'];
+        }
         loadTrackedGames();
     } else {
         setTimeout(() => {
