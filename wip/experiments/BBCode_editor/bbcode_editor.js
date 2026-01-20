@@ -36,6 +36,32 @@ let templates = {};
 // --- Auth State (via AuthManager) ---
 let authManager = null; // Will be initialized in DOMContentLoaded
 
+/*************************************
+ * Platform Sorting Utility - Win > Linux > Mac
+ *************************************/
+const sortFilesByPlatform = (files) => {
+    if (!files) return files;
+    return files.sort((a, b) => {
+        const getOrder = (p) => {
+            if (p.startsWith('Win')) return 1;
+            if (p.startsWith('Linux')) return 2;
+            if (p.startsWith('Mac')) return 3;
+            return 4;
+        };
+        return getOrder(a.platform) - getOrder(b.platform);
+    });
+};
+
+// Sorts all files in a game object (main files + custom groups)
+const sortGameFiles = (game) => {
+    if (!game) return game;
+    if (game.files) sortFilesByPlatform(game.files);
+    if (game.customGroups) {
+        game.customGroups.forEach(g => sortFilesByPlatform(g.files));
+    }
+    return game;
+};
+
 /***********************
  * DOM Elements
  ***********************/
@@ -261,7 +287,7 @@ function loadLocalData() {
         const storedData = localStorage.getItem(`${STORAGE_PREFIX}appData`);
         if (storedData) {
             const parsedData = JSON.parse(storedData);
-            if (parsedData.games) parsedData.games = parsedData.games.map(migrateGameData);
+            if (parsedData.games) parsedData.games = parsedData.games.map(migrateGameData).map(sortGameFiles);
             state = { ...state, ...parsedData, settings: { ...defaultSettings, ...(parsedData.settings || {}) }, presets: parsedData.presets || [] };
         } else { state.settings = defaultSettings; }
     } catch (e) { state = { games: [], activeGameIndex: 0, presets: [], settings: defaultSettings, template: '' }; }
@@ -602,11 +628,12 @@ const parseInputText = (text) => {
     if (text.includes('[spoiler=') && text.includes('Branch:')) {
         const bbGame = parseBBCodeInput(text);
         if (bbGame) {
+            sortGameFiles(bbGame); // Ensure Win > Linux > Mac ordering
             const existIdx = state.games.findIndex(g => g.gameTitle === bbGame.gameTitle);
             if (existIdx !== -1) {
                 // Merging data using smart merge:
                 const existing = state.games[existIdx];
-                state.games[existIdx] = mergeGameData(existing, bbGame);
+                state.games[existIdx] = sortGameFiles(mergeGameData(existing, bbGame));
             } else {            
                 state.games.push(bbGame);
             }
@@ -710,19 +737,8 @@ const parseInputText = (text) => {
 
     // Save updates
     for (const [title, game] of gamesToUpdate.entries()) {
-        // Sort Files: Win > Linux > Mac
-        const sorter = (a, b) => {
-            const getOrder = (p) => {
-                if (p.startsWith('Win')) return 1;
-                if (p.startsWith('Linux')) return 2;
-                if (p.startsWith('Mac')) return 3;
-                return 4;
-            };
-            return getOrder(a.platform) - getOrder(b.platform);
-        };
-
-        game.files.sort(sorter);
-        if (game.customGroups) game.customGroups.forEach(g => g.files.sort(sorter));
+        // Sort Files: Win > Linux > Mac using the global utility
+        sortGameFiles(game);
 
         gamesMap.set(title, game);
     }
