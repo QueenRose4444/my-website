@@ -261,6 +261,7 @@ function updateDisplay() {
     elements.monitorsList.innerHTML = '';
     clearAllCountdowns();
 
+    const currentUser = authManager?.currentUser;
     if (!currentUser) {
         elements.monitorsList.innerHTML = `<p class="empty-state">Please log in to see your monitors.</p>`;
         return;
