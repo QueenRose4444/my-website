@@ -177,7 +177,7 @@ async function uploadCookieFile(monitorId, file) {
     formData.append('file', file);
     
     try {
-        const token = authManager?.getToken();
+        const token = authManager?.authToken;
         if (!token) throw new Error('Not authenticated');
         
         const response = await fetch(`${MONITORS_ENDPOINT}/${monitorId}/cookies`, {
