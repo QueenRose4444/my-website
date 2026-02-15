@@ -1,0 +1,157 @@
+{
+  "mounjaro_kwikpen_clicks": [
+    {
+      "pen_strength": "2.5mg",
+      "pen_strength_mg": 2.5,
+      "total_clicks_in_pen": 240,
+      "standard_dose_clicks": 60,
+      "split_doses": [
+        {
+          "dose_mg": 2.5,
+          "clicks_per_dose": 60,
+          "doses_per_pen": "4"
+        }
+      ]
+    },
+    {
+      "pen_strength": "5mg",
+      "pen_strength_mg": 5,
+      "total_clicks_in_pen": 240,
+      "standard_dose_clicks": 60,
+      "split_doses": [
+        {
+          "dose_mg": 2.5,
+          "clicks_per_dose": 30,
+          "doses_per_pen": "8"
+        },
+        {
+          "dose_mg": 5,
+          "clicks_per_dose": 60,
+          "doses_per_pen": "4"
+        }
+      ]
+    },
+    {
+      "pen_strength": "7.5mg",
+      "pen_strength_mg": 7.5,
+      "total_clicks_in_pen": 240,
+      "standard_dose_clicks": 60,
+      "split_doses": [
+        {
+          "dose_mg": 2.5,
+          "clicks_per_dose": 20,
+          "doses_per_pen": "12"
+        },
+        {
+          "dose_mg": 5,
+          "clicks_per_dose": 40,
+          "doses_per_pen": "6"
+        },
+        {
+          "dose_mg": 7.5,
+          "clicks_per_dose": 60,
+          "doses_per_pen": "4"
+        }
+      ]
+    },
+    {
+      "pen_strength": "10mg",
+      "pen_strength_mg": 10,
+      "total_clicks_in_pen": 240,
+      "standard_dose_clicks": 60,
+      "split_doses": [
+        {
+          "dose_mg": 2.5,
+          "clicks_per_dose": 15,
+          "doses_per_pen": "16"
+        },
+        {
+          "dose_mg": 5,
+          "clicks_per_dose": 30,
+          "doses_per_pen": "8"
+        },
+        {
+          "dose_mg": 7.5,
+          "clicks_per_dose": 45,
+          "doses_per_pen": "~5.3"
+        },
+        {
+          "dose_mg": 10,
+          "clicks_per_dose": 60,
+          "doses_per_pen": "4"
+        }
+      ]
+    },
+    {
+      "pen_strength": "12.5mg",
+      "pen_strength_mg": 12.5,
+      "total_clicks_in_pen": 240,
+      "standard_dose_clicks": 60,
+      "split_doses": [
+        {
+          "dose_mg": 2.5,
+          "clicks_per_dose": 12,
+          "doses_per_pen": "20"
+        },
+        {
+          "dose_mg": 5,
+          "clicks_per_dose": 24,
+          "doses_per_pen": "10"
+        },
+        {
+          "dose_mg": 7.5,
+          "clicks_per_dose": 36,
+          "doses_per_pen": "~6.6"
+        },
+        {
+          "dose_mg": 10,
+          "clicks_per_dose": 48,
+          "doses_per_pen": "5"
+        },
+        {
+          "dose_mg": 12.5,
+          "clicks_per_dose": 60,
+          "doses_per_pen": "4"
+        }
+      ]
+    },
+    {
+      "pen_strength": "15mg",
+      "pen_strength_mg": 15,
+      "total_clicks_in_pen": 240,
+      "standard_dose_clicks": 60,
+      "split_doses": [
+        {
+          "dose_mg": 2.5,
+          "clicks_per_dose": 10,
+          "doses_per_pen": "24"
+        },
+        {
+          "dose_mg": 5,
+          "clicks_per_dose": 20,
+          "doses_per_pen": "12"
+        },
+        {
+          "dose_mg": 7.5,
+          "clicks_per_dose": 30,
+          "doses_per_pen": "8"
+        },
+        {
+          "dose_mg": 10,
+          "clicks_per_dose": 40,
+          "doses_per_pen": "6"
+        },
+        {
+          "dose_mg": 12.5,
+          "clicks_per_dose": 50,
+          "doses_per_pen": "~4.8"
+        },
+        {
+          "dose_mg": 15,
+          "clicks_per_dose": 60,
+          "doses_per_pen": "4"
+        }
+      ]
+    }
+  ]
+}
