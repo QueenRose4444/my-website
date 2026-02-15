@@ -23,40 +23,10 @@ function copyRecursive(src, dest) {
 
 // Get all items in root
 fs.readdirSync('.').forEach(item => {
-    const exclusions = ['.git', 'node_modules', 'public', 'build.js', 'package.json', '.vscode', '.idea'];
-    if (!exclusions.includes(item)) {
+    if (item !== 'public' && item !== 'node_modules' && item !== '.git' && item !== 'build.js' && item !== 'package.json') {
         copyRecursive(item, path.join(outputDir, item));
     }
 });
-
-// Special handling for Meds V2: Copy 'dist' content to 'public/wip/meds/v2'
-const medV2Dist = path.join('wip', 'meds', 'v2', 'dist');
-const medV2Public = path.join(outputDir, 'wip', 'meds', 'v2');
-
-if (fs.existsSync(medV2Dist)) {
-    console.log(`Copying Meds V2 build from ${medV2Dist} to ${medV2Public}...`);
-    // Check if dist exists, if so, we want to replace the source files copied above with the built files
-    
-    // First, maybe clear the v2 folder in public?
-    // Actually, copyRecursive overwrites.
-    // The previous loop copied 'wip/meds/v2/src' etc. to 'public/wip/meds/v2/src'.
-    // We want 'public/wip/meds/v2' to contain 'index.html', 'assets', etc from 'dist'.
-    
-    // We should delete 'public/wip/meds/v2' and replace it with 'dist' content?
-    // Yes, essentially.
-    
-    // Safety check
-    if (fs.existsSync(medV2Public)) {
-        fs.rmSync(medV2Public, { recursive: true, force: true });
-    }
-    fs.mkdirSync(medV2Public, { recursive: true });
-    
-    // Copy contents of dist to public/wip/meds/v2
-    fs.readdirSync(medV2Dist).forEach(child => {
-         copyRecursive(path.join(medV2Dist, child), path.join(medV2Public, child));
-    });
-}
-
 
 // Rename all HTML files to index.html
 function renameHtmlFiles(dir) {
