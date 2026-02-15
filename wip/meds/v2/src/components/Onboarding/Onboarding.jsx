@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import MedicationForm from '../Medications/MedicationForm';
 import HistoryEstimator from './HistoryEstimator';
+import ImportStep from './ImportStep';
 import { useMedStore } from '../../store/useMedStore';
 
 export default function Onboarding() {
-    const [step, setStep] = useState(1);
+    const [step, setStep] = useState(0); // 0: Import, 1: Add Med, 2: History
     const [tempMed, setTempMed] = useState(null);
     const { addMedication, addLog } = useMedStore();
 
@@ -23,7 +24,7 @@ export default function Onboarding() {
             addLog({ ...log, medId: med.id });
         });
 
-        // Finished - App.jsx handles redirection based on store state
+        // Finished
     };
 
     const handleHistorySkip = () => {
@@ -40,6 +41,7 @@ export default function Onboarding() {
                 </div>
 
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl shadow-xl">
+                    {step === 0 && <ImportStep onComplete={() => location.reload()} onSkip={() => setStep(1)} />}
                     {step === 1 && <MedicationForm onSubmit={handleMedicationSubmit} />}
                     {step === 2 && tempMed && (
                         <HistoryEstimator
