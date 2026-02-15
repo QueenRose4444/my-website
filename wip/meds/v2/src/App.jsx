@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useMedStore } from './store/useMedStore';
 import { AuthManager } from './utils/AuthManager';
 import { APP_NAME, ENVIRONMENT } from './constants';
@@ -34,11 +34,6 @@ function AppContent() {
     return <Login />;
   }
 
-  // Decide where to route empty state
-  // If no meds, force onboarding, unless we are ALREADY there
-  // This logic is tricky with Router.
-  // Better: ProtectedRoute component.
-
   return (
     <Routes>
       <Route path="/" element={medications.length === 0 ? <Navigate to="/onboarding" /> : <Dashboard />} />
@@ -52,8 +47,8 @@ function AppContent() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <AppContent />
-    </BrowserRouter>
+    </HashRouter>
   );
 }
