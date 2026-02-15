@@ -140,6 +140,12 @@ export const useMedStore = create(
         } catch (e) {
             console.error("Failed to save to backend", e);
         }
+      },
+      
+      // Import Actions
+      importWeights: (weights) => {
+          set({ weightHistory: weights });
+          get().saveData();
       }
     }),
     {
