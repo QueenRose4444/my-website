@@ -79,6 +79,12 @@ const flatpickrTimeFormatMapping = {
 
 const medicationData = {
     mounjaro: { halfLife: 120, timeToPeak: 48 },
+    ozempic: { halfLife: 168, timeToPeak: 48 }
+};
+
+const medicationDoses = {
+    mounjaro: ["2.5", "5", "7.5", "10", "12.5", "15"],
+    ozempic: ["0.25", "0.5", "1", "2"]
 };
 
 /***********************
@@ -1244,16 +1250,30 @@ function getLastDoseForMedication(medication) {
     return medicationShots[0]?.dose || null;
 }
 
+function populateDoseDropdown(medication, doseSelectElement, selectedDose) {
+    const doses = medicationDoses[medication] || [];
+    doseSelectElement.innerHTML = '';
+    doses.forEach(dose => {
+        const option = document.createElement('option');
+        option.value = dose;
+        option.textContent = `${dose}mg`;
+        if (selectedDose !== null && String(dose) === String(selectedDose)) {
+            option.selected = true;
+        }
+        doseSelectElement.appendChild(option);
+    });
+    if (selectedDose === null && doses.length > 0) {
+        doseSelectElement.value = doses[0];
+    }
+}
+
 function updateDoseToLastUsed() {
     const elements = getElements();
     if (!elements.medicationSelect || !elements.doseSelect) return;
     const selectedMedication = elements.medicationSelect.value;
     const lastDose = getLastDoseForMedication(selectedMedication);
-    if (lastDose !== null) {
-        if (Array.from(elements.doseSelect.options).some(o => o.value === String(lastDose))) {
-            elements.doseSelect.value = String(lastDose);
-        }
-    }
+    
+    populateDoseDropdown(selectedMedication, elements.doseSelect, lastDose);
 }
 
 function updateWeightEntryUI() {
@@ -1331,7 +1351,11 @@ function editShot(index) {
     if (!shot || !shot.dateTime) return;
     const shotDate = new Date(shot.dateTime);
     const medOptions = Object.keys(medicationData).map(k => `<option value="${k}" ${shot.medication === k ? "selected" : ""}>${k.charAt(0).toUpperCase() + k.slice(1)}</option>`).join('');
-    const doseOptions = ["2.5", "5", "7.5", "10", "12.5", "15"].map(d => `<option value="${d}" ${String(shot.dose) === d ? "selected" : ""}>${d}mg</option>`).join('');
+    
+    // Determine the initially selected medication for the edit modal
+    const initialMedication = Object.keys(medicationData).includes(shot.medication) ? shot.medication : 'mounjaro';
+    const availableDoses = medicationDoses[initialMedication] || [];
+    const doseOptions = availableDoses.map(d => `<option value="${d}" ${String(shot.dose) === d ? "selected" : ""}>${d}mg</option>`).join('');
     
     let locationInputHTML = '';
     if (userSettings.shotLocationTrackingEnabled) {
@@ -1350,6 +1374,21 @@ function editShot(index) {
              <button id="deleteShot" class="btn-danger">Delete</button>
         </div></div>`;
     elements.shotHistoryModal.innerHTML = editContent;
+    
+    const editMedicationEl = document.getElementById('editMedication');
+    const editDoseEl = document.getElementById('editDose');
+    
+    editMedicationEl.addEventListener('change', (e) => {
+        const selectedMed = e.target.value;
+        const doses = medicationDoses[selectedMed] || [];
+        editDoseEl.innerHTML = '';
+        doses.forEach(dose => {
+            const option = document.createElement('option');
+            option.value = dose;
+            option.textContent = `${dose}mg`;
+            editDoseEl.appendChild(option);
+        });
+    });
     const editDatePicker = flatpickr("#editDate", { dateFormat: flatpickrDateFormatMapping[userSettings.dateFormat], defaultDate: shotDate, altInput: true, altFormat: flatpickrDateFormatMapping[userSettings.dateFormat], allowInput: true });
     const editTimePicker = flatpickr("#editTime", { enableTime: true, noCalendar: true, dateFormat: flatpickrTimeFormatMapping[userSettings.timeFormat], defaultDate: shotDate, altInput: true, altFormat: flatpickrTimeFormatMapping[userSettings.timeFormat], time_24hr: userSettings.timeFormat === "24hr", allowInput: true });
     document.getElementById('saveEdit').addEventListener('click', () => {
