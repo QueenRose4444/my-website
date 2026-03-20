@@ -424,6 +424,19 @@ const parseBBCodeInput = (text) => {
 
     if (mainFiles.length === 0 && customGroups.length === 0) return null;
 
+    // Sort Files: Win > Linux > Mac (same order as raw import)
+    const platformSorter = (a, b) => {
+        const getOrder = (p) => {
+            if (p.startsWith('Win')) return 1;
+            if (p.startsWith('Linux')) return 2;
+            if (p.startsWith('Mac')) return 3;
+            return 4;
+        };
+        return getOrder(a.platform) - getOrder(b.platform);
+    };
+    mainFiles.sort(platformSorter);
+    customGroups.forEach(grp => grp.files.sort(platformSorter));
+
     const gameTitle = mainFiles.length > 0 ? mainFiles[0].gameTitle : (customGroups[0]?.files[0]?.gameTitle || 'Imported Game');
 
     return {
