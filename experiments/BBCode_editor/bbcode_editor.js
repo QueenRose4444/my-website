@@ -792,6 +792,19 @@ const renderOutput = () => {
     const activeGame = state.games[state.activeGameIndex];
     if (!activeGame) return;
 
+    // Sort files: Win > Linux > Mac before rendering
+    const platformSorter = (a, b) => {
+        const getOrder = (p) => {
+            if (p.startsWith('Win')) return 1;
+            if (p.startsWith('Linux')) return 2;
+            if (p.startsWith('Mac')) return 3;
+            return 4;
+        };
+        return getOrder(a.platform) - getOrder(b.platform);
+    };
+    activeGame.files.sort(platformSorter);
+    if (activeGame.customGroups) activeGame.customGroups.forEach(grp => grp.files.sort(platformSorter));
+
     let template = state.template;
 
     // Replace Top Level SHOW_VERSION_LABEL
