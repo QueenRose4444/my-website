@@ -495,7 +495,7 @@ async function loadAllGames(query = "", append = false) {
         const newGames = data.results.map(g => ({
             app_id: g.app_id, 
             name: g.name,
-            image: `https://cdn.cloudflare.steamstatic.com/steam/apps/${g.app_id}/header.jpg`,
+            image: g.header_image_url || `https://cdn.cloudflare.steamstatic.com/steam/apps/${g.app_id}/header.jpg`,
             is_catalog: true, 
             ccu: g.ccu 
         }));
