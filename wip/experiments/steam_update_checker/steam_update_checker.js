@@ -505,7 +505,7 @@ async function loadAllGames(query = "", append = false) {
             renderGames(gamesCache, false);
         } else {
             gamesCache = [...gamesCache, ...newGames];
-            renderGames(gamesCache, false);
+            renderGames(newGames, false);
         }
 
         if (newGames.length >= 50) loadMoreBtn.style.display = 'block';
@@ -659,7 +659,7 @@ function renderGames(games, isTrackedView) {
 
         card.innerHTML = `
             <div style="position:relative;" onclick="openGameModal('${game.app_id}')">
-                <img src="${game.image}" class="game-image" onerror="this.src='https://placehold.co/600x400?text=No+Image'">
+                <img src="${game.image}" class="game-image" data-appid="${game.app_id}" onerror="handleImgError(this)">
                 ${actionBtn}
             </div>
             <div class="game-info" onclick="openGameModal('${game.app_id}')">
@@ -993,7 +993,7 @@ async function renderModalInfo(appId, container) {
 
         container.innerHTML = `
             <div style="display:flex; gap:20px; flex-wrap:wrap;">
-                <img src="${info.header_image}" style="width:100%; border-radius:8px; margin-bottom:15px; max-height:200px; object-fit:cover;">
+                <img src="${info.header_image}" style="width:100%; border-radius:8px; margin-bottom:15px; max-height:250px; object-fit:contain; background:#1a1a1a;">
                 <div style="flex: 1; min-width: 250px;">
                     <h2 style="color:#4bc0c0; margin-bottom: 10px;">${info.name}</h2>
                     <p style="margin-bottom: 15px; font-size:0.9em; color:#ccc;">${info.short_description || "No description available."}</p>
@@ -1363,6 +1363,48 @@ window.loadMoreGames = loadMoreGames;
 window.switchSettingsTab = switchSettingsTab;
 window.saveInterfacePreferences = saveInterfacePreferences;
 window.regenerateToken = regenerateToken;
+
+/**
+ * Cascading image fallback for game cards.
+ * Tries: header.jpg -> capsule_616x353.jpg -> Steam Store API header_image -> placeholder
+ */
+async function handleImgError(img) {
+    const appId = img.dataset.appid;
+    if (!appId) {
+        img.onerror = null;
+        img.src = 'https://placehold.co/600x400?text=No+Image';
+        return;
+    }
+
+    // Stage 1: Try capsule image on CDN
+    if (!img.dataset.triedCapsule) {
+        img.dataset.triedCapsule = 'true';
+        img.src = `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/capsule_616x353.jpg`;
+        return;
+    }
+
+    // Stage 2: Fetch real header_image from Steam Store API
+    if (!img.dataset.triedApi) {
+        img.dataset.triedApi = 'true';
+        try {
+            const res = await fetch(`${CONFIG.API_BASE_URL}/games/info/${appId}`);
+            if (res.ok) {
+                const info = await res.json();
+                if (info.header_image) {
+                    img.src = info.header_image;
+                    return;
+                }
+            }
+        } catch(e) {
+            console.warn(`Failed to fetch image for app ${appId}`, e);
+        }
+    }
+
+    // Stage 3: Give up, use placeholder
+    img.onerror = null;
+    img.src = 'https://placehold.co/600x400?text=No+Image';
+}
+window.handleImgError = handleImgError;
 
 function showToast(msg, type) {
     const colors = {
