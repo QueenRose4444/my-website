@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arma3 · Discord Bot Settings</title>
+
+    <link rel="icon" type="image/png" href="/images/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/images/favicon.svg" />
+    <link rel="shortcut icon" href="/images/favicon.ico" />
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/app.css">
+    <link rel="stylesheet" href="css/arma.css">
+    <link rel="stylesheet" href="css/templates.css">
+    <link rel="canonical" href="https://rosestuffs.org/wip/experiments/Discord_bot_settings/" />
+</head>
+
+<body>
+    <!-- ============================== TOP BAR ============================== -->
+    <header class="top-bar">
+        <div class="top-bar-left">
+            <a class="brand" href="#" aria-label="Arma3 Discord Bot Settings">
+                <span class="brand-badge">A</span>
+                <span class="brand-text">
+                    <span class="brand-name">Arma3</span>
+                    <span class="brand-sub">Discord Bot Settings</span>
+                </span>
+            </a>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+                <a href="../../home/">Home</a>
+                <span class="crumb-sep">/</span>
+                <a href="../">Experiments</a>
+                <span class="crumb-sep">/</span>
+                <span class="crumb-current">Bot Settings</span>
+            </nav>
+        </div>
+
+        <div class="user-account">
+            <button id="loginBtn" class="btn btn-discord"><i class="fab fa-discord"></i> Login with Discord</button>
+            <div id="loggedInBox" class="user-box" hidden>
+                <img id="userAvatar" class="user-avatar" alt="">
+                <span id="userName" class="user-name">…</span>
+                <button id="logoutBtn" class="btn btn-ghost icon-btn" title="Log out" aria-label="Log out">
+                    <i class="fas fa-arrow-right-from-bracket"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ============================== APP ============================== -->
+    <div class="app-container">
+        <!-- ---------- SIDEBAR ---------- -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-pickers">
+                <div class="sidebar-section">
+                    <span class="sidebar-label">Bot</span>
+                    <div class="select-wrap">
+                        <select id="botPicker" class="picker"></select>
+                        <i class="fas fa-chevron-down select-caret"></i>
+                    </div>
+                </div>
+                <div class="sidebar-section">
+                    <span class="sidebar-label">Server</span>
+                    <div class="select-wrap">
+                        <select id="guildPicker" class="picker"></select>
+                        <i class="fas fa-chevron-down select-caret"></i>
+                    </div>
+                </div>
+            </div>
+
+            <nav class="sidebar-tabs" aria-label="Sections">
+                <div class="sidebar-group" data-group="arma">
+                    <button class="sidebar-group-header" type="button" aria-expanded="true">
+                        <i class="fas fa-chevron-down sidebar-group-chev"></i>
+                        <i class="fas fa-shield-halved"></i>
+                        <span>Arma 3 server</span>
+                    </button>
+                    <div class="sidebar-group-body">
+                        <button class="tab-btn active" data-tab="settings" data-target="settingsPanel">
+                            <i class="fas fa-sliders"></i> <span>Settings</span>
+                        </button>
+                        <button class="tab-btn" data-tab="status" data-target="statusPanel">
+                            <i class="fas fa-server"></i> <span>Server status</span>
+                        </button>
+                        <button class="tab-btn" data-tab="arma-management" data-target="armaManagementPanel">
+                            <i class="fas fa-toolbox"></i> <span>Arma Management</span>
+                        </button>
+                        <button class="tab-btn" data-tab="missions" data-target="missionsPanel">
+                            <i class="fas fa-flag"></i> <span>Missions</span>
+                        </button>
+                        <button class="tab-btn" data-tab="compose" data-target="composePanel">
+                            <i class="fas fa-feather-pointed"></i> <span>New mission</span>
+                        </button>
+                        <button class="tab-btn" data-tab="templates" data-target="templatesPanel">
+                            <i class="fas fa-palette"></i> <span>Templates</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="sidebar-group" data-group="discord">
+                    <button class="sidebar-group-header" type="button" aria-expanded="true">
+                        <i class="fas fa-chevron-down sidebar-group-chev"></i>
+                        <i class="fab fa-discord"></i>
+                        <span>Discord</span>
+                    </button>
+                    <div class="sidebar-group-body">
+                        <button class="tab-btn" data-tab="embeds" data-target="embedsPanel">
+                            <i class="fas fa-paper-plane"></i> <span>Embeds</span>
+                        </button>
+                        <button class="tab-btn" data-tab="roles" data-target="rolesPanel">
+                            <i class="fas fa-user-tag"></i> <span>Roles</span>
+                        </button>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <span class="version-tag">Web UI v0.2</span>
+            </div>
+        </aside>
+
+        <!-- ---------- MAIN ---------- -->
+        <main class="main-content" id="mainContent">
+            <!-- Login state -->
+            <div id="loginPanel" class="empty-panel state-panel" hidden>
+                <div class="state-art">
+                    <i class="fab fa-discord"></i>
+                </div>
+                <h2>Sign in to manage your bots</h2>
+                <p>Log in with Discord to see the servers you can administer.</p>
+                <button id="loginBtnLarge" class="btn btn-discord btn-lg">
+                    <i class="fab fa-discord"></i> Login with Discord
+                </button>
+            </div>
+
+            <!-- No guild state -->
+            <div id="emptyGuildPanel" class="empty-panel state-panel" hidden>
+                <div class="state-art muted-art">
+                    <i class="fas fa-server"></i>
+                </div>
+                <h2>No managed servers</h2>
+                <p>You're not an administrator of any server this bot serves. Ask the server's admin to grant
+                   you <strong>Manage&nbsp;Server</strong>.</p>
+            </div>
+
+            <!-- Booting state (logged in, context loading) -->
+            <div id="bootPanel" class="empty-panel state-panel" hidden>
+                <div class="spinner lg"></div>
+                <h2>Loading your servers…</h2>
+                <p>Fetching the bots and guilds you can manage.</p>
+            </div>
+
+            <!-- ====================== SETTINGS ====================== -->
+            <section id="settingsPanel" class="tab-panel panel-w-md" hidden>
+                <header class="panel-header">
+                    <div class="panel-title">
+                        <h1>Server settings</h1>
+                        <span id="settingsGuildName" class="panel-sub"></span>
+                    </div>
+                    <button id="settingsSaveBtn" class="btn btn-primary" disabled>
+                        <i class="fas fa-floppy-disk"></i> Save changes
+                    </button>
+                </header>
+
+                <div id="settingsBody" class="panel-body">
+                    <article class="card">
+                        <div class="card-head">
+                            <h3><i class="fas fa-bell card-ico"></i> Reminders</h3>
+                        </div>
+                        <div class="setting-row toggle-row">
+                            <div class="setting-label">
+                                <label for="defaultOptIn">Default opt-in</label>
+                                <small id="optInSub" class="muted"></small>
+                            </div>
+                            <label class="switch">
+                                <input id="defaultOptIn" type="checkbox">
+                                <span class="switch-track"></span>
+                            </label>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label">
+                                <label>Default reminder windows</label>
+                                <small class="muted">how long before a mission members are pinged</small>
+                            </div>
+                            <div class="chip-input" id="remindersChips" data-input="defaultReminders"></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label">
+                                <label for="defaultTimezone">Default timezone</label>
+                                <small class="muted">IANA name — used when parsing mission times</small>
+                            </div>
+                            <div class="select-wrap">
+                                <select id="defaultTimezone" class="picker"><option value="">(use local — Etc/GMT-8 fallback)</option></select>
+                                <i class="fas fa-chevron-down select-caret"></i>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="card">
+                        <div class="card-head">
+                            <h3><i class="fas fa-hashtag card-ico"></i> RSVP tally channel</h3>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label">
+                                <label for="rsvpChannel">Channel</label>
+                                <small class="muted">where the live RSVP table is posted</small>
+                            </div>
+                            <div class="select-wrap">
+                                <select id="rsvpChannel" class="picker"><option value="">(none)</option></select>
+                                <i class="fas fa-chevron-down select-caret"></i>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="card">
+                        <div class="card-head">
+                            <h3><i class="fas fa-user-plus card-ico"></i> Autorole on join</h3>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label">
+                                <label for="autoroleRole">Role</label>
+                                <small class="muted">automatically assigned to every new member who joins the guild</small>
+                            </div>
+                            <div class="select-wrap">
+                                <select id="autoroleRole" class="picker"><option value="">(disabled)</option></select>
+                                <i class="fas fa-chevron-down select-caret"></i>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="card">
+                        <div class="card-head">
+                            <h3><i class="fas fa-filter card-ico"></i> Mission detection rules</h3>
+                        </div>
+                        <p class="card-intro muted">When the bot sees a monitored-role mention with a Date&nbsp;+&nbsp;Time, it checks these rules in priority order. The first rule whose match text appears in the message wins, and the bot uses its template. With no rules set, every parseable mission uses the server's default template.</p>
+                        <div id="detectionRules" class="rules-table"></div>
+                        <button id="addRuleBtn" class="btn btn-secondary sm-btn"><i class="fas fa-plus"></i> Add rule</button>
+                    </article>
+
+                    <article class="card">
+                        <div class="card-head">
+                            <h3><i class="fas fa-cubes-stacked card-ico"></i> Modlist</h3>
+                        </div>
+                        <div class="setting-row stack-row">
+                            <div class="setting-label">
+                                <label>Modlist channels</label>
+                                <small class="muted">any <code>.html</code> attachment in these channels is auto-added to the modlist library and set active. Add multiple if your community posts modlists in different channels (announcements + #modlists, etc.).</small>
+                            </div>
+                            <div id="modlistChannelChips" class="role-chips"></div>
+                            <div class="picker-with-manual" style="margin-top:.4rem">
+                                <div class="select-wrap">
+                                    <select id="modlistChannelPicker" class="picker"><option value="">Add a channel…</option></select>
+                                    <i class="fas fa-chevron-down select-caret"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="setting-row stack-row">
+                            <div class="setting-label">
+                                <label>Current modlist</label>
+                                <small id="modlistUpdated" class="muted"></small>
+                            </div>
+                            <div id="modlistCurrent" class="modlist-current"></div>
+                        </div>
+                        <div class="modlist-actions">
+                            <button id="modlistEditBtn" class="btn btn-secondary sm-btn"><i class="fas fa-pen"></i> Edit manually</button>
+                            <button id="modlistClearBtn" class="btn btn-danger sm-btn"><i class="fas fa-eraser"></i> Clear</button>
+                        </div>
+                    </article>
+
+                    <article class="card">
+                        <div class="card-head">
+                            <h3><i class="fas fa-at card-ico"></i> Monitored roles</h3>
+                        </div>
+                        <p class="card-intro muted">Mentions of these roles trigger reminder DMs. Adding a role here is the same as <code>/missionsadmin role add</code>.</p>
+                        <div class="role-list" id="monitoredRoles"></div>
+                        <div class="add-role-row">
+                            <div class="select-wrap grow">
+                                <select id="addRolePicker" class="picker"><option value="">Select a role…</option></select>
+                                <i class="fas fa-chevron-down select-caret"></i>
+                            </div>
+                            <button id="addRoleBtn" class="btn btn-secondary"><i class="fas fa-plus"></i> Add role</button>
+                        </div>
+                    </article>
+                </div>
+            </section>
+
+            <!-- ====================== MISSIONS ====================== -->
+            <section id="missionsPanel" class="tab-panel panel-w-lg" hidden>
+                <header class="panel-header">
+                    <div class="panel-title">
+                        <h1>Missions</h1>
+                        <span id="missionsGuildName" class="panel-sub"></span>
+                    </div>
+                    <div class="seg-control" id="missionsSeg" role="tablist">
+                        <button class="seg-btn active" data-state="upcoming">Upcoming</button>
+                        <button class="seg-btn" data-state="past">Past</button>
+                        <button class="seg-btn" data-state="all">All</button>
+                    </div>
+                </header>
+                <div id="missionsList" class="mission-list"></div>
+            </section>
+
+            <!-- ====================== COMPOSE ====================== -->
+            <section id="composePanel" class="tab-panel panel-w-md" hidden>
+                <header class="panel-header">
+                    <div class="panel-title">
+                        <h1>New mission</h1>
+                        <span id="composeGuildName" class="panel-sub"></span>
+                    </div>
+                    <button id="composeSubmitBtn" class="btn btn-primary">
+                        <i class="fas fa-paper-plane"></i> Post mission
+                    </button>
+                </header>
+
+                <div class="panel-body">
+                    <article class="card">
+                        <div class="card-head"><h3><i class="fas fa-location-dot card-ico"></i> Where</h3></div>
+                        <div class="setting-row">
+                            <div class="setting-label">
+                                <label for="composeChannel">Channel</label>
+                                <small class="muted">where the announcement message is posted</small>
+                            </div>
+                            <div class="select-wrap">
+                                <select id="composeChannel" class="picker"></select>
+                                <i class="fas fa-chevron-down select-caret"></i>
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label">
+                                <label for="composeRolePicker">Mention these roles</label>
+                                <small class="muted">at least one — these members get reminders</small>
+                            </div>
+                            <div class="select-wrap">
+                                <select id="composeRolePicker" class="picker"></select>
+                                <i class="fas fa-chevron-down select-caret"></i>
+                            </div>
+                        </div>
+                        <div class="role-list inset-roles" id="composeRoleChips"></div>
+                    </article>
+
+                    <article class="card">
+                        <div class="card-head"><h3><i class="fas fa-clock card-ico"></i> When</h3></div>
+                        <div class="setting-row">
+                            <div class="setting-label">
+                                <label for="composeWhen">Date &amp; time</label>
+                                <small class="muted">in the timezone below</small>
+                            </div>
+                            <input id="composeWhen" type="datetime-local" class="text-input">
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label">
+                                <label for="composeTz">Timezone</label>
+                                <small class="muted">defaults to your browser timezone</small>
+                            </div>
+                            <input id="composeTz" list="tzList" class="text-input" autocomplete="off">
+                        </div>
+                    </article>
+
+                    <article class="card">
+                        <div class="card-head"><h3><i class="fas fa-align-left card-ico"></i> Content</h3></div>
+                        <div class="setting-row">
+                            <div class="setting-label"><label for="composeTitle">Title</label></div>
+                            <input id="composeTitle" maxlength="240" class="text-input" placeholder="Operation Iron Shield">
+                        </div>
+                        <div class="setting-row stack-row">
+                            <div class="setting-label">
+                                <label for="composeBody">Body</label>
+                                <small class="muted">Markdown — **bold**, *italic*, `code`, [text](url)</small>
+                            </div>
+                            <textarea id="composeBody" class="text-input" rows="9" placeholder="Full mission briefing here…"></textarea>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label">
+                                <label for="composeTemplate">Announcement template</label>
+                                <small class="muted">optional — uses bot default if none</small>
+                            </div>
+                            <div class="select-wrap">
+                                <select id="composeTemplate" class="picker"><option value="">(use bot default)</option></select>
+                                <i class="fas fa-chevron-down select-caret"></i>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="card">
+                        <div class="card-head"><h3><i class="fas fa-cubes-stacked card-ico"></i> Modlist <span class="optional-tag">optional</span></h3></div>
+                        <p class="card-intro muted">Attach a modlist for <strong>this mission</strong>. You can pick an existing one from the library, upload a launcher <code>.html</code>, or leave empty to use whatever's currently active.</p>
+                        <div class="setting-row">
+                            <div class="setting-label"><label for="composeModlistLibrary">From library</label>
+                                <small class="muted">pick a saved modlist</small></div>
+                            <div class="select-wrap">
+                                <select id="composeModlistLibrary" class="picker"><option value="">(none — use guild's active modlist)</option></select>
+                                <i class="fas fa-chevron-down select-caret"></i>
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label"><label for="composeModlistFile">Upload new</label>
+                                <small class="muted">pick a launcher-exported <code>.html</code>; auto-renamed when pushed to server</small></div>
+                            <input id="composeModlistFile" type="file" accept=".html,text/html" class="text-input">
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label"><label for="composeModlistNewName">Name for new modlist</label>
+                                <small class="muted">required when uploading; stored in library so it can be reused</small></div>
+                            <input id="composeModlistNewName" class="text-input" placeholder="Op Iron Shield mods">
+                        </div>
+                        <details class="advanced-section">
+                            <summary class="muted" style="cursor:pointer;font-size:0.85rem;margin:0.4rem 0">Advanced: pasted URL / text only</summary>
+                            <div class="setting-row">
+                                <div class="setting-label"><label for="composeModlistUrl">Preset URL</label>
+                                    <small class="muted">link to an .html preset (used as fallback if file/library not picked)</small></div>
+                                <input id="composeModlistUrl" class="text-input mono" placeholder="https://….html">
+                            </div>
+                            <div class="setting-row stack-row">
+                                <div class="setting-label"><label for="composeModlistText">Notes</label>
+                                    <small class="muted">plain-text mod list (no file/URL)</small></div>
+                                <textarea id="composeModlistText" class="text-input" rows="3" placeholder="CBA_A3, ACE3, ACRE2, …"></textarea>
+                            </div>
+                        </details>
+                    </article>
+                </div>
+            </section>
+
+            <!-- ====================== TEMPLATES ====================== -->
+            <section id="templatesPanel" class="tab-panel panel-w-xl" hidden>
+                <header class="panel-header">
+                    <div class="panel-title">
+                        <h1>Templates</h1>
+                        <span id="templatesGuildName" class="panel-sub"></span>
+                    </div>
+                    <div class="seg-control kind-seg" id="templatesSeg">
+                        <button class="seg-btn active" data-kind="mission_dm">Mission DM</button>
+                        <button class="seg-btn" data-kind="reminder_dm">Reminder DM</button>
+                        <button class="seg-btn" data-kind="rsvp_summary">RSVP summary</button>
+                        <button class="seg-btn" data-kind="announcement">Announcement</button>
+                        <button class="seg-btn" data-kind="freeform">Freeform</button>
+                    </div>
+                </header>
+
+                <div class="templates-grid">
+                    <!-- list column -->
+                    <aside class="templates-list-wrap">
+                        <button id="newTemplateBtn" class="btn btn-secondary new-tpl-btn">
+                            <i class="fas fa-plus"></i> New template
+                        </button>
+                        <div id="templatesList" class="templates-list"></div>
+                    </aside>
+
+                    <!-- editor column -->
+                    <section class="editor-pane" id="templateEditor" hidden>
+                        <header class="editor-header">
+                            <div class="editor-name-wrap">
+                                <label class="micro-label" for="tplName">Template name</label>
+                                <input id="tplName" maxlength="80" class="text-input" placeholder="Template name">
+                            </div>
+                            <label class="default-toggle">
+                                <input type="checkbox" id="tplIsDefault">
+                                <span class="switch-track sm"></span>
+                                <span class="default-toggle-text">Guild default</span>
+                            </label>
+                        </header>
+
+                        <div class="editor-scroll">
+                            <details open><summary><i class="fas fa-chevron-right disc"></i> Header</summary>
+                                <div class="details-body">
+                                    <div class="ed-row"><label>Color</label>
+                                        <div class="color-input">
+                                            <input id="tplColorPicker" type="color" value="#5865f2">
+                                            <input id="tplColor" class="text-input mono" placeholder="#5865f2">
+                                        </div>
+                                    </div>
+                                    <div class="ed-row"><label for="tplAuthorName">Author name</label>
+                                        <input id="tplAuthorName" class="text-input" data-token-target></div>
+                                    <div class="ed-row"><label for="tplAuthorIcon">Author icon URL</label>
+                                        <input id="tplAuthorIcon" class="text-input mono"></div>
+                                </div>
+                            </details>
+
+                            <details open><summary><i class="fas fa-chevron-right disc"></i> Body</summary>
+                                <div class="details-body">
+                                    <div class="ed-row"><label for="tplTitle">Title</label>
+                                        <input id="tplTitle" class="text-input" data-token-target></div>
+                                    <div class="ed-row"><label for="tplUrl">Title link URL</label>
+                                        <input id="tplUrl" class="text-input mono"></div>
+                                    <div class="ed-row stack"><label for="tplDescription">Description</label>
+                                        <textarea id="tplDescription" class="text-input" rows="4" data-token-target></textarea></div>
+                                    <div class="ed-row stack"><label for="tplContent">DM plain-text content <small class="muted">sent above the embed</small></label>
+                                        <input id="tplContent" class="text-input" data-token-target></div>
+                                </div>
+                            </details>
+
+                            <details open><summary><i class="fas fa-chevron-right disc"></i> Fields</summary>
+                                <div class="details-body">
+                                    <div id="tplFields" class="fields-editor"></div>
+                                    <button id="tplAddField" type="button" class="btn btn-secondary sm-btn"><i class="fas fa-plus"></i> Add field</button>
+                                </div>
+                            </details>
+
+                            <details><summary><i class="fas fa-chevron-right disc"></i> Footer &amp; media</summary>
+                                <div class="details-body">
+                                    <div class="ed-row"><label for="tplFooterText">Footer text</label>
+                                        <input id="tplFooterText" class="text-input" data-token-target></div>
+                                    <div class="ed-row"><label for="tplFooterIcon">Footer icon URL</label>
+                                        <input id="tplFooterIcon" class="text-input mono"></div>
+                                    <div class="ed-row"><label for="tplThumb">Thumbnail URL</label>
+                                        <input id="tplThumb" class="text-input mono"></div>
+                                    <div class="ed-row"><label for="tplImage">Image URL</label>
+                                        <input id="tplImage" class="text-input mono"></div>
+                                    <div class="ed-row"><label for="tplTimestamp">Timestamp</label>
+                                        <div class="select-wrap">
+                                            <select id="tplTimestamp" class="picker">
+                                                <option value="none">None</option>
+                                                <option value="message">Message time</option>
+                                                <option value="start">Mission start</option>
+                                            </select>
+                                            <i class="fas fa-chevron-down select-caret"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </details>
+
+                            <details><summary><i class="fas fa-chevron-right disc"></i> Role bindings</summary>
+                                <div class="details-body" id="tplBindingsBody">
+                                    <p class="card-intro muted">Bindings override the guild default for these specific roles when the bot picks a template.</p>
+                                    <div id="tplRoleBindings" class="role-list"></div>
+                                    <div class="add-role-row">
+                                        <div class="select-wrap grow">
+                                            <select id="tplRoleBindPicker" class="picker"><option value="">Select a role…</option></select>
+                                            <i class="fas fa-chevron-down select-caret"></i>
+                                        </div>
+                                        <button id="tplRoleBindBtn" class="btn btn-secondary">Bind</button>
+                                    </div>
+                                    <p id="tplBindLocked" class="bind-locked" hidden><i class="fas fa-lock"></i> Save the template first to enable role bindings.</p>
+                                </div>
+                            </details>
+
+                            <details><summary><i class="fas fa-chevron-right disc"></i> Placeholder cheat sheet</summary>
+                                <div class="details-body">
+                                    <p class="card-intro muted">Click a token to insert it into the last focused field.</p>
+                                    <div id="tplPlaceholders" class="token-grid"></div>
+                                </div>
+                            </details>
+                        </div>
+
+                        <footer class="editor-footer">
+                            <button id="tplDeleteBtn" type="button" class="btn btn-danger" hidden><i class="fas fa-trash"></i> Delete</button>
+                            <span class="spacer"></span>
+                            <button id="tplDuplicateBtn" type="button" class="btn btn-ghost"><i class="fas fa-clone"></i> Duplicate</button>
+                            <button id="tplSaveBtn" type="button" class="btn btn-primary"><i class="fas fa-floppy-disk"></i> Save template</button>
+                        </footer>
+                    </section>
+
+                    <!-- editor empty state -->
+                    <div class="editor-empty" id="editorEmpty">
+                        <div class="state-art muted-art"><i class="fas fa-wand-magic-sparkles"></i></div>
+                        <h3>Pick a template to edit</h3>
+                        <p>Select a template on the left, or create a new one to start designing an embed.</p>
+                    </div>
+
+                    <!-- preview column -->
+                    <aside class="preview-pane" id="previewPane">
+                        <header class="preview-header">
+                            <span class="preview-title"><i class="fab fa-discord"></i> Live preview</span>
+                            <div class="preview-controls">
+                                <div class="select-wrap mini">
+                                    <select id="previewContext" class="picker mini" title="Sample data context"></select>
+                                    <i class="fas fa-chevron-down select-caret"></i>
+                                </div>
+                                <div class="seg-control mini" id="previewFraming" title="Message framing">
+                                    <button class="seg-btn active" data-framing="dm">DM</button>
+                                    <button class="seg-btn" data-framing="channel">Channel</button>
+                                </div>
+                            </div>
+                        </header>
+                        <div id="tplPreview" class="dc-preview-host"></div>
+                    </aside>
+                </div>
+            </section>
+
+            <!-- ====================== EMBEDS (Mee6-style sender) ====================== -->
+            <section id="embedsPanel" class="tab-panel panel-w-xl" hidden>
+                <!-- LIST view (default) -->
+                <div id="embedsListView">
+                    <header class="panel-header">
+                        <div class="panel-title">
+                            <h2>Embeds</h2>
+                            <span id="embedsGuildName" class="panel-sub"></span>
+                        </div>
+                        <div class="panel-actions">
+                            <button id="embedsNewBtn" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> New embed
+                            </button>
+                        </div>
+                    </header>
+                    <div class="embeds-toolbar">
+                        <div class="embeds-filters">
+                            <label class="embeds-filter-label">Channel</label>
+                            <select id="embedsChannelFilter" class="select"><option value="">All channels</option></select>
+                        </div>
+                        <div class="seg-control embeds-view-seg" id="embedsViewSeg">
+                            <button class="seg-btn active" data-view="preview" title="Preview each embed"><i class="fas fa-image"></i> Preview</button>
+                            <button class="seg-btn" data-view="compact" title="Compact list"><i class="fas fa-bars-staggered"></i> Compact</button>
+                            <button class="seg-btn" data-view="titles" title="Titles only"><i class="fas fa-list"></i> Titles</button>
+                        </div>
+                    </div>
+                    <div id="embedsList">Loading…</div>
+                </div>
+
+                <!-- EDITOR view (shown when composing or editing) -->
+                <div id="embedsEditorView" hidden>
+                    <header class="panel-header embeds-editor-header">
+                        <div class="panel-title">
+                            <button id="embedsBackBtn" class="btn btn-ghost"><i class="fas fa-arrow-left"></i> Back to embeds</button>
+                            <h2 id="embedsEditorTitle">Compose new embed</h2>
+                        </div>
+                        <div class="panel-actions">
+                            <button id="embedsCancelBtn" class="btn btn-ghost">Discard</button>
+                            <button id="embedsSaveBtn" class="btn btn-primary">
+                                <i class="fas fa-paper-plane"></i> <span id="embedsSaveLabel">Send</span>
+                            </button>
+                        </div>
+                    </header>
+                    <div id="embedsEditorBody" class="embed-editor-split"></div>
+                </div>
+            </section>
+
+            <!-- ====================== ROLES (Discord role admin) ====================== -->
+            <section id="rolesPanel" class="tab-panel panel-w-md" hidden>
+                <header class="panel-header">
+                    <div class="panel-title">
+                        <h2>Roles</h2>
+                        <span id="rolesGuildName" class="panel-sub"></span>
+                    </div>
+                    <div class="panel-actions">
+                        <button id="rolesNewBtn" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> New role
+                        </button>
+                        <button id="rolesRefreshBtn" class="btn btn-ghost">
+                            <i class="fas fa-rotate-right"></i> Refresh
+                        </button>
+                    </div>
+                </header>
+                <div id="rolesPermBanner" class="muted" hidden style="padding:.75rem 1rem;border:1px solid var(--warn);background:var(--warn-soft);border-radius:.5rem;margin-bottom:1rem">
+                    <i class="fas fa-triangle-exclamation"></i> <span id="rolesPermMessage">Bot is missing required permissions.</span>
+                </div>
+                <div class="card">
+                    <div class="card-head">
+                        <h3><i class="fas fa-list card-ico"></i> All roles</h3>
+                        <small class="muted">Drag to reorder. Roles above the bot's highest role are managed by Discord.</small>
+                    </div>
+                    <div id="rolesList" class="muted" style="padding:1rem">Loading…</div>
+                </div>
+                <div class="card collapsible" id="reactionRolesCard" style="margin-top:1rem">
+                    <div class="card-head" id="reactionRolesToggle" style="cursor:pointer">
+                        <h3><i class="fas fa-face-grin-wink card-ico"></i> Reaction roles <i class="fas fa-chevron-right disc-caret"></i></h3>
+                        <small class="muted">Pair an embed with emoji↔role mappings — users react to get the role.</small>
+                    </div>
+                    <div id="reactionRolesBody" hidden>
+                        <div style="padding:.5rem 0">
+                            <button id="reactionRolesNewBtn" class="btn btn-primary"><i class="fas fa-plus"></i> New reaction-role group</button>
+                        </div>
+                        <div id="reactionRolesList" class="muted" style="padding:.5rem">Loading…</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ====================== ARMA MANAGEMENT (v2) ====================== -->
+            <section id="armaManagementPanel" class="tab-panel panel-w-md" hidden>
+                <header class="panel-header">
+                    <div class="panel-title">
+                        <h1>Arma Management</h1>
+                        <span id="armaManagementGuildName" class="panel-sub"></span>
+                    </div>
+                </header>
+
+                <!-- Phase status: 2a (modlists) + 2b (loadouts + apply) are live. Events + pause/resume are next. -->
+                <div class="demo-bar" id="armaPreviewBanner" hidden>
+                    <span class="demo-label"><i class="fas fa-flask"></i> Demo scenarios (no live event yet — Phase 2c)</span>
+                    <div class="seg-control mini" id="armaScenarioSeg">
+                        <button class="seg-btn active" data-scenario="none">No event</button>
+                        <button class="seg-btn" data-scenario="live">Live event</button>
+                        <button class="seg-btn" data-scenario="drift">Drift</button>
+                    </div>
+                </div>
+
+                <!-- 1. active state strip -->
+                <section id="armaStateStrip" class="state-strip"></section>
+
+                <!-- 2.5 auto-detected loadout drafts banner (v2e) -->
+                <div id="loadoutDraftsBanner" hidden></div>
+
+                <!-- 2. loadout library -->
+                <section class="card" id="loadoutGridCard">
+                    <div class="card-head">
+                        <h3><i class="fas fa-list-check card-ico"></i> Loadouts</h3>
+                        <div style="display:flex;gap:0.85rem;align-items:center">
+                            <label class="opt-toggle" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-dim);cursor:pointer">
+                                <input type="checkbox" id="showArchivedToggle"> Show archived
+                            </label>
+                            <button id="newLoadoutBtn" class="btn btn-primary sm-btn"><i class="fas fa-plus"></i> New loadout</button>
+                        </div>
+                    </div>
+                    <div id="loadoutGrid" class="loadout-grid"></div>
+                </section>
+
+                <!-- 2b. mission PBOs (collapsible) — manage what's installed in /mpmissions -->
+                <article class="card collapsible" id="missionsLibraryCard">
+                    <div class="card-head" id="missionsLibraryToggle" style="cursor:pointer">
+                        <h3><i class="fas fa-flag-checkered card-ico"></i> Installed missions
+                            <i class="fas fa-chevron-right disc-caret"></i></h3>
+                        <small class="muted" style="font-weight:normal">.pbo files in <code>/mpmissions</code> on the server</small>
+                    </div>
+                    <div id="missionsLibraryBody" hidden>
+                        <div class="lib-toolbar">
+                            <button id="uploadMissionPboBtn" class="btn btn-secondary sm-btn"><i class="fas fa-cloud-arrow-up"></i> Upload mission PBO</button>
+                            <button id="refreshMissionsListBtn" class="btn btn-ghost sm-btn"><i class="fas fa-rotate-right"></i> Refresh</button>
+                            <span class="muted" style="font-size:0.82rem">Uploaded PBOs become pickable when creating a loadout.</span>
+                        </div>
+                        <table class="data-table">
+                            <thead>
+                                <tr><th>Filename</th><th>Size</th><th>Modified</th><th>Used by loadouts</th><th></th></tr>
+                            </thead>
+                            <tbody id="missionsTbody"></tbody>
+                        </table>
+                    </div>
+                </article>
+
+                <!-- 3. modlist library (collapsible) -->
+                <article class="card collapsible" id="modlistLibraryCard">
+                    <div class="card-head" id="modlistLibraryToggle" style="cursor:pointer">
+                        <h3><i class="fas fa-cubes-stacked card-ico"></i> Modlist library
+                            <i class="fas fa-chevron-right disc-caret"></i></h3>
+                        <small class="muted" style="font-weight:normal">launcher HTML, kept &amp; reusable</small>
+                    </div>
+                    <div id="modlistLibraryBody" hidden>
+                        <div class="lib-toolbar">
+                            <button id="newModlistBtn" class="btn btn-secondary sm-btn"><i class="fas fa-plus"></i> New modlist</button>
+                            <span class="muted" style="font-size:0.82rem">Posting in the modlist channel also adds an entry here and sets it active.</span>
+                        </div>
+                        <table class="data-table">
+                            <thead>
+                                <tr><th>Name</th><th>Size</th><th>Source</th><th>Updated</th><th style="text-align:center">Active</th><th></th></tr>
+                            </thead>
+                            <tbody id="modlistTbody"></tbody>
+                        </table>
+                    </div>
+                </article>
+
+                <!-- 5. access tokens (collapsible) — admin-generated tokens for the standalone /arma page -->
+                <article class="card collapsible" id="armaTokensCard">
+                    <div class="card-head" id="armaTokensToggle" style="cursor:pointer">
+                        <h3><i class="fas fa-key card-ico"></i> Access tokens
+                            <i class="fas fa-chevron-right disc-caret"></i></h3>
+                        <small class="muted" style="font-weight:normal">give external admins server access without Discord OAuth</small>
+                    </div>
+                    <div id="armaTokensBody" hidden>
+                        <p class="muted" style="margin:0 0 .6rem 0">
+                            Generate a token here, hand it to someone, and they log into the standalone Arma Management page at
+                            <a href="arma/" target="_blank"><code>./arma/</code></a> with just the token — no Discord account needed.
+                            Each token is scoped to <strong>one Arma server</strong>; revoke any time.
+                        </p>
+                        <div class="lib-toolbar">
+                            <button id="newArmaTokenBtn" class="btn btn-primary sm-btn"><i class="fas fa-plus"></i> Generate new token</button>
+                            <button id="refreshArmaTokensBtn" class="btn btn-ghost sm-btn"><i class="fas fa-rotate-right"></i> Refresh</button>
+                        </div>
+                        <table class="data-table">
+                            <thead>
+                                <tr><th>Name</th><th>Server</th><th>Created</th><th>Last used</th><th>Status</th><th></th></tr>
+                            </thead>
+                            <tbody id="armaTokensTbody"></tbody>
+                        </table>
+                    </div>
+                </article>
+
+                <!-- 4. event timeline (collapsible) -->
+                <article class="card collapsible" id="eventTimelineCard">
+                    <div class="card-head" id="eventTimelineToggle" style="cursor:pointer">
+                        <h3><i class="fas fa-clock-rotate-left card-ico"></i> Event timeline
+                            <i class="fas fa-chevron-right disc-caret"></i></h3>
+                        <small class="muted" style="font-weight:normal">swaps · drift</small>
+                    </div>
+                    <div id="eventTimelineBody" hidden>
+                        <div id="eventTimeline" class="timeline"></div>
+                    </div>
+                </article>
+            </section>
+
+            <!-- ====================== SERVER STATUS ====================== -->
+            <section id="statusPanel" class="tab-panel panel-w-md" hidden>
+                <header class="panel-header">
+                    <div class="panel-title">
+                        <h1>Server status</h1>
+                        <span id="statusGuildName" class="panel-sub"></span>
+                    </div>
+                    <button id="statusSaveBtn" class="btn btn-primary"><i class="fas fa-floppy-disk"></i> Save changes</button>
+                </header>
+
+                <!-- empty state -->
+                <div id="statusEmpty" class="card status-empty" hidden>
+                    <div class="state-art muted-art"><i class="fas fa-server"></i></div>
+                    <h3>No server configured yet</h3>
+                    <p>Connect an Arma 3 server hosted on Pterodactyl to track its live state in Discord.</p>
+                    <button id="statusAddBtn" class="btn btn-primary"><i class="fas fa-plus"></i> Add server</button>
+                </div>
+
+                <div id="statusBody" class="panel-body" hidden>
+                    <article class="card">
+                        <div class="card-head"><h3><i class="fas fa-plug card-ico"></i> Pterodactyl</h3></div>
+                        <div class="setting-row">
+                            <div class="setting-label"><label for="ptPanelUrl">Panel URL</label>
+                                <small class="muted">base URL of your Pterodactyl panel</small></div>
+                            <input id="ptPanelUrl" class="text-input mono" placeholder="http://192.168.0.250:8447">
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label"><label for="ptClientKey">Client API key</label>
+                                <small class="muted">a <code>ptlc_</code> token from Account → API Credentials</small></div>
+                            <div class="secret-input">
+                                <input id="ptClientKey" type="password" class="text-input mono" placeholder="ptlc_…" autocomplete="off">
+                                <button type="button" id="ptKeyToggle" class="btn btn-ghost icon-btn" title="Show/hide"><i class="fas fa-eye"></i></button>
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label"><label for="ptServerId">Server identifier</label>
+                                <small class="muted">8-char ID from the panel URL <code>/server/&lt;id&gt;</code></small></div>
+                            <input id="ptServerId" class="text-input mono" placeholder="5e01be65">
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label"><label for="ptDisplayName">Display name</label>
+                                <small class="muted">fallback name if Pterodactyl doesn't report one</small></div>
+                            <input id="ptDisplayName" class="text-input" placeholder="Sandbox">
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label"><label for="ptPollInterval">Poll interval (s)</label>
+                                <small class="muted">how often the bot checks — clamped to 15s min</small></div>
+                            <input id="ptPollInterval" type="number" min="15" step="5" value="60" class="text-input">
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label"><label>Connection</label>
+                                <small class="muted">save, then read back the latest poll</small></div>
+                            <div class="test-conn-wrap">
+                                <button id="statusTestBtn" type="button" class="btn btn-secondary"><i class="fas fa-bolt"></i> Test connection</button>
+                                <span id="statusTestResult" class="test-result"></span>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="card">
+                        <div class="card-head"><h3><i class="fas fa-magnifying-glass-chart card-ico"></i> Live game query (A2S)</h3></div>
+                        <p class="muted" style="margin:0 0 0.75rem 0">
+                            Steam A2S queries hit the Arma server directly (UDP) for live <strong>player count</strong>, <strong>current mission</strong> and <strong>map</strong> — info Pterodactyl can't expose. Default query port is the game port + 1 (Arma default <code>2303</code>).
+                        </p>
+                        <div class="setting-row toggle-row">
+                            <div class="setting-label">
+                                <label for="a2sEnabled">Enable A2S queries</label>
+                                <small class="muted">on every poll, alongside Pterodactyl state</small>
+                            </div>
+                            <label class="switch">
+                                <input id="a2sEnabled" type="checkbox">
+                                <span class="switch-track"></span>
+                            </label>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label"><label for="a2sHost">A2S host</label>
+                                <small class="muted">IP or hostname the bot can reach (LAN IP if same network)</small></div>
+                            <input id="a2sHost" class="text-input mono" placeholder="192.168.0.250">
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label"><label for="a2sPort">A2S port</label>
+                                <small class="muted">game port + 1; default <code>2303</code></small></div>
+                            <input id="a2sPort" type="number" min="1" max="65535" value="2303" class="text-input">
+                        </div>
+                    </article>
+
+                    <article class="card">
+                        <div class="card-head"><h3><i class="fas fa-hashtag card-ico"></i> Discord channels</h3></div>
+                        <div class="setting-row">
+                            <div class="setting-label"><label for="statusSummaryChannel">Summary channel / category</label>
+                                <small class="muted">channel or category whose <strong>name</strong> updates with state — e.g. <code>🟢 Online · 4/64</code>. Pick from list, or paste a channel/category ID below if the picker is empty.</small></div>
+                            <div class="picker-with-manual">
+                                <div class="select-wrap"><select id="statusSummaryChannel" class="picker"><option value="">(none)</option></select><i class="fas fa-chevron-down select-caret"></i></div>
+                                <input id="statusSummaryChannelManual" type="text" class="text-input mono manual-id-input" placeholder="…or paste channel/category ID" inputmode="numeric">
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label"><label for="statusNameTemplate">Name template</label>
+                                <small class="muted">click a token to insert it at the cursor — <em>last 4 require A2S.</em>
+                                    Discord rate-limits channel renames to <strong>2 per 10 minutes</strong>, so the bot only renames at most every ~6 min — fast-changing tokens like <code>{player_count}</code> lag behind in-game by up to that long.</small></div>
+                            <div class="token-chip-row" id="statusTemplateTokens">
+                                <button type="button" class="token-chip" data-token="{state_emoji}" title="🟢 / 🔴 / etc."><code>{state_emoji}</code></button>
+                                <button type="button" class="token-chip" data-token="{state}" title="online / offline / installing / loading"><code>{state}</code></button>
+                                <button type="button" class="token-chip" data-token="{state_label}" title="Online / Offline / Installing / Loading"><code>{state_label}</code></button>
+                                <button type="button" class="token-chip" data-token="{server_name}"><code>{server_name}</code></button>
+                                <button type="button" class="token-chip a2s" data-token="{player_count}"><code>{player_count}</code></button>
+                                <button type="button" class="token-chip a2s" data-token="{player_max}"><code>{player_max}</code></button>
+                                <button type="button" class="token-chip a2s" data-token="{current_mission}"><code>{current_mission}</code></button>
+                                <button type="button" class="token-chip a2s" data-token="{map_name}"><code>{map_name}</code></button>
+                            </div>
+                            <input id="statusNameTemplate" class="text-input mono" placeholder="{state_emoji} {state} {player_count}/{player_max}">
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label"><label>Preview</label>
+                                <small class="muted">rendered against the last poll</small></div>
+                            <div class="channel-name-preview"><i class="fas fa-hashtag"></i><span id="statusNamePreview">—</span></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label"><label for="statusDetailChannel">Detail channel</label>
+                                <small class="muted">a rich embed lives here, edited every poll — full state, CPU/RAM/disk, uptime. Pick from list, or paste a channel ID.</small></div>
+                            <div class="picker-with-manual">
+                                <div class="select-wrap"><select id="statusDetailChannel" class="picker"><option value="">(none)</option></select><i class="fas fa-chevron-down select-caret"></i></div>
+                                <input id="statusDetailChannelManual" type="text" class="text-input mono manual-id-input" placeholder="…or paste channel ID" inputmode="numeric">
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="card collapsible" id="statusImportExportCard">
+                        <div class="card-head" id="statusImportExportToggle" style="cursor:pointer">
+                            <h3><i class="fas fa-arrow-right-arrow-left card-ico"></i> Import / Export <small class="muted" style="font-weight:normal">— click to expand</small></h3>
+                        </div>
+                        <div id="statusImportExportBody" hidden>
+                            <p class="muted" style="margin:0 0 0.5rem 0">Copy this JSON to back up your server config, or paste a JSON snippet to fill the form (you still need to click <strong>Save changes</strong> after).</p>
+                            <textarea id="statusJsonBlob" class="text-input mono" rows="8" placeholder='{ "ptero_panel_url": "https://...", "ptero_client_key": "ptlc_...", "ptero_server_identifier": "...", "summary_channel_id": null, "detail_channel_id": null, "summary_channel_template": "{state_emoji} {server_name}", "display_name": "Arma3", "poll_interval_sec": 60 }'></textarea>
+                            <div style="display:flex;gap:0.5rem;margin-top:0.5rem;flex-wrap:wrap">
+                                <button id="statusJsonExportBtn" type="button" class="btn btn-secondary sm-btn"><i class="fas fa-download"></i> Fill from current</button>
+                                <button id="statusJsonImportBtn" type="button" class="btn btn-secondary sm-btn"><i class="fas fa-upload"></i> Apply to form</button>
+                                <button id="statusJsonCopyBtn" type="button" class="btn btn-ghost sm-btn"><i class="fas fa-copy"></i> Copy to clipboard</button>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="card">
+                        <div class="card-head">
+                            <h3><i class="fas fa-wave-square card-ico"></i> Current state</h3>
+                            <span id="statusPolledAt" class="muted"></span>
+                        </div>
+                        <div id="statusState" class="status-state"></div>
+                        <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                            <button id="statusRefreshBtn" type="button" class="btn btn-secondary sm-btn"><i class="fas fa-rotate-right"></i> Refresh now</button>
+                            <button id="statusRestartBtn" type="button" class="btn btn-ghost sm-btn" title="Restart the Arma server"><i class="fas fa-power-off"></i> Restart server</button>
+                        </div>
+                    </article>
+
+                    <article class="card">
+                        <div class="card-head">
+                            <h3><i class="fas fa-flag-checkered card-ico"></i> Upload mission</h3>
+                        </div>
+                        <p class="muted" style="margin:0 0 0.75rem 0">
+                            Upload a <code>.pbo</code> to the Arma server's <code>mpmissions/</code> folder. Filename must end <code>.pbo</code> and follow the
+                            <code>Name.MapName.pbo</code> pattern (e.g. <code>OpIronShield.Altis.pbo</code>) so the server knows which terrain to load.
+                            Restart so the server indexes it, then switch in-game with the <code>#missions</code> admin chat command.
+                        </p>
+                        <div class="setting-row">
+                            <div class="setting-label"><label for="missionPboFile">Mission PBO</label>
+                                <small class="muted">max 50 MB</small></div>
+                            <input id="missionPboFile" type="file" accept=".pbo" class="text-input">
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-label"><label for="missionPboName">Filename override</label>
+                                <small class="muted">leave blank to use the uploaded file's name</small></div>
+                            <input id="missionPboName" type="text" class="text-input mono" placeholder="OpIronShield.Altis.pbo">
+                        </div>
+                        <div class="setting-row toggle-row">
+                            <div class="setting-label">
+                                <label for="missionPboRestart">Restart server after upload</label>
+                                <small class="muted">required for the server to see the new mission in its admin list</small>
+                            </div>
+                            <label class="switch">
+                                <input id="missionPboRestart" type="checkbox" checked>
+                                <span class="switch-track"></span>
+                            </label>
+                        </div>
+                        <button id="missionPboUploadBtn" type="button" class="btn btn-primary sm-btn"><i class="fas fa-cloud-arrow-up"></i> Upload mission</button>
+                        <div id="missionPboResult" class="muted" style="margin-top:0.5rem"></div>
+                    </article>
+
+                    <article class="card">
+                        <div class="card-head">
+                            <h3><i class="fas fa-list-check card-ico"></i> Installed missions</h3>
+                            <button id="missionsInstalledRefreshBtn" type="button" class="btn btn-ghost sm-btn"><i class="fas fa-rotate-right"></i> Refresh</button>
+                        </div>
+                        <p class="muted" style="margin:0 0 0.5rem 0">
+                            Files in the server's <code>/mpmissions</code> folder. Sandbox stays the auto-boot default — “Set as boot default” only changes which mission loads on next server start. Admins normally switch missions live via <code>#missions</code>.
+                        </p>
+                        <div id="missionsInstalledList" class="missions-installed-list"></div>
+                    </article>
+
+                    <article class="card">
+                        <div class="card-head"><h3><i class="fas fa-cubes-stacked card-ico"></i> Modlist</h3></div>
+                        <p class="muted" style="margin:0 0 0.75rem 0">
+                            The server's <code>/modlist.html</code> is what players drag into the Arma launcher to match the server. Either push whatever's currently captured by the modlist Discord channel, or upload a launcher export from your machine directly (any filename — auto-renamed to <code>modlist.html</code> on the server).
+                        </p>
+
+                        <div class="setting-row">
+                            <div class="setting-label"><label>Push captured modlist</label>
+                                <small class="muted">uses the HTML the bot last saved from the configured modlist channel</small></div>
+                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
+                                <button id="pushModlistBtn" type="button" class="btn btn-primary sm-btn"><i class="fas fa-paper-plane"></i> Push captured modlist</button>
+                                <span id="pushModlistResult" class="muted"></span>
+                            </div>
+                        </div>
+
+                        <div class="setting-row">
+                            <div class="setting-label"><label for="uploadModlistFile">Upload modlist file</label>
+                                <small class="muted">pick a launcher-exported <code>.html</code> from your PC; it's auto-renamed to <code>modlist.html</code> when written to the server</small></div>
+                            <input id="uploadModlistFile" type="file" accept=".html,text/html" class="text-input">
+                        </div>
+                        <div class="setting-row toggle-row">
+                            <div class="setting-label">
+                                <label for="uploadModlistSaveAsCurrent">Also save as guild's active modlist</label>
+                                <small class="muted">treats this upload the same as if posted in the bot's modlist channel — overwrites the captured text</small>
+                            </div>
+                            <label class="switch">
+                                <input id="uploadModlistSaveAsCurrent" type="checkbox">
+                                <span class="switch-track"></span>
+                            </label>
+                        </div>
+                        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
+                            <button id="uploadModlistBtn" type="button" class="btn btn-primary sm-btn"><i class="fas fa-cloud-arrow-up"></i> Upload &amp; push to server</button>
+                            <span id="uploadModlistResult" class="muted"></span>
+                        </div>
+                    </article>
+
+                    <div class="status-footer-row">
+                        <label class="status-enabled-toggle">
+                            <input id="statusEnabled" type="checkbox">
+                            <span class="switch-track"></span>
+                            <span class="status-enabled-text">Monitoring enabled</span>
+                        </label>
+                        <span class="spacer"></span>
+                        <button id="statusDeleteBtn" type="button" class="btn btn-danger"><i class="fas fa-trash"></i> Delete server</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ============================== MISSION DRAWER ============================== -->
+    <dialog id="missionDrawer" class="drawer">
+        <div class="drawer-inner">
+            <header class="drawer-header">
+                <h3 id="drawerTitle">Mission</h3>
+                <button id="drawerClose" class="btn btn-ghost icon-btn" aria-label="Close">
+                    <i class="fas fa-xmark"></i>
+                </button>
+            </header>
+            <div id="drawerBody" class="drawer-body"></div>
+            <footer class="drawer-footer">
+                <button id="drawerCancel" type="button" class="btn btn-danger"><i class="fas fa-ban"></i> Cancel mission</button>
+                <span class="spacer"></span>
+                <button id="drawerRemind" type="button" class="btn btn-ghost" title="Re-fire reminder DMs for this mission now"><i class="fas fa-bell"></i> Re-fire reminders</button>
+                <button id="drawerReschedule" type="button" class="btn btn-secondary"><i class="fas fa-calendar-day"></i> Reschedule…</button>
+                <button id="drawerCloseBtn" type="button" class="btn btn-ghost">Close</button>
+            </footer>
+        </div>
+    </dialog>
+
+    <!-- ============================== RESCHEDULE DIALOG ============================== -->
+    <dialog id="rescheduleDialog" class="drawer narrow">
+        <form id="rescheduleForm" class="drawer-inner">
+            <header class="drawer-header"><h3>Reschedule mission</h3></header>
+            <div class="drawer-body">
+                <p class="muted">All role members will be re-notified and the RSVP summary updated within ~30s.</p>
+                <div class="ed-row stack"><label for="rescheduleWhen">New start time</label>
+                    <input id="rescheduleWhen" type="datetime-local" required class="text-input"></div>
+                <div class="ed-row stack"><label for="rescheduleTz">Timezone</label>
+                    <input id="rescheduleTz" list="tzList" class="text-input" required autocomplete="off"></div>
+            </div>
+            <footer class="drawer-footer">
+                <span class="spacer"></span>
+                <button type="button" id="rescheduleCancelBtn" class="btn btn-ghost">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-calendar-check"></i> Reschedule</button>
+            </footer>
+        </form>
+    </dialog>
+
+    <datalist id="tzList"></datalist>
+
+    <!-- ============================== RULE EDIT DIALOG ============================== -->
+    <dialog id="ruleDialog" class="drawer narrow">
+        <form id="ruleForm" class="drawer-inner">
+            <header class="drawer-header"><h3 id="ruleDialogTitle">Add detection rule</h3></header>
+            <div class="drawer-body">
+                <div class="ed-row stack"><label for="ruleMatch">Match text</label>
+                    <input id="ruleMatch" class="text-input" maxlength="240" required placeholder="MISSION AVAILABLE">
+                    <small class="muted">case-insensitive substring, e.g. <code>MISSION AVAILABLE</code></small></div>
+                <div class="ed-row stack"><label for="ruleTemplate">Template</label>
+                    <div class="select-wrap"><select id="ruleTemplate" class="picker" required></select><i class="fas fa-chevron-down select-caret"></i></div>
+                    <label class="field-inline-lbl" style="margin-top:0.5rem"><input type="checkbox" id="ruleAllKinds"> show all template kinds</label></div>
+                <div class="ed-row stack"><label for="rulePriority">Priority</label>
+                    <input id="rulePriority" type="number" class="text-input" value="0" step="1">
+                    <small class="muted">lower numbers checked first</small></div>
+            </div>
+            <footer class="drawer-footer">
+                <span class="spacer"></span>
+                <button type="button" id="ruleCancelBtn" class="btn btn-ghost">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Save rule</button>
+            </footer>
+        </form>
+    </dialog>
+
+    <!-- ============================== MODLIST EDIT DIALOG ============================== -->
+    <dialog id="modlistDialog" class="drawer narrow">
+        <form id="modlistForm" class="drawer-inner">
+            <header class="drawer-header"><h3 id="modlistDialogTitle">Edit modlist</h3></header>
+            <div class="drawer-body">
+                <p class="muted" id="modlistDialogIntro">Manually set the server's cached modlist. The bot will keep overwriting it whenever a new post lands in the modlist channel.</p>
+                <div class="ed-row stack"><label for="modlistUrlInput">Preset URL</label>
+                    <input id="modlistUrlInput" class="text-input mono" placeholder="https://….html"></div>
+                <div class="ed-row stack"><label for="modlistTextInput">Text</label>
+                    <textarea id="modlistTextInput" class="text-input" rows="5" placeholder="CBA_A3, ACE3, ACRE2, …"></textarea></div>
+            </div>
+            <footer class="drawer-footer">
+                <span class="spacer"></span>
+                <button type="button" id="modlistCancelBtn" class="btn btn-ghost">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-floppy-disk"></i> Save</button>
+            </footer>
+        </form>
+    </dialog>
+
+    <!-- ============================== MISSION MODLIST OVERRIDE DIALOG ============================== -->
+    <dialog id="missionModlistDialog" class="drawer narrow">
+        <form id="missionModlistForm" class="drawer-inner">
+            <header class="drawer-header"><h3>Override mission modlist</h3></header>
+            <div class="drawer-body">
+                <p class="muted">Replace the modlist for this specific mission. Leave both empty to clear it.</p>
+                <div class="ed-row stack"><label for="missionModlistUrl">Preset URL</label>
+                    <input id="missionModlistUrl" class="text-input mono" placeholder="https://….html"></div>
+                <div class="ed-row stack"><label for="missionModlistText">Text</label>
+                    <textarea id="missionModlistText" class="text-input" rows="4" placeholder="CBA_A3, ACE3, ACRE2, …"></textarea></div>
+            </div>
+            <footer class="drawer-footer">
+                <span class="spacer"></span>
+                <button type="button" id="missionModlistCancelBtn" class="btn btn-ghost">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-floppy-disk"></i> Save</button>
+            </footer>
+        </form>
+    </dialog>
+
+    <div id="toastHost" class="toast-host"></div>
+
+    <!-- ============================== SCRIPTS ============================== -->
+    <script src="js/config.js"></script>
+    <script src="js/util.js"></script>
+    <script src="js/demo.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/settings.js"></script>
+    <script src="js/missions.js"></script>
+    <script src="js/compose.js"></script>
+    <script src="js/templates.js"></script>
+    <script src="js/status.js"></script>
+    <script src="js/arma_data.js"></script>
+    <script src="js/arma_api.js"></script>
+    <script src="js/arma.js"></script>
+    <script src="js/arma_dialogs.js"></script>
+    <script src="js/embeds.js"></script>
+    <script src="js/roles.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>

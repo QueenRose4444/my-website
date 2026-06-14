@@ -344,12 +344,24 @@ body {
     border-radius: 12px;
     width: 90%;
     max-width: 600px;
+    max-height: 90vh; /* Never taller than the viewport... */
     position: relative;
     border: 1px solid #444;
     color: #eee;
-    overflow: hidden;
+    overflow: hidden; /* ...outer stays clipped so corners + fixed header hold */
     display: flex;
     flex-direction: column;
+}
+
+/* Keep the tab bar pinned; let the body region scroll when content is tall. */
+.modal-tabs {
+    flex-shrink: 0;
+}
+.modal-content > #modalBody,
+.modal-content > [id^="settingsTab"] {
+    flex: 1 1 auto;
+    min-height: 0; /* allow the flex child to shrink below content height so it can scroll */
+    overflow-y: auto;
 }
 .close-modal {
     position: absolute; top: 10px; right: 15px;

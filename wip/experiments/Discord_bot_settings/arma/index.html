@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arma Management — Token Access</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/theme.css">
+    <link rel="stylesheet" href="../css/app.css">
+    <link rel="stylesheet" href="../css/arma.css">
+    <style>
+      /* Slim standalone layout — no sidebar, no Discord OAuth. Just the
+         Arma Management content scoped to one server. */
+      .standalone-wrap { max-width: 1100px; margin: 1rem auto; padding: 0 1rem; }
+      .token-gate { max-width: 480px; margin: 4rem auto; padding: 2rem;
+                    background: var(--surface); border: 1px solid var(--border);
+                    border-radius: var(--radius); }
+      .token-gate h1 { margin: 0 0 0.5rem 0; }
+      .token-gate p { color: var(--text-dim); margin: 0.4rem 0; }
+      .token-gate input { margin-top: 0.6rem; }
+      .standalone-header { display: flex; align-items: center; justify-content: space-between;
+                           padding: 0.8rem 0 1.2rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+      .standalone-header h1 { font-size: 1.4rem; margin: 0; display: flex; align-items: center; gap: 0.5rem; }
+      .standalone-header .server-name { color: var(--text-dim); font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <!-- token entry gate (shown when no token in localStorage or token rejected) -->
+    <div class="token-gate" id="tokenGate" hidden>
+      <h1><i class="fas fa-key"></i> Arma Management</h1>
+      <p>Enter the access token you were given to manage this Arma server. The admin who issued it can revoke any time.</p>
+      <input id="tokenInput" type="text" class="text-input mono" placeholder="arma_xxxxxxxxxxxxxxx" autocomplete="off">
+      <div style="display:flex;gap:0.5rem;margin-top:0.75rem;align-items:center">
+        <button id="tokenSubmit" class="btn btn-primary"><i class="fas fa-arrow-right"></i> Continue</button>
+        <span id="tokenError" style="color:var(--danger);font-size:0.85rem"></span>
+      </div>
+    </div>
+
+    <!-- main UI (shown after a valid token is loaded) -->
+    <div class="standalone-wrap" id="mainShell" hidden>
+      <header class="standalone-header">
+        <h1><i class="fas fa-shield-halved" style="color:var(--accent)"></i>
+          Arma Management
+          <span class="server-name" id="serverNameSpan"></span>
+        </h1>
+        <div>
+          <button id="logoutBtn" class="btn btn-ghost sm-btn"><i class="fas fa-arrow-right-from-bracket"></i> Forget token</button>
+        </div>
+      </header>
+
+      <!-- 1. active state strip -->
+      <section id="armaStateStrip" class="state-strip"></section>
+
+      <!-- 2. loadout library -->
+      <section class="card" id="loadoutGridCard">
+          <div class="card-head">
+              <h3><i class="fas fa-list-check card-ico"></i> Loadouts</h3>
+              <div style="display:flex;gap:0.85rem;align-items:center">
+                  <label class="opt-toggle" style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;color:var(--text-dim);cursor:pointer">
+                      <input type="checkbox" id="showArchivedToggle"> Show archived
+                  </label>
+                  <button id="newLoadoutBtn" class="btn btn-primary sm-btn"><i class="fas fa-plus"></i> New loadout</button>
+              </div>
+          </div>
+          <div id="loadoutGrid" class="loadout-grid"></div>
+      </section>
+
+      <!-- 2b. installed missions -->
+      <article class="card collapsible" id="missionsLibraryCard">
+          <div class="card-head" id="missionsLibraryToggle" style="cursor:pointer">
+              <h3><i class="fas fa-flag-checkered card-ico"></i> Installed missions
+                  <i class="fas fa-chevron-right disc-caret"></i></h3>
+              <small class="muted" style="font-weight:normal">.pbo files in /mpmissions on the server</small>
+          </div>
+          <div id="missionsLibraryBody" hidden>
+              <div class="lib-toolbar">
+                  <button id="uploadMissionPboBtn" class="btn btn-secondary sm-btn"><i class="fas fa-cloud-arrow-up"></i> Upload mission PBO</button>
+                  <button id="refreshMissionsListBtn" class="btn btn-ghost sm-btn"><i class="fas fa-rotate-right"></i> Refresh</button>
+              </div>
+              <table class="data-table">
+                  <thead>
+                      <tr><th>Filename</th><th>Size</th><th>Modified</th><th>Used by loadouts</th><th></th></tr>
+                  </thead>
+                  <tbody id="missionsTbody"></tbody>
+              </table>
+          </div>
+      </article>
+
+      <!-- 3. modlist library -->
+      <article class="card collapsible" id="modlistLibraryCard">
+          <div class="card-head" id="modlistLibraryToggle" style="cursor:pointer">
+              <h3><i class="fas fa-cubes-stacked card-ico"></i> Modlist library
+                  <i class="fas fa-chevron-right disc-caret"></i></h3>
+              <small class="muted" style="font-weight:normal">launcher HTML, kept &amp; reusable</small>
+          </div>
+          <div id="modlistLibraryBody" hidden>
+              <div class="lib-toolbar">
+                  <button id="newModlistBtn" class="btn btn-secondary sm-btn"><i class="fas fa-plus"></i> New modlist</button>
+              </div>
+              <table class="data-table">
+                  <thead>
+                      <tr><th>Name</th><th>Size</th><th>Source</th><th>Updated</th><th style="text-align:center">Active</th><th></th></tr>
+                  </thead>
+                  <tbody id="modlistTbody"></tbody>
+              </table>
+          </div>
+      </article>
+
+      <!-- 4. event timeline -->
+      <article class="card collapsible" id="eventTimelineCard">
+          <div class="card-head" id="eventTimelineToggle" style="cursor:pointer">
+              <h3><i class="fas fa-clock-rotate-left card-ico"></i> Event timeline
+                  <i class="fas fa-chevron-right disc-caret"></i></h3>
+              <small class="muted" style="font-weight:normal">swaps · drift</small>
+          </div>
+          <div id="eventTimelineBody" hidden>
+              <div id="eventTimeline" class="timeline"></div>
+          </div>
+      </article>
+    </div>
+
+    <div class="toast-host" id="toastHost"></div>
+
+    <!-- Shared utilities + reused render code -->
+    <script src="../js/util.js"></script>
+    <script src="../js/arma_data.js"></script>
+    <script src="../js/arma.js"></script>
+    <script src="../js/arma_dialogs.js"></script>
+    <!-- Standalone shell: token gate + reduced API client. -->
+    <script src="arma_standalone.js"></script>
+</body>
+</html>

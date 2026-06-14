@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Character — D&D</title>
+  <link rel="stylesheet" href="css/dnd.css" />
+</head>
+<body data-page="character">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html" class="brand-link">
+        <span class="brand-mark">d20</span>
+        <span class="brand-name">Tabletop</span>
+      </a>
+      <span class="badge" id="charStatus">character</span>
+    </div>
+    <nav class="topnav">
+      <span id="userChip" class="user-chip"></span>
+      <button id="btnSave" class="btn primary">Save</button>
+      <a href="index.html" class="btn ghost">Back</a>
+    </nav>
+  </header>
+
+  <main class="wrap character-wrap">
+    <aside class="char-sidebar">
+      <h3>Library</h3>
+      <button id="btnNewChar" class="btn tiny" style="width:100%">New character</button>
+      <ul id="libraryList" class="library"></ul>
+      <div class="sidebar-tools">
+        <button id="btnExport" class="btn ghost tiny">Export JSON</button>
+        <label class="btn ghost tiny">
+          Import JSON
+          <input id="importFile" type="file" accept="application/json" class="hidden" />
+        </label>
+        <button id="btnDelete" class="btn danger tiny">Delete</button>
+      </div>
+    </aside>
+
+    <section class="char-sheet">
+      <form id="charForm">
+        <div class="row between gap wrap">
+          <label class="grow">Name<input name="name" required /></label>
+          <label>Portrait
+            <input id="portraitInput" type="file" accept="image/*" />
+          </label>
+          <div id="portraitPreview" class="portrait-preview"></div>
+        </div>
+
+        <div class="row gap wrap">
+          <label>Race
+            <select name="race" id="raceSelect"></select>
+          </label>
+          <label>Class
+            <select name="class" id="classSelect"></select>
+          </label>
+          <label>Level<input name="level" type="number" min="1" max="20" value="1" /></label>
+          <label>Background<input name="background" /></label>
+          <label>Alignment<input name="alignment" placeholder="e.g. Neutral Good" /></label>
+        </div>
+
+        <h3>Abilities</h3>
+        <div class="ability-grid">
+          <label>STR<input name="str" type="number" value="10" min="1" max="30" /></label>
+          <label>DEX<input name="dex" type="number" value="10" min="1" max="30" /></label>
+          <label>CON<input name="con" type="number" value="10" min="1" max="30" /></label>
+          <label>INT<input name="int" type="number" value="10" min="1" max="30" /></label>
+          <label>WIS<input name="wis" type="number" value="10" min="1" max="30" /></label>
+          <label>CHA<input name="cha" type="number" value="10" min="1" max="30" /></label>
+        </div>
+
+        <h3>Combat</h3>
+        <div class="row gap wrap">
+          <label>HP<input name="hp" type="number" value="10" /></label>
+          <label>Max HP<input name="maxHp" type="number" value="10" /></label>
+          <label>Temp HP<input name="tempHp" type="number" value="0" /></label>
+          <label>AC<input name="ac" type="number" value="10" /></label>
+          <label>Speed<input name="speed" type="number" value="30" /></label>
+          <label>Initiative<input name="initiativeBonus" type="number" value="0" /></label>
+        </div>
+
+        <h3>Skills</h3>
+        <div id="skillsGrid" class="skills-grid"></div>
+
+        <h3>Inventory</h3>
+        <div id="inventory" class="inventory">
+          <ul id="inventoryList" class="inventory-list"></ul>
+          <div id="inventoryAdd" class="row gap">
+            <input name="invName" placeholder="Item name" />
+            <input name="invQty" type="number" value="1" min="1" style="width:80px" />
+            <input name="invNotes" placeholder="notes" />
+            <button class="btn tiny" type="button" id="btnAddInventory">Add</button>
+          </div>
+        </div>
+
+        <h3>Features &amp; traits</h3>
+        <textarea name="features" rows="4" placeholder="Racial traits, class features, feats…"></textarea>
+
+        <h3>Backstory / notes</h3>
+        <textarea name="notes" rows="6"></textarea>
+      </form>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="../../../auth.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/rulesets/dnd5e.js"></script>
+  <script src="js/character-creator.js"></script>
+</body>
+</html>

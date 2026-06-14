@@ -207,7 +207,7 @@
             <div class="modal-tabs" style="padding-top: 20px;">
                 <button class="tab-btn active" onclick="switchSettingsTab('interface')">Interface</button>
                 <button class="tab-btn" onclick="switchSettingsTab('notifications')">Notifications</button>
-                <button class="tab-btn" onclick="switchSettingsTab('rules')">Domain Rules</button>
+                <button class="tab-btn" onclick="switchSettingsTab('rules')">Links &amp; Rules</button>
                 <button class="tab-btn" onclick="switchSettingsTab('security')">Security</button>
             </div>
 
@@ -280,6 +280,63 @@
 
             <!-- DOMAIN RULES TAB -->
             <div id="settingsTabRules" style="padding: 20px; display: none;">
+
+                <!-- QUICK SITE SEARCH TEMPLATE -->
+                <div class="settings-group"
+                    style="background: none; border: none; padding: 0; margin-bottom: 25px; border-bottom: 1px solid #333; padding-bottom: 25px;">
+                    <h2 style="color:#4bc0c0; margin-bottom: 10px;">Quick Site Search</h2>
+                    <p style="color:#ccc; margin-bottom: 15px; font-size: 0.9em;">
+                        Paste your community/site search URL and put <code>{GameName}</code> where the game name goes.
+                        Each game then gets a one-click <strong>"Find on site"</strong> button that opens your site's
+                        search results and jumps to the link box so you can paste it back.
+                    </p>
+
+                    <input type="text" id="searchTemplateUrl" oninput="updateSearchTemplatePreview()"
+                        placeholder="https://site.com/forum/search.php?keywords={GameName}&amp;sf=titleonly&amp;submit=Search"
+                        class="search-input" style="width:100%; padding:10px; border-radius:4px; margin-bottom:10px;">
+
+                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+                        <input type="text" id="searchTemplateName"
+                            placeholder="Site name (optional, e.g. MyForum)" class="search-input"
+                            style="flex:2; min-width:160px; padding:10px; border-radius:4px;">
+                        <select id="searchTemplateSpace" onchange="updateSearchTemplatePreview()" class="search-input"
+                            style="flex:1; min-width:150px; padding:10px; border-radius:4px; cursor:pointer;">
+                            <option value="plus">Spaces &rarr; + (forums)</option>
+                            <option value="percent">Spaces &rarr; %20</option>
+                            <option value="raw">Spaces &rarr; keep as-is</option>
+                        </select>
+                    </div>
+
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn btn-primary" onclick="saveSearchTemplate()">Save Search</button>
+                        <button class="btn btn-dark" onclick="clearSearchTemplate()">Clear</button>
+                    </div>
+
+                    <div id="searchTemplatePreview"
+                        style="margin-top:12px; font-size:0.8em; color:#888; word-break:break-all;"></div>
+                </div>
+
+                <!-- CLEAN SAVED LINKS (strip unwanted query params) -->
+                <div class="settings-group"
+                    style="background: none; border: none; padding: 0; margin-bottom: 25px; border-bottom: 1px solid #333; padding-bottom: 25px;">
+                    <h2 style="color:#4bc0c0; margin-bottom: 10px;">Clean Saved Links</h2>
+                    <p style="color:#ccc; margin-bottom: 15px; font-size: 0.9em;">
+                        Auto-remove annoying query parameters from a custom link when you save it &mdash; e.g. phpBB's
+                        <code>hilit</code> (the on-page search highlight). Enter parameter names, comma-separated; the
+                        value is stripped no matter what it is.
+                    </p>
+
+                    <div style="display:flex; gap:10px;">
+                        <input type="text" id="stripParamsInput" oninput="updateStripParamsPreview()"
+                            placeholder="hilit, sid, highlight" class="search-input"
+                            style="flex:1; padding:10px; border-radius:4px;">
+                        <button class="btn btn-primary" onclick="saveStripParams()">Save</button>
+                    </div>
+
+                    <div id="stripParamsPreview"
+                        style="margin-top:12px; font-size:0.8em; color:#888; word-break:break-all;"></div>
+                </div>
+
                 <div class="settings-group" style="background: none; border: none; padding: 0;">
                     <h2 style="color:#4bc0c0; margin-bottom: 20px;">Global Tracking Rules</h2>
                     <p style="color:#ccc; margin-bottom: 20px; font-size: 0.9em;">
