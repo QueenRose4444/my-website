@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Session — D&D</title>
+  <link rel="stylesheet" href="css/dnd.css" />
+</head>
+<body data-page="session">
+  <header class="topbar">
+    <div class="brand">
+      <a href="index.html" class="brand-link">
+        <span class="brand-mark">d20</span>
+        <span class="brand-name">Tabletop</span>
+      </a>
+      <span id="campaignBadge" class="badge"></span>
+      <span id="roleBadge" class="badge accent"></span>
+    </div>
+    <nav class="topnav">
+      <span id="userChip" class="user-chip"></span>
+      <span id="connChip" class="conn-chip">connecting…</span>
+      <button id="btnLeave" class="btn ghost">Back to dashboard</button>
+    </nav>
+  </header>
+
+  <main class="session-grid">
+    <aside class="pane pane-left">
+      <section class="card">
+        <h3 class="card-title">Party</h3>
+        <ul id="partyList" class="party-list"></ul>
+      </section>
+
+      <section class="card" id="mySheetCard">
+        <div class="row between">
+          <h3 class="card-title">My character</h3>
+          <a id="editCharLink" class="btn ghost tiny" href="#">Edit</a>
+        </div>
+        <div id="mySheet" class="my-sheet">
+          <div class="empty">No character bound yet.</div>
+        </div>
+      </section>
+
+      <section class="card" id="initCard">
+        <div class="row between">
+          <h3 class="card-title">Initiative</h3>
+          <div class="row gap dm-only hidden" data-dm>
+            <button id="btnInitAddPc" class="btn tiny ghost">+ PC</button>
+            <button id="btnInitAddNpc" class="btn tiny ghost">+ NPC</button>
+            <button id="btnInitStart" class="btn tiny">Start</button>
+            <button id="btnInitAdvance" class="btn tiny" disabled>Next</button>
+            <button id="btnInitEnd" class="btn tiny ghost" disabled>End</button>
+          </div>
+        </div>
+        <div id="initStatus" class="init-status">No combat running.</div>
+        <ol id="initList" class="init-list"></ol>
+      </section>
+    </aside>
+
+    <section class="pane pane-center">
+      <section class="card map-card">
+        <div class="row between wrap">
+          <h3 class="card-title">Map</h3>
+          <div class="row gap wrap">
+            <select id="scenePicker" class="scene-picker"><option value="">— no map —</option></select>
+            <div class="row gap dm-only hidden" data-dm>
+              <input type="file" id="mapFile" accept="image/*" class="hidden" />
+              <button id="btnNewMap" class="btn tiny">New map…</button>
+              <button id="btnRenameMap" class="btn ghost tiny" disabled>Rename</button>
+              <button id="btnDeleteMap" class="btn ghost tiny" disabled>Delete</button>
+              <button id="btnAddToken" class="btn tiny" disabled>Add token</button>
+            </div>
+          </div>
+        </div>
+        <div id="mapSurface" class="map-surface">
+          <div class="map-empty">No map set.</div>
+        </div>
+      </section>
+
+      <section class="card dm-panel dm-only hidden" id="encounterCard" data-dm>
+        <div class="row between">
+          <h3 class="card-title">Encounter images</h3>
+          <div class="row gap">
+            <input type="file" id="encFile" accept="image/*" class="hidden" />
+            <button id="btnEncUpload" class="btn tiny">Upload</button>
+          </div>
+        </div>
+        <div id="encGrid" class="enc-grid"><div class="empty small">No images yet.</div></div>
+      </section>
+    </section>
+
+    <aside class="pane pane-right">
+      <section class="card chat-card">
+        <div class="tabs small">
+          <button class="tab active" data-chat-tab="all">All</button>
+          <button class="tab" data-chat-tab="rolls">Rolls</button>
+          <button class="tab" data-chat-tab="whispers">Whispers</button>
+          <button class="tab dm-only hidden" data-dm data-chat-tab="dm">DM notes</button>
+        </div>
+        <div id="chatLog" class="chat-log"></div>
+        <form id="chatForm" class="chat-input">
+          <select id="chatTarget" class="chat-target">
+            <option value="">Say (all)</option>
+          </select>
+          <input name="content" placeholder="Message…" autocomplete="off" maxlength="4000" />
+          <button class="btn primary tiny">Send</button>
+        </form>
+      </section>
+
+      <section class="card dice-card">
+        <h3 class="card-title">Dice</h3>
+        <form id="diceForm" class="dice-row">
+          <input name="expression" placeholder="1d20+5" autocomplete="off" required />
+          <input name="label" placeholder="label (optional)" autocomplete="off" maxlength="40" />
+          <div class="row gap wrap">
+            <label class="pill"><input type="radio" name="mode" value="normal" checked /> Normal</label>
+            <label class="pill"><input type="radio" name="mode" value="adv" /> Adv</label>
+            <label class="pill"><input type="radio" name="mode" value="dis" /> Dis</label>
+          </div>
+          <div class="quick-dice">
+            <button type="button" data-quick="1d4">d4</button>
+            <button type="button" data-quick="1d6">d6</button>
+            <button type="button" data-quick="1d8">d8</button>
+            <button type="button" data-quick="1d10">d10</button>
+            <button type="button" data-quick="1d12">d12</button>
+            <button type="button" data-quick="1d20">d20</button>
+            <button type="button" data-quick="1d100">d100</button>
+          </div>
+          <div class="row gap">
+            <button class="btn primary" type="submit">Roll</button>
+            <button id="btnManualRoll" class="btn dm-only hidden" data-dm type="button">Manual</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card dm-panel dm-only hidden" data-dm>
+        <h3 class="card-title">DM tools</h3>
+        <div class="row gap wrap">
+          <button id="btnDmNote" class="btn tiny">Add note</button>
+          <button id="btnCopyInvite" class="btn ghost tiny">Copy invite</button>
+          <button id="btnSettings" class="btn ghost tiny">Settings</button>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <div id="tokenModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <h3>Add a token</h3>
+      <form id="tokenForm" class="stack">
+        <label>Label<input name="label" required maxlength="40" /></label>
+        <label>Kind
+          <select name="kind">
+            <option value="npc">NPC / enemy</option>
+            <option value="player">Player (assign owner)</option>
+            <option value="object">Object</option>
+          </select>
+        </label>
+        <label>Color<input name="color" type="color" value="#c93a3a" /></label>
+        <label>Assign to player (optional)
+          <select name="ownerUserId"><option value="">— none —</option></select>
+        </label>
+        <label>Token image (optional)
+          <input name="tokenImage" type="file" accept="image/*" />
+        </label>
+        <div class="error" data-role="error"></div>
+        <div class="row end gap">
+          <button type="button" class="btn ghost" data-close>Cancel</button>
+          <button class="btn primary">Add</button>
+        </div>
+      </form>
+      <button class="modal-close" data-close>×</button>
+    </div>
+  </div>
+
+  <div id="manualModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <h3>Manual roll result</h3>
+      <form id="manualForm" class="stack">
+        <label>Expression (what you're rolling for)<input name="expression" placeholder="1d20+5" required /></label>
+        <label>Actual total<input name="total" type="number" required /></label>
+        <label>Label<input name="label" placeholder="Stealth" /></label>
+        <div class="row end gap">
+          <button type="button" class="btn ghost" data-close>Cancel</button>
+          <button class="btn primary">Announce</button>
+        </div>
+      </form>
+      <button class="modal-close" data-close>×</button>
+    </div>
+  </div>
+
+  <div id="noteModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <h3>DM note</h3>
+      <form id="noteForm" class="stack">
+        <label>Note<textarea name="content" rows="4" required maxlength="8000"></textarea></label>
+        <fieldset>
+          <legend>Share with</legend>
+          <div id="noteTargets" class="stack small"></div>
+        </fieldset>
+        <div class="row end gap">
+          <button type="button" class="btn ghost" data-close>Cancel</button>
+          <button class="btn primary">Save</button>
+        </div>
+      </form>
+      <button class="modal-close" data-close>×</button>
+    </div>
+  </div>
+
+  <div id="initAddPcModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <h3>Add PC to initiative</h3>
+      <form id="initAddPcForm" class="stack">
+        <label>Party member
+          <select name="memberId" required></select>
+        </label>
+        <div class="row gap">
+          <label style="flex:1">Initiative<input name="initiative" type="number" value="10" required /></label>
+          <button type="button" id="btnRollInitPc" class="btn ghost tiny" style="align-self:flex-end">Roll 1d20+DEX</button>
+        </div>
+        <div class="error" data-role="error"></div>
+        <div class="row end gap">
+          <button type="button" class="btn ghost" data-close>Cancel</button>
+          <button class="btn primary">Add</button>
+        </div>
+      </form>
+      <button class="modal-close" data-close>×</button>
+    </div>
+  </div>
+
+  <div id="initAddNpcModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <h3>Add NPC to initiative</h3>
+      <form id="initAddNpcForm" class="stack">
+        <label>Label<input name="label" required maxlength="60" placeholder="Goblin A" /></label>
+        <div class="row gap">
+          <label style="flex:1">Initiative<input name="initiative" type="number" value="10" required /></label>
+          <label style="flex:1">HP<input name="hp" type="number" min="0" value="7" /></label>
+        </div>
+        <label>Color<input name="color" type="color" value="#c93a3a" /></label>
+        <div class="error" data-role="error"></div>
+        <div class="row end gap">
+          <button type="button" class="btn ghost" data-close>Cancel</button>
+          <button class="btn primary">Add</button>
+        </div>
+      </form>
+      <button class="modal-close" data-close>×</button>
+    </div>
+  </div>
+
+  <div id="newMapModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <h3>New map</h3>
+      <form id="newMapForm" class="stack">
+        <label>Name<input name="name" required maxlength="80" placeholder="The Old Inn" /></label>
+        <label>Map image (optional)<input name="mapImage" type="file" accept="image/*" /></label>
+        <div class="error" data-role="error"></div>
+        <div class="row end gap">
+          <button type="button" class="btn ghost" data-close>Cancel</button>
+          <button class="btn primary">Create</button>
+        </div>
+      </form>
+      <button class="modal-close" data-close>×</button>
+    </div>
+  </div>
+
+  <div id="encLabelModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <h3>Label this image</h3>
+      <form id="encLabelForm" class="stack">
+        <label>Label<input name="label" required maxlength="80" placeholder="Goblin Chief" /></label>
+        <div class="error" data-role="error"></div>
+        <div class="row end gap">
+          <button type="button" class="btn ghost" data-close>Cancel</button>
+          <button class="btn primary">Save</button>
+        </div>
+      </form>
+      <button class="modal-close" data-close>×</button>
+    </div>
+  </div>
+
+  <div id="encShowModal" class="modal hidden enc-show" role="dialog" aria-modal="true">
+    <div class="enc-show-card">
+      <img id="encShowImg" alt="" />
+      <div class="enc-show-caption"><span id="encShowLabel"></span></div>
+      <div class="enc-show-actions">
+        <button id="btnEncClose" class="btn ghost">Close for me</button>
+        <button id="btnEncDismissAll" class="btn dm-only hidden" data-dm>Dismiss for everyone</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="../../../auth.js"></script>
+  <script src="https://cdn.socket.io/4.8.0/socket.io.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/rulesets/dnd5e.js"></script>
+  <script src="js/dice.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/scene-picker.js"></script>
+  <script src="js/character-sheet.js"></script>
+  <script src="js/initiative.js"></script>
+  <script src="js/encounters.js"></script>
+  <script src="js/dm-panel.js"></script>
+  <script src="js/lobby.js"></script>
+  <script src="js/session.js"></script>
+</body>
+</html>

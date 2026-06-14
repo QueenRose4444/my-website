@@ -79,12 +79,6 @@ const flatpickrTimeFormatMapping = {
 
 const medicationData = {
     mounjaro: { halfLife: 120, timeToPeak: 48 },
-    ozempic: { halfLife: 168, timeToPeak: 48 }
-};
-
-const medicationDoses = {
-    mounjaro: ["2.5", "5", "7.5", "10", "12.5", "15"],
-    ozempic: ["0.25", "0.5", "1", "2"]
 };
 
 /***********************
@@ -117,6 +111,9 @@ function getElements() {
         shotHistoryModal: document.getElementById("shotHistoryModal"),
         penDosesRemaining: document.getElementById("penDosesRemaining"),
         penEmptyDate: document.getElementById("penEmptyDate"),
+        managePensBtn: document.getElementById("managePensBtn"),
+        boughtNewPenBtn: document.getElementById("boughtNewPenBtn"),
+        penManagementModal: document.getElementById("penManagementModal"),
         weightDateInput: document.getElementById('weightDate'),
         weightTimeInput: document.getElementById('weightTime'),
         weightValueInput: document.getElementById('weightValue'),
@@ -274,6 +271,71 @@ function loadLocalData() {
         shotHistory = [];
         weightHistory = [];
         userSettings = { ...defaultSettings };
+    }
+    
+    migratePens();
+}
+
+function migratePens() {
+    let changed = false;
+    if (!userSettings.pens) {
+        userSettings.pens = [];
+        changed = true;
+    }
+    
+    const sortedShots = [...shotHistory].sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+    
+    let activePens = {};
+    userSettings.pens.forEach(p => {
+        let key = `${p.medication}-${p.dose}`;
+        let used = shotHistory.filter(s => s.penId === p.id).length;
+        if (used < p.dosesTotal) {
+            if (!activePens[key] || p.dateStarted > activePens[key].dateStarted) {
+                activePens[key] = p;
+            }
+        }
+    });
+
+    sortedShots.forEach(shot => {
+        if (!shot.penId) {
+            let key = `${shot.medication}-${shot.dose}`;
+            let pen = activePens[key];
+            let usedCount = pen ? shotHistory.filter(s => s.penId === pen.id).length : 0;
+
+            if (!pen || usedCount >= pen.dosesTotal) {
+                pen = {
+                    id: "pen_" + Date.now() + "_" + Math.floor(Math.random()*10000),
+                    medication: shot.medication,
+                    dose: String(shot.dose),
+                    dosesTotal: 4,
+                    dateStarted: new Date(shot.dateTime).getTime()
+                };
+                userSettings.pens.push(pen);
+                activePens[key] = pen;
+                changed = true;
+            }
+            shot.penId = pen.id;
+            changed = true;
+        }
+    });
+    
+    // Clean up empty pens that might have been created but have no shots (except the most recent active one)
+    const pensToRemove = [];
+    userSettings.pens.forEach(p => {
+        let used = shotHistory.filter(s => s.penId === p.id).length;
+        let key = `${p.medication}-${p.dose}`;
+        // If pen has 0 uses, and it's NOT the active pen for this med/dose, it's an orphaned empty pen
+        if (used === 0 && activePens[key]?.id !== p.id) {
+            pensToRemove.push(p.id);
+        }
+    });
+    if (pensToRemove.length > 0) {
+        userSettings.pens = userSettings.pens.filter(p => !pensToRemove.includes(p.id));
+        changed = true;
+    }
+    
+    if (changed) {
+        setTimeout(saveData, 0);
     }
 }
 
@@ -1209,32 +1271,32 @@ function updatePenStatusDisplay() {
         .filter(s => s.dateTime && !isNaN(new Date(s.dateTime)))
         .sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
 
-    if (sortedShots.length === 0) {
+    if (sortedShots.length === 0 || !userSettings.pens) {
         elements.penDosesRemaining.textContent = "N/A";
         elements.penEmptyDate.textContent = "N/A";
         return;
     }
 
     const lastShot = sortedShots[0];
-    const currentDose = lastShot.dose;
-    let consecutiveDoseCount = 0;
+    const penId = lastShot.penId;
+    const pen = userSettings.pens.find(p => p.id === penId);
 
-    for (const shot of sortedShots) {
-        if (shot.dose === currentDose) {
-            consecutiveDoseCount++;
-        } else {
-            break;
-        }
+    if (!pen) {
+        elements.penDosesRemaining.textContent = "N/A";
+        elements.penEmptyDate.textContent = "N/A";
+        return;
     }
 
-    const dosesUsedInCurrentPen = (consecutiveDoseCount - 1) % 4 + 1;
-    const dosesRemaining = 4 - dosesUsedInCurrentPen;
+    const dosesUsed = shotHistory.filter(s => s.penId === pen.id).length;
+    const dosesRemaining = Math.max(0, pen.dosesTotal - dosesUsed);
 
-    elements.penDosesRemaining.textContent = `${dosesRemaining} / 4`;
+    elements.penDosesRemaining.textContent = `${dosesRemaining} / ${pen.dosesTotal}`;
 
     if (dosesRemaining === 0) {
         elements.penEmptyDate.textContent = "New pen needed";
+        if (elements.boughtNewPenBtn) elements.boughtNewPenBtn.style.display = 'inline-block';
     } else {
+        if (elements.boughtNewPenBtn) elements.boughtNewPenBtn.style.display = 'none';
         const lastShotDate = new Date(lastShot.dateTime);
         const daysUntilFinalDose = (dosesRemaining - 1) * 7;
         const finalDoseDate = new Date(lastShotDate.getTime());
@@ -1250,30 +1312,16 @@ function getLastDoseForMedication(medication) {
     return medicationShots[0]?.dose || null;
 }
 
-function populateDoseDropdown(medication, doseSelectElement, selectedDose) {
-    const doses = medicationDoses[medication] || [];
-    doseSelectElement.innerHTML = '';
-    doses.forEach(dose => {
-        const option = document.createElement('option');
-        option.value = dose;
-        option.textContent = `${dose}mg`;
-        if (selectedDose !== null && String(dose) === String(selectedDose)) {
-            option.selected = true;
-        }
-        doseSelectElement.appendChild(option);
-    });
-    if (selectedDose === null && doses.length > 0) {
-        doseSelectElement.value = doses[0];
-    }
-}
-
 function updateDoseToLastUsed() {
     const elements = getElements();
     if (!elements.medicationSelect || !elements.doseSelect) return;
     const selectedMedication = elements.medicationSelect.value;
     const lastDose = getLastDoseForMedication(selectedMedication);
-    
-    populateDoseDropdown(selectedMedication, elements.doseSelect, lastDose);
+    if (lastDose !== null) {
+        if (Array.from(elements.doseSelect.options).some(o => o.value === String(lastDose))) {
+            elements.doseSelect.value = String(lastDose);
+        }
+    }
 }
 
 function updateWeightEntryUI() {
@@ -1315,6 +1363,92 @@ function updateDisplay() {
 /********************************
  * History & Settings Modal Logic
  ********************************/
+function renderPenManagement() {
+    const elements = getElements();
+    if (!elements.penManagementModal) return;
+
+    let pensListHTML = '';
+    if (userSettings.pens && userSettings.pens.length > 0) {
+        const sortedPens = [...userSettings.pens].sort((a, b) => b.dateStarted - a.dateStarted);
+        
+        sortedPens.forEach(pen => {
+            const used = shotHistory.filter(s => s.penId === pen.id).length;
+            const remaining = Math.max(0, pen.dosesTotal - used);
+            const isFinished = remaining === 0;
+            const bg = isFinished ? 'background: rgba(255, 255, 255, 0.05); border: 1px solid #444;' : 'background: rgba(75, 192, 192, 0.1); border: 1px solid #4bc0c0;';
+            const medName = pen.medication.charAt(0).toUpperCase() + pen.medication.slice(1);
+            
+            pensListHTML += `
+            <div class="pen-item" style="padding: 15px; margin-bottom: 15px; border-radius: 8px; ${bg}">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h4 style="margin: 0; color: ${isFinished ? '#aaa' : '#fff'};">${medName} ${pen.dose}mg</h4>
+                    <span style="font-size: 0.85em; color: #ccc;">Started: ${formatDate(new Date(pen.dateStarted))}</span>
+                </div>
+                <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+                    <div class="input-group" style="margin-bottom: 0;">
+                        <label style="display: inline-block; width: auto; margin-right: 10px;">Total Capacity:</label>
+                        <input type="number" value="${pen.dosesTotal}" class="pen-capacity-input" data-pen-id="${pen.id}" style="width: 60px; display: inline-block; padding: 5px;">
+                    </div>
+                    <p style="margin: 0;">Used: <strong>${used}</strong></p>
+                    <p style="margin: 0; color: ${isFinished ? '#ff6b6b' : '#4bc0c0'}; font-weight: bold;">Remaining: ${remaining}</p>
+                    ${!isFinished ? `<button class="mark-pen-empty-btn btn-danger" style="padding: 5px 10px; font-size: 0.8em;" data-pen-id="${pen.id}">Mark Empty</button>` : ''}
+                </div>
+            </div>`;
+        });
+    } else {
+        pensListHTML = '<p style="text-align: center; color: #ccc;">No pens registered yet. Shots you log will automatically create pens.</p>';
+    }
+
+    const modalContent = `
+        <div class="modal-content" style="max-width: 600px;">
+            <span class="close-modal" data-modal-id="penManagementModal">&times;</span>
+            <h2>Pen Management</h2>
+            <p style="color: #ccc; font-size: 0.9em; margin-bottom: 20px;">
+                Manage your medication pens. You can adjust the total capacity of a pen (e.g., if you extract an extra dose) to fix the doses remaining.
+            </p>
+            <div id="pensListContainer" style="max-height: 60vh; overflow-y: auto; padding-right: 10px;">
+                ${pensListHTML}
+            </div>
+            <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+                <button type="button" class="close-modal-button" data-modal-id="penManagementModal">Close</button>
+            </div>
+        </div>
+    `;
+
+    elements.penManagementModal.innerHTML = modalContent;
+    elements.penManagementModal.style.display = "block";
+
+    // Add listeners for capacity changes
+    elements.penManagementModal.querySelectorAll('.pen-capacity-input').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const penId = e.target.dataset.penId;
+            const newCapacity = parseInt(e.target.value);
+            if (!isNaN(newCapacity) && newCapacity >= 0) {
+                const pen = userSettings.pens.find(p => p.id === penId);
+                if (pen) {
+                    pen.dosesTotal = newCapacity;
+                    saveData();
+                    renderPenManagement(); // Re-render to update remaining text
+                }
+            }
+        });
+    });
+
+    // Add listeners for Mark Empty
+    elements.penManagementModal.querySelectorAll('.mark-pen-empty-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const penId = e.target.dataset.penId;
+            const pen = userSettings.pens.find(p => p.id === penId);
+            if (pen) {
+                const used = shotHistory.filter(s => s.penId === pen.id).length;
+                pen.dosesTotal = used; // Mark empty by setting capacity to used
+                saveData();
+                renderPenManagement();
+            }
+        });
+    });
+}
+
 function renderShotHistory() {
     const elements = getElements();
     const sortedHistory = [...shotHistory].filter(s => s.dateTime).sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
@@ -1351,12 +1485,20 @@ function editShot(index) {
     if (!shot || !shot.dateTime) return;
     const shotDate = new Date(shot.dateTime);
     const medOptions = Object.keys(medicationData).map(k => `<option value="${k}" ${shot.medication === k ? "selected" : ""}>${k.charAt(0).toUpperCase() + k.slice(1)}</option>`).join('');
+    const doseOptions = ["2.5", "5", "7.5", "10", "12.5", "15"].map(d => `<option value="${d}" ${String(shot.dose) === d ? "selected" : ""}>${d}mg</option>`).join('');
     
-    // Determine the initially selected medication for the edit modal
-    const initialMedication = Object.keys(medicationData).includes(shot.medication) ? shot.medication : 'mounjaro';
-    const availableDoses = medicationDoses[initialMedication] || [];
-    const doseOptions = availableDoses.map(d => `<option value="${d}" ${String(shot.dose) === d ? "selected" : ""}>${d}mg</option>`).join('');
-    
+    // Build Pen options
+    let penOptions = '<option value="">Auto-assign</option>';
+    if (userSettings.pens) {
+        const relevantPens = userSettings.pens.filter(p => p.medication === shot.medication && p.dose === String(shot.dose))
+            .sort((a,b) => b.dateStarted - a.dateStarted);
+        penOptions += relevantPens.map(p => {
+            const used = shotHistory.filter(s => s.penId === p.id).length;
+            const dateStr = formatDate(new Date(p.dateStarted));
+            return `<option value="${p.id}" ${shot.penId === p.id ? "selected" : ""}>${dateStr} (${used}/${p.dosesTotal} used)</option>`;
+        }).join('');
+    }
+
     let locationInputHTML = '';
     if (userSettings.shotLocationTrackingEnabled) {
         const locationOptions = (userSettings.shotLocations || []).map(loc => `<option value="${loc}" ${shot.location === loc ? "selected" : ""}>${userSettings.shotLocationAbbreviations ? getAbbreviation(loc) : loc}</option>`).join('');
@@ -1366,6 +1508,7 @@ function editShot(index) {
     const editContent = `<div class="modal-content"><span class="close-modal" data-modal-id="shotHistoryModal">&times;</span><h2>Edit Shot</h2>
         <div class="input-group"><label>Medication:</label><select id="editMedication">${medOptions}</select></div>
         <div class="input-group"><label>Dose:</label><select id="editDose">${doseOptions}</select></div>
+        <div class="input-group"><label>Pen:</label><select id="editPenId">${penOptions}</select></div>
         ${locationInputHTML}
         <div class="input-group"><label>Date:</label><input type="text" id="editDate"></div>
         <div class="input-group"><label>Time:</label><input type="text" id="editTime"></div>
@@ -1374,34 +1517,22 @@ function editShot(index) {
              <button id="deleteShot" class="btn-danger">Delete</button>
         </div></div>`;
     elements.shotHistoryModal.innerHTML = editContent;
-    
-    const editMedicationEl = document.getElementById('editMedication');
-    const editDoseEl = document.getElementById('editDose');
-    
-    editMedicationEl.addEventListener('change', (e) => {
-        const selectedMed = e.target.value;
-        const doses = medicationDoses[selectedMed] || [];
-        editDoseEl.innerHTML = '';
-        doses.forEach(dose => {
-            const option = document.createElement('option');
-            option.value = dose;
-            option.textContent = `${dose}mg`;
-            editDoseEl.appendChild(option);
-        });
-    });
     const editDatePicker = flatpickr("#editDate", { dateFormat: flatpickrDateFormatMapping[userSettings.dateFormat], defaultDate: shotDate, altInput: true, altFormat: flatpickrDateFormatMapping[userSettings.dateFormat], allowInput: true });
     const editTimePicker = flatpickr("#editTime", { enableTime: true, noCalendar: true, dateFormat: flatpickrTimeFormatMapping[userSettings.timeFormat], defaultDate: shotDate, altInput: true, altFormat: flatpickrTimeFormatMapping[userSettings.timeFormat], time_24hr: userSettings.timeFormat === "24hr", allowInput: true });
     document.getElementById('saveEdit').addEventListener('click', () => {
         const newDate = editDatePicker.selectedDates[0];
         const newTime = editTimePicker.selectedDates[0];
         if (!newDate || !newTime) return;
+        const selectedPenId = document.getElementById('editPenId').value;
         shotHistory[index] = {
             ...shotHistory[index],
             dateTime: new Date(newDate.getFullYear(), newDate.getMonth(), newDate.getDate(), newTime.getHours(), newTime.getMinutes()),
             medication: document.getElementById('editMedication').value,
             dose: String(document.getElementById('editDose').value),
-            location: userSettings.shotLocationTrackingEnabled ? document.getElementById('editLocation').value : shot.location
+            location: userSettings.shotLocationTrackingEnabled ? document.getElementById('editLocation').value : shot.location,
+            penId: selectedPenId || undefined
         };
+        migratePens(); // ensure any changes correctly reflect in pen creation if needed
         saveData();
         renderShotHistory();
     });
@@ -2023,6 +2154,7 @@ function setupEventListeners() {
         };
 
         shotHistory.unshift(shotData);
+        migratePens();
         saveData();
         setTimeout(updateDoseToLastUsed, 100);
     });
@@ -2034,6 +2166,27 @@ function setupEventListeners() {
     });
     
     elements.shotHistoryButton.addEventListener("click", renderShotHistory);
+    
+    if (elements.managePensBtn) elements.managePensBtn.addEventListener("click", renderPenManagement);
+    if (elements.boughtNewPenBtn) elements.boughtNewPenBtn.addEventListener("click", () => {
+        const sortedShots = [...shotHistory].filter(s => s.dateTime).sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+        if (sortedShots.length > 0) {
+            const lastShot = sortedShots[0];
+            // Only add if there isn't already a fresh unused pen for this med/dose
+            const unusedPen = userSettings.pens.find(p => p.medication === lastShot.medication && p.dose === lastShot.dose && shotHistory.filter(s => s.penId === p.id).length === 0);
+            if (!unusedPen) {
+                userSettings.pens.push({
+                    id: "pen_" + Date.now() + "_" + Math.floor(Math.random()*10000),
+                    medication: lastShot.medication,
+                    dose: String(lastShot.dose),
+                    dosesTotal: 4,
+                    dateStarted: Date.now()
+                });
+                saveData();
+                updateDisplay();
+            }
+        }
+    });
     
     elements.saveWeightEntryButton.addEventListener('click', () => {
         const weightDate = weightDatePicker?.selectedDates[0];

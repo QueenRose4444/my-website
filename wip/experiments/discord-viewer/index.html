@@ -11,6 +11,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Discord Message Viewer</title>
+    <!-- Apply theme before stylesheet loads to avoid a flash of the wrong theme -->
+    <script>
+        document.documentElement.dataset.theme =
+            localStorage.getItem('discord_theme') || 'dark';
+    </script>
     <!-- Link to the specific CSS -->
     <link rel="stylesheet" href="style.css">
     <link rel="canonical" href="https://rosestuffs.org/discord-viewer/" />
@@ -107,12 +112,22 @@
                             </path>
                         </svg>
                     </button>
+                    <button id="membersButton" title="Toggle Members List">
+                        <svg aria-hidden="true" role="img" width="24" height="24" viewBox="0 0 24 24">
+                            <path fill="currentColor"
+                                d="M14 8.252V13H21V11C21 9.346 19.654 8 18 8C16.825 8 15.821 8.681 15.327 9.668C14.948 9.083 14.495 8.589 14 8.252ZM10 14C7.794 14 6 15.794 6 18V20H14V18C14 15.794 12.206 14 10 14ZM10 13C11.654 13 13 11.654 13 10C13 8.346 11.654 7 10 7C8.346 7 7 8.346 7 10C7 11.654 8.346 13 10 13ZM18 7C19.103 7 20 6.103 20 5C20 3.897 19.103 3 18 3C16.897 3 16 3.897 16 5C16 6.103 16.897 7 18 7Z">
+                            </path>
+                        </svg>
+                    </button>
                 </div>
             </div>
             <div class="messages-wrapper" id="messagesWrapper">
                 <div class="messages-list" id="messageList">
                     <div class="empty-state">Select a server and channel to view messages.</div>
                 </div>
+                <button id="jumpToPresentBtn" class="jump-to-present" hidden>
+                    Jump to Present <span aria-hidden="true">↓</span>
+                </button>
             </div>
         </section>
 
@@ -126,6 +141,41 @@
                 <!-- Stats will be injected here -->
             </div>
         </aside>
+
+        <!-- Right Sidebar/Panel: Members -->
+        <aside class="members-panel" id="membersPanel" hidden>
+            <div class="sidebar-header">
+                <h2>Members <span id="memberCount" class="muted-count"></span></h2>
+                <button class="close-members" aria-label="Close">&times;</button>
+            </div>
+            <div class="members-content" id="membersContent">
+                <!-- groups + members injected here -->
+            </div>
+        </aside>
+
+        <!-- Member profile modal -->
+        <div id="memberProfileModal" class="modal" style="display:none;">
+            <div class="modal-content member-profile">
+                <span class="close-modal" data-modal-id="memberProfileModal">&times;</span>
+                <div class="member-profile-header">
+                    <img id="memberProfileAvatar" class="member-profile-avatar" alt="">
+                    <div class="member-profile-names">
+                        <h2 id="memberProfileDisplay"></h2>
+                        <p id="memberProfileUsername" class="muted-count"></p>
+                    </div>
+                </div>
+                <div class="member-profile-body">
+                    <div class="member-profile-section">
+                        <h4>Member since</h4>
+                        <p id="memberProfileJoined">—</p>
+                    </div>
+                    <div class="member-profile-section">
+                        <h4>Roles</h4>
+                        <div id="memberProfileRoles" class="member-profile-roles"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </main>
 
     <!-- Modals -->
@@ -268,7 +318,13 @@
         <div class="modal-content">
             <span class="close-modal" data-modal-id="settingsModal">&times;</span>
             <h2>Settings</h2>
-            <p>No configurable settings are available.</p>
+            <div class="setting-row">
+                <label for="theme-select">Theme</label>
+                <select id="theme-select">
+                    <option value="dark">Dark</option>
+                    <option value="darker">Darker (OLED)</option>
+                </select>
+            </div>
             <div style="margin-top: 20px;">
                 <button id="changePasswordButton" style="display: none;">Change Password</button>
                 <button type="button" class="close-modal-button" data-modal-id="settingsModal">Close</button>

@@ -1,6 +1,7 @@
 /other_stuffs
 /old/other_stuffs
 /backends
+/prompts
 *create-indexfiles.ps1
 tmp.txt
 tmp2.txt
@@ -15,3 +16,5 @@ wip/meds-testing
 faviconupdate.py
 experiments/BBCode_editor/test-data
 wip/experiments/BBCode_editor/conversion/test-data
+.syncignore
+BBCodetmp.txt

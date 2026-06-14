@@ -54,7 +54,6 @@
                 <div class="controls">
                     <div class="input-group"> <label for="medication">Medication:</label> <select id="medication">
                             <option value="mounjaro">Mounjaro</option>
-                            <option value="ozempic">Ozempic</option>
                         </select> </div>
                     <div class="input-group"> <label for="dose">Dose:</label> <select id="dose">
                             <option value="2.5">2.5mg</option>
@@ -95,6 +94,8 @@
                             <span>Pen Stats:</span>
                             <span>Doses Left: <span id="penDosesRemaining">N/A</span></span>
                             <span>Est. Last Dose: <span id="penEmptyDate">N/A</span></span>
+                            <button id="boughtNewPenBtn" class="btn-small" style="display: none;">+ Bought New Pen</button>
+                            <button id="managePensBtn" class="btn-small">Manage Pens</button>
                         </div>
                     </div>
                 </div>
@@ -193,6 +194,7 @@
         </div>
         <div id="shotHistoryModal" class="modal"> </div>
         <div id="weightHistoryModal" class="modal"> </div>
+        <div id="penManagementModal" class="modal"> </div>
 
     </div>
     <div id="settingsModal" class="modal">
