@@ -41,6 +41,7 @@
         medProjection: 'auto',
         medLevelScope: 'all',
         medYDensity: 'auto',
+        medChartHeight: 'm',
         weightRange: 'm',
         onboardedAt: null,
     };

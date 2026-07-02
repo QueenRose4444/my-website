@@ -128,6 +128,9 @@
                 case 'med-scope':
                     S().update(s => { s.settings.medLevelScope = id; });
                     break;
+                case 'med-height':
+                    S().update(s => { s.settings.medChartHeight = el.dataset.val; });
+                    break;
                 case 'med-ydensity':
                     S().update(s => {
                         s.settings.medYDensity = el.dataset.val;
