@@ -396,7 +396,7 @@
                     </div>
                 </div>
                 ${scopeChips}
-                <div class="chart-wrap" id="medLevelChart"></div>
+                <div class="chart-wrap" id="medLevelChart" style="height:${{ s: 220, m: 300, l: 400, xl: 520 }[set.medChartHeight || 'm'] || 300}px"></div>
             </div>` : '';
 
         const weightSection = showWeight && set.showWeight ? `

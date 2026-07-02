@@ -133,8 +133,24 @@
             if (step === 'weight') {
                 title = 'Track weight too?';
                 sub = 'Optional — adds the weight chart, goal progress and stats.';
+                // pre-fill from imported data so the wizard matches what the
+                // page will show afterwards
+                if (!ctx.prefillDone) {
+                    const info = importedWeightInfo();
+                    if (info) {
+                        if (info.unit && ['kg', 'lbs', 'st-lbs'].includes(info.unit)) ctx.unit = info.unit;
+                        const disp = kg => kg != null && !isNaN(kg) ? D.weightValue(kg, ctx.unit).toFixed(1) : '';
+                        if (!ctx.currentW) ctx.currentW = disp(info.currentKg);
+                        if (!ctx.startW) ctx.startW = disp(info.startKg);
+                        if (!ctx.startWDate) ctx.startWDate = info.startDate || '';
+                        if (!ctx.goalW) ctx.goalW = disp(info.goalKg);
+                        ctx.prefill = info;
+                    }
+                    ctx.prefillDone = true;
+                }
                 const u = ctx.unit;
                 body = `
+                    ${ctx.prefill ? `<div class="pen-hint" style="margin-bottom:14px">${Icons.check} Pre-filled from your imported data — tweak anything that looks off.</div>` : ''}
                     <div class="chip-grp" style="margin-bottom:14px" id="obTrackW">
                         <button class="chip ${ctx.trackWeight ? 'active' : ''}" data-tw="yes">Yes, track weight</button>
                         <button class="chip ${!ctx.trackWeight ? 'active' : ''}" data-tw="no">Not for me</button>
@@ -275,6 +291,42 @@
             }
         }
 
+        // goal / start / current weight hiding inside the chosen import source,
+        // so the wizard can pre-fill instead of looking like the data is missing
+        function importedWeightInfo() {
+            let payload = null, v2state = null;
+            if (ctx.importChoice === 'v1-local' && v1Local) payload = v1Local;
+            else if (ctx.importChoice === 'file' && ctx.importedFile) {
+                if (ctx.importedFile.kind === 'v1') payload = ctx.importedFile.payload;
+                else v2state = ctx.importedFile.state;
+            }
+            if (payload) {
+                const ws = (payload.weightHistory || []).slice()
+                    .filter(x => !isNaN(new Date(x.dateTime)) && !isNaN(parseFloat(x.weightKg)))
+                    .sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+                const us = payload.userSettings || {};
+                return {
+                    unit: us.weightUnit === 'lb' ? 'lbs' : (us.weightUnit || null),
+                    goalKg: us.goalWeight != null ? parseFloat(us.goalWeight) : null,
+                    startKg: ws[0] ? parseFloat(ws[0].weightKg) : null,
+                    startDate: ws[0] ? D.ymd(new Date(ws[0].dateTime)) : '',
+                    currentKg: ws.length ? parseFloat(ws[ws.length - 1].weightKg) : null,
+                };
+            }
+            if (v2state) {
+                const ws = (v2state.weights || []).slice().sort((a, b) => a.timestamp - b.timestamp);
+                const st = v2state.settings || {};
+                return {
+                    unit: st.weightUnit || null,
+                    goalKg: st.goalKg != null ? st.goalKg : null,
+                    startKg: st.startKg != null ? st.startKg : (ws[0] ? ws[0].kg : null),
+                    startDate: ws[0] ? ws[0].date : '',
+                    currentKg: ws.length ? ws[ws.length - 1].kg : null,
+                };
+            }
+            return null;
+        }
+
         function toKg(v) {
             const n = parseFloat(v);
             if (isNaN(n)) return null;
@@ -323,8 +375,12 @@
                         }
                     }
                     if (curKg != null) {
+                        // don't re-log a "today" entry when the value is just the
+                        // pre-filled latest weight from the import
+                        const unchangedPrefill = ctx.prefill && ctx.prefill.currentKg != null
+                            && Math.abs(curKg - ctx.prefill.currentKg) < 0.05;
                         const today = D.ymd(new Date());
-                        if (!s.weights.some(w => w.date === today)) {
+                        if (!unchangedPrefill && !s.weights.some(w => w.date === today)) {
                             const ts = Date.now();
                             s.weights.push({ id: 'w-ob-cur-' + ts, date: today, time: D.hm(new Date()), timestamp: ts, kg: Math.round(curKg * 10) / 10 });
                         }
