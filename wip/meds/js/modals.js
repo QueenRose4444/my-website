@@ -351,6 +351,25 @@
         let mode = isEdit ? 'custom' : 'preset';
         let preset = null;
 
+        // value + unit pair for durations so "3 hours" doesn't have to be typed as 0.125 days
+        const durVal = (days, dflt) => {
+            const v = m2 => Math.round(m2 * 100) / 100;
+            if (days == null || isNaN(days)) return { val: dflt != null ? dflt : '', unit: 'days' };
+            return days < 0.99 ? { val: v(days * 24), unit: 'hours' } : { val: v(days), unit: 'days' };
+        };
+        const durRow = (id, label, days, dflt, ph) => {
+            const d0 = durVal(days, dflt);
+            return `<div class="field nomb"><label>${label}</label>
+                <div class="freq-row">
+                    <input type="number" min="0" step="0.5" id="${id}" value="${d0.val}" placeholder="${ph || ''}">
+                    <select id="${id}Unit">
+                        <option value="hours" ${d0.unit === 'hours' ? 'selected' : ''}>hours</option>
+                        <option value="days" ${d0.unit === 'days' ? 'selected' : ''}>days</option>
+                        <option value="weeks">weeks</option>
+                    </select>
+                </div></div>`;
+        };
+
         const customFormHtml = m => `
             <div class="field-row">
                 <div class="field nomb"><label>Name</label><input id="cmName" value="${escapeHtml(m ? m.name : '')}" placeholder="e.g. Trulicity"></div>
@@ -358,7 +377,7 @@
             </div>
             <div class="field"><label>Type</label>
                 <div class="chip-grp" id="cmType">
-                    ${['injection', 'pill', 'liquid', 'cream'].map(tp => `<button class="chip ${(m ? (m.type || 'injection') : 'injection') === tp ? 'active' : ''}" data-type="${tp}">${tp}</button>`).join('')}
+                    ${['injection', 'pill', 'patch', 'gel', 'liquid', 'cream'].map(tp => `<button class="chip ${(m ? (m.type || 'injection') : 'injection') === tp ? 'active' : ''}" data-type="${tp}">${tp}</button>`).join('')}
                 </div>
             </div>
             <div class="field"><label>Available doses (comma separated)</label>
@@ -366,15 +385,15 @@
             <div class="field-row">
                 <div class="field nomb"><label>Unit</label>
                     <select id="cmUnit">${['mg', 'mcg', 'IU', 'units', 'ml'].map(u => `<option ${m && m.unit === u ? 'selected' : ''}>${u}</option>`).join('')}</select></div>
-                <div class="field nomb"><label>Frequency (days)</label><input type="number" step="0.5" id="cmFreq" value="${m ? m.frequency : 7}"></div>
+                ${durRow('cmFreq', 'How often — e.g. 12 hours, 1 day, 1 week', m ? m.frequency : 7, 7)}
             </div>
             <div class="field-row" id="cmPenRow">
                 <div class="field nomb"><label>Doses per pen</label><input type="number" id="cmCap" value="${m ? m.penCapacity : 4}"></div>
                 <div class="field nomb"><label>Pens per package</label><input type="number" id="cmPkg" value="${m ? m.pensPerPackage || 1 : 1}"></div>
             </div>
             <div class="field-row">
-                <div class="field nomb"><label>Half-life (days)</label><input type="number" step="0.1" id="cmHl" value="${m ? m.halfLife : 5}"></div>
-                <div class="field nomb"><label>Time to peak (days, optional)</label><input type="number" step="0.1" id="cmTtp" value="${m && m.timeToPeak ? m.timeToPeak : ''}" placeholder="0"></div>
+                ${durRow('cmHl', 'Half-life', m ? m.halfLife : 5, 5)}
+                ${durRow('cmTtp', 'Time to peak (optional)', m && m.timeToPeak ? m.timeToPeak : null, '', '0')}
             </div>
             <div class="field"><label>Colour</label><input type="color" id="cmColor" value="${m ? m.color || '#5fc8c8' : '#5fc8c8'}" class="color-input"></div>
             <div class="field">
@@ -433,12 +452,21 @@
                     if (!grid) return;
                     const q = (filter || '').toLowerCase();
                     const existing = new Set(Store().state.meds.map(m => m.presetId));
-                    grid.innerHTML = D.MED_PRESETS
-                        .filter(p => !q || p.name.toLowerCase().includes(q) || (p.generic || '').toLowerCase().includes(q))
-                        .map(p => `<button class="preset ${preset && preset.presetId === p.presetId ? 'active' : ''} ${existing.has(p.presetId) ? 'dim' : ''}" data-preset="${p.presetId}">
+                    const matches = D.MED_PRESETS.filter(p => !q
+                        || p.name.toLowerCase().includes(q)
+                        || (p.generic || '').toLowerCase().includes(q)
+                        || (p.category || '').toLowerCase().includes(q));
+                    const card = p => `<button class="preset ${preset && preset.presetId === p.presetId ? 'active' : ''} ${existing.has(p.presetId) ? 'dim' : ''}" data-preset="${p.presetId}">
                             <div class="p-name">${p.name}<span class="p-type">${p.type}</span></div>
-                            <div class="p-meta">${p.generic} · ${p.doses.length} doses · every ${p.frequency < 1 ? '<1' : p.frequency}d${existing.has(p.presetId) ? ' · added' : ''}</div>
-                        </button>`).join('') || '<div class="empty pad-sm"><div class="em-sub">No matches — try a custom med</div></div>';
+                            <div class="p-meta">${p.generic} · ${p.doses.length} doses · ${D.fmtFreq(p.frequency)}${existing.has(p.presetId) ? ' · added' : ''}</div>
+                        </button>`;
+                    grid.innerHTML = D.CATEGORY_ORDER
+                        .map(cat => {
+                            const group = matches.filter(p => p.category === cat);
+                            if (!group.length) return '';
+                            return `<div class="preset-cat">${cat}</div>` + group.map(card).join('');
+                        })
+                        .join('') || '<div class="empty pad-sm"><div class="em-sub">No matches — try a custom med</div></div>';
                 };
                 renderPresets();
 
@@ -517,19 +545,28 @@
                         Store().update(s => { s.meds.push(med); s.activeMedId = med.id; });
                         toast(`${med.name} added`);
                         close();
+                        // straight into the history estimator — Cancel = just starting
+                        backfill(med);
                         return;
                     }
                     const name = modal.querySelector('#cmName').value.trim();
                     const doses = parseDoses();
                     if (!name || !doses.length) return;
+                    // duration inputs carry their own hours/days/weeks unit
+                    const durDays = id => {
+                        const v = parseFloat(modal.querySelector('#' + id).value);
+                        if (isNaN(v)) return null;
+                        const u = modal.querySelector('#' + id + 'Unit').value;
+                        return u === 'hours' ? v / 24 : u === 'weeks' ? v * 7 : v;
+                    };
                     const medPayload = {
                         name,
                         generic: modal.querySelector('#cmGeneric').value.trim(),
                         type: cmType,
                         doses,
-                        frequency: parseFloat(modal.querySelector('#cmFreq').value) || 7,
-                        halfLife: parseFloat(modal.querySelector('#cmHl').value) || 5,
-                        timeToPeak: parseFloat(modal.querySelector('#cmTtp').value) || 0,
+                        frequency: durDays('cmFreq') || 7,
+                        halfLife: durDays('cmHl') || 5,
+                        timeToPeak: durDays('cmTtp') || 0,
                         penCapacity: cmType === 'injection' ? (parseInt(modal.querySelector('#cmCap').value) || 4) : 1,
                         pensPerPackage: cmType === 'injection' ? (parseInt(modal.querySelector('#cmPkg').value) || 1) : 1,
                         unit: modal.querySelector('#cmUnit').value,
@@ -559,18 +596,21 @@
                         });
                         if (Object.keys(map).length) medPayload.dose2halfLife = map;
                     }
+                    const newMed = isEdit ? null
+                        : Object.assign({ id: name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now().toString(36) }, medPayload);
                     Store().update(s => {
                         if (isEdit) {
                             const i = s.meds.findIndex(x => x.id === editMed.id);
                             if (i >= 0) s.meds[i] = Object.assign({}, s.meds[i], medPayload);
                         } else {
-                            const med = Object.assign({ id: name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now().toString(36) }, medPayload);
-                            s.meds.push(med);
-                            s.activeMedId = med.id;
+                            s.meds.push(newMed);
+                            s.activeMedId = newMed.id;
                         }
                     });
                     toast(isEdit ? 'Medication updated' : `${name} added`);
                     close();
+                    // straight into the history estimator — Cancel = just starting
+                    if (newMed) backfill(newMed);
                 });
             },
         });
@@ -592,8 +632,8 @@
             <span class="dim-sm">weeks</span></div>`).join('');
 
         openModal({
-            title: `Backfill ${med.name} history`,
-            sub: 'Estimates your past doses so charts and levels start out right. Estimated doses are marked and can be removed later.',
+            title: `Already taking ${med.name}?`,
+            sub: 'Estimates your past doses so charts and levels start out right. Estimated doses get an “est” tag and can be removed later. Just starting this med? Hit Cancel — nothing else needed.',
             bodyHtml: `
                 <div class="field">
                     <label>What dose are you on now? (${escapeHtml(med.unit)})</label>

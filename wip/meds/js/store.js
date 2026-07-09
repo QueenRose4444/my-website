@@ -217,14 +217,21 @@
             }
         },
 
-        // canonical string for conflict detection
+        // canonical string for conflict detection.
+        // View/appearance preferences are deliberately EXCLUDED — flipping a
+        // graph range on your phone must never trigger the sync-conflict
+        // prompt on your PC. They still sync (last device to write wins);
+        // only real data differences ask the user to pick a side.
         canonical(s) {
             if (!s) return null;
+            const VIEW_ONLY = ['theme', 'accent', 'chartOrder', 'showMedLevel', 'showWeight', 'showCalendar', 'showStats',
+                'medLevelRange', 'medRange', 'medProjection', 'medLevelScope', 'medYDensity', 'medChartHeight',
+                'weightRange', 'onboardedAt'];
             const shots = (s.shots || []).map(x => [x.timestamp, x.medId, x.dose, x.location || ''].join('|')).sort();
             const weights = (s.weights || []).map(x => [x.timestamp, Math.round(x.kg * 10) / 10].join('|')).sort();
             const pens = (s.pens || []).map(x => [x.id, x.dose, x.capacity].join('|')).sort();
             const meds = (s.meds || []).map(x => [x.id, x.name, (x.doses || []).join(','), x.frequency, x.halfLife, x.preferredNextDose != null ? x.preferredNextDose : ''].join('|')).sort();
-            const set = Object.keys(DEFAULT_SETTINGS).sort().map(k => {
+            const set = Object.keys(DEFAULT_SETTINGS).filter(k => !VIEW_ONLY.includes(k)).sort().map(k => {
                 const v = (s.settings || {})[k];
                 return k + '=' + (Array.isArray(v) ? v.join(',') : JSON.stringify(v != null ? v : null));
             });

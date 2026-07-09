@@ -100,13 +100,18 @@
             if (step === 'med') {
                 title = 'Pick your medication';
                 sub = 'You can add more later, or set up a custom one.';
+                const presetCard = p => `
+                    <button class="preset ${ctx.preset && ctx.preset.presetId === p.presetId ? 'active' : ''}" data-preset="${p.presetId}">
+                        <div class="p-name">${p.name}<span class="p-type">${p.type}</span></div>
+                        <div class="p-meta">${p.generic} · ${D.fmtFreq(p.frequency)}</div>
+                    </button>`;
                 body = `
                     <div class="preset-grid">
-                        ${D.MED_PRESETS.map(p => `
-                            <button class="preset ${ctx.preset && ctx.preset.presetId === p.presetId ? 'active' : ''}" data-preset="${p.presetId}">
-                                <div class="p-name">${p.name}<span class="p-type">${p.type}</span></div>
-                                <div class="p-meta">${p.generic} · every ${p.frequency < 1 ? '<1' : p.frequency}d</div>
-                            </button>`).join('')}
+                        ${D.CATEGORY_ORDER.map(cat => {
+                            const group = D.MED_PRESETS.filter(p => p.category === cat);
+                            if (!group.length) return '';
+                            return `<div class="preset-cat">${cat}</div>` + group.map(presetCard).join('');
+                        }).join('')}
                     </div>
                     <button class="link no-ml" id="obCustomLater">${ctx.customLater ? '✓ ' : ''}I'll set up a custom med after</button>`;
                 canNext = !!ctx.preset || ctx.customLater;

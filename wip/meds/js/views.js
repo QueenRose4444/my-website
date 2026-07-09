@@ -170,7 +170,7 @@
                 <div class="meta-cell">
                     <div class="k">Est. med level</div>
                     <div class="v tabular-mono">${currentLevel.toFixed(3)} <span class="dim-sm">${escapeHtml(d.med.unit)}</span></div>
-                    <div class="vsub">half-life ${d.med.halfLife}d${d.med.dose2halfLife ? ' · per-dose' : ''}</div>
+                    <div class="vsub">half-life ${D.fmtDur(d.med.halfLife)}${d.med.dose2halfLife ? ' · per-dose' : ''}</div>
                 </div>
                 <div class="meta-cell">
                     <div class="k k-flex"><span>Next ${d.isInjection ? 'shot' : 'dose'}</span>
@@ -386,7 +386,7 @@
                         <div class="chart-sub">
                             <span class="tabular-mono big-num">${D.medLevelAt(d.shots, d.med, Date.now()).toFixed(3)}</span>
                             <span class="dim-sm">${escapeHtml(d.med.unit)} now${multiMed ? ' (' + escapeHtml(d.med.name) + ')' : ''}</span>
-                            <span class="pill">half-life ${d.med.halfLife}d${d.med.dose2halfLife ? ' · per-dose' : ''}</span>
+                            <span class="pill">half-life ${D.fmtDur(d.med.halfLife)}${d.med.dose2halfLife ? ' · per-dose' : ''}</span>
                             ${projDays > 0 ? `<span class="pill" title="Change in Settings → Dashboard layout">+${projDays}d ahead</span>` : ''}
                         </div>
                     </div>
@@ -637,8 +637,8 @@
                     ${m.id === s.activeMedId ? `<span class="pill accent"><span class="pill-dot"></span>active</span>` : ''}
                 </div>
                 <div class="mc-facts">
-                    <div><div class="k">Frequency</div><div>Every ${m.frequency}d</div></div>
-                    <div><div class="k">Half-life</div><div>${m.halfLife}d${m.dose2halfLife ? ' (varies)' : ''}</div></div>
+                    <div><div class="k">Frequency</div><div>${D.fmtFreq(m.frequency)}</div></div>
+                    <div><div class="k">Half-life</div><div>${D.fmtDur(m.halfLife)}${m.dose2halfLife ? ' (varies)' : ''}</div></div>
                     <div><div class="k">Doses logged</div><div>${medShots.length}</div></div>
                     ${isInjection ? `<div><div class="k">Supply</div><div>${totalSupply} dose${totalSupply === 1 ? '' : 's'}</div></div>` : ''}
                 </div>

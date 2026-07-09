@@ -112,7 +112,194 @@
                 sourceUrl: 'https://www.drugs.com/dosage/trulicity.html#:~:text=missed',
             },
         },
+
+        // ---------------- ADHD ----------------
+        {
+            presetId: 'vyvanse', name: 'Vyvanse / Elvanse', generic: 'Lisdexamfetamine', type: 'pill', category: 'ADHD',
+            doses: [20, 30, 40, 50, 60, 70], frequency: 1, halfLife: 0.46, timeToPeak: 0.16,
+            penCapacity: 30, pensPerPackage: 1, unit: 'mg', color: '#c084fc',
+            titration: [{ dose: 30, weeks: 1 }, { dose: 50, weeks: 2 }, { dose: 70, weeks: 4 }],
+            missedDose: {
+                takeWithinDays: 0, minGapDays: 0.6,
+                note: 'Skip a missed dose and take the next one at the usual time — taking it later in the day can wreck your sleep, and never double up.',
+                sourceLabel: 'Drugs.com — Vyvanse',
+                sourceUrl: 'https://www.drugs.com/vyvanse.html#:~:text=miss%20a%20dose',
+            },
+        },
+        {
+            presetId: 'adderall-xr', name: 'Adderall XR', generic: 'Mixed amfetamine salts ER', type: 'pill', category: 'ADHD',
+            doses: [5, 10, 15, 20, 25, 30], frequency: 1, halfLife: 0.42, timeToPeak: 0.29,
+            penCapacity: 30, pensPerPackage: 1, unit: 'mg', color: '#fb923c',
+            titration: [{ dose: 10, weeks: 1 }, { dose: 20, weeks: 2 }, { dose: 30, weeks: 4 }],
+            missedDose: {
+                takeWithinDays: 0, minGapDays: 0.6,
+                note: 'Skip a missed dose and take the next one at the usual time — avoid taking it late in the day (sleep), and never double up.',
+                sourceLabel: 'Drugs.com — Adderall',
+                sourceUrl: 'https://www.drugs.com/adderall.html#:~:text=miss%20a%20dose',
+            },
+        },
+        {
+            presetId: 'ritalin-ir', name: 'Ritalin (IR)', generic: 'Methylphenidate', type: 'pill', category: 'ADHD',
+            doses: [5, 10, 15, 20], frequency: 0.5, halfLife: 0.13, timeToPeak: 0.09,
+            penCapacity: 30, pensPerPackage: 1, unit: 'mg', color: '#f87171',
+            titration: [{ dose: 5, weeks: 1 }, { dose: 10, weeks: 2 }, { dose: 20, weeks: 4 }],
+            missedDose: {
+                takeWithinDays: 0, minGapDays: 0.15,
+                note: 'Skip the missed dose and take your next dose at the usual time. Do not take 2 doses to make up for a forgotten dose.',
+                sourceLabel: 'NHS — methylphenidate for adults',
+                sourceUrl: 'https://www.nhs.uk/medicines/methylphenidate-adults/how-and-when-to-take-methylphenidate-for-adults/#:~:text=If%20you%20forget',
+            },
+        },
+        {
+            presetId: 'concerta', name: 'Concerta XL', generic: 'Methylphenidate ER', type: 'pill', category: 'ADHD',
+            doses: [18, 27, 36, 54, 72], frequency: 1, halfLife: 0.15, timeToPeak: 0.29,
+            penCapacity: 30, pensPerPackage: 1, unit: 'mg', color: '#f59e0b',
+            titration: [{ dose: 18, weeks: 1 }, { dose: 36, weeks: 2 }, { dose: 54, weeks: 4 }],
+            missedDose: {
+                takeWithinDays: 0, minGapDays: 0.6,
+                note: 'Skip the missed dose and take your next dose at the usual time — taking it late in the day can affect sleep. Do not take 2 doses to make up for a forgotten one.',
+                sourceLabel: 'NHS — methylphenidate for adults',
+                sourceUrl: 'https://www.nhs.uk/medicines/methylphenidate-adults/how-and-when-to-take-methylphenidate-for-adults/#:~:text=If%20you%20forget',
+            },
+        },
+        {
+            presetId: 'atomoxetine', name: 'Strattera', generic: 'Atomoxetine', type: 'pill', category: 'ADHD',
+            doses: [10, 18, 25, 40, 60, 80, 100], frequency: 1, halfLife: 0.21, timeToPeak: 0.08,
+            penCapacity: 28, pensPerPackage: 1, unit: 'mg', color: '#38bdf8',
+            titration: [{ dose: 40, weeks: 1 }, { dose: 80, weeks: 4 }],
+            missedDose: {
+                takeWithinDays: 0.4, minGapDays: 0.4,
+                note: 'Take it as soon as you remember that day; if it’s nearly the next day, skip it. Never take a double dose.',
+                sourceLabel: 'Drugs.com — atomoxetine',
+                sourceUrl: 'https://www.drugs.com/atomoxetine.html#:~:text=miss%20a%20dose',
+            },
+        },
+        {
+            presetId: 'guanfacine-xr', name: 'Intuniv XR', generic: 'Guanfacine ER', type: 'pill', category: 'ADHD',
+            doses: [1, 2, 3, 4], frequency: 1, halfLife: 0.71, timeToPeak: 0.21,
+            penCapacity: 28, pensPerPackage: 1, unit: 'mg', color: '#34d399',
+            titration: [{ dose: 1, weeks: 1 }, { dose: 2, weeks: 1 }, { dose: 3, weeks: 1 }, { dose: 4, weeks: 4 }],
+            missedDose: {
+                takeWithinDays: 0, minGapDays: 0.6,
+                note: 'Skip the missed dose and resume your usual schedule. If you miss 2 or more doses in a row, talk to your prescriber — re-titration may be needed.',
+            },
+        },
+
+        // ---------------- HRT — feminising ----------------
+        {
+            presetId: 'estradiol-tab', name: 'Estradiol tablets', generic: 'Estradiol / valerate (Estrofem, Progynova)', type: 'pill', category: 'HRT — feminising',
+            doses: [1, 2, 3, 4, 6, 8], frequency: 1, halfLife: 0.6, timeToPeak: 0.25,
+            penCapacity: 28, pensPerPackage: 1, unit: 'mg', color: '#f472b6',
+            titration: [{ dose: 2, weeks: 12 }, { dose: 4, weeks: 12 }, { dose: 6, weeks: 12 }],
+            missedDose: {
+                takeWithinDays: 0, minGapDays: 0.5,
+                note: 'Skip the missed dose and take or use your next dose at the usual time — never take 2 doses at once.',
+                sourceLabel: 'NHS — oestrogen tablets, patches, gel & spray',
+                sourceUrl: 'https://www.nhs.uk/medicines/hormone-replacement-therapy-hrt/oestrogen-tablets-patches-gel-and-spray/how-and-when-to-take-or-use-oestrogen-tablets-patches-gel-and-spray/#:~:text=If%20you%20forget',
+            },
+        },
+        {
+            presetId: 'estradiol-patch', name: 'Estradiol patches', generic: 'Estradiol TD (Estradot, Evorel)', type: 'patch', category: 'HRT — feminising',
+            doses: [25, 37.5, 50, 75, 100, 150, 200], frequency: 3.5, halfLife: 1.2, timeToPeak: 1,
+            penCapacity: 8, pensPerPackage: 1, unit: 'mcg', color: '#e879f9',
+            titration: [{ dose: 50, weeks: 12 }, { dose: 100, weeks: 12 }, { dose: 150, weeks: 12 }],
+            missedDose: {
+                takeWithinDays: 1.5, minGapDays: 1,
+                note: 'Forgot to change your patch: change it as soon as you remember and apply the next one at the usual time. If it’s almost time for the next patch, skip the missed one and change on the usual day.',
+                sourceLabel: 'NHS — oestrogen tablets, patches, gel & spray',
+                sourceUrl: 'https://www.nhs.uk/medicines/hormone-replacement-therapy-hrt/oestrogen-tablets-patches-gel-and-spray/how-and-when-to-take-or-use-oestrogen-tablets-patches-gel-and-spray/#:~:text=forget%20to%20change',
+            },
+        },
+        {
+            presetId: 'estradiol-gel', name: 'Estradiol gel', generic: 'Estradiol (Oestrogel, Sandrena)', type: 'gel', category: 'HRT — feminising',
+            doses: [0.5, 0.75, 1, 1.5, 2, 3], frequency: 1, halfLife: 0.6, timeToPeak: 0.2,
+            penCapacity: 64, pensPerPackage: 1, unit: 'mg', color: '#fb7185',
+            titration: [{ dose: 1.5, weeks: 12 }, { dose: 3, weeks: 12 }],
+            missedDose: {
+                takeWithinDays: 0, minGapDays: 0.5,
+                note: 'Skip the missed dose and use your next dose at the usual time — never use 2 doses at once.',
+                sourceLabel: 'NHS — oestrogen tablets, patches, gel & spray',
+                sourceUrl: 'https://www.nhs.uk/medicines/hormone-replacement-therapy-hrt/oestrogen-tablets-patches-gel-and-spray/how-and-when-to-take-or-use-oestrogen-tablets-patches-gel-and-spray/#:~:text=If%20you%20forget',
+            },
+        },
+        {
+            presetId: 'estradiol-inj', name: 'Estradiol injection', generic: 'Estradiol valerate / enanthate', type: 'injection', category: 'HRT — feminising',
+            doses: [3, 4, 5, 6, 8, 10], frequency: 7, halfLife: 3.5, timeToPeak: 2,
+            penCapacity: 10, pensPerPackage: 1, unit: 'mg', color: '#d946ef',
+            titration: [{ dose: 4, weeks: 12 }, { dose: 5, weeks: 12 }],
+            missedDose: {
+                takeWithinDays: 3, minGapDays: 3,
+                note: 'A few days late is commonly taken when remembered, then continue as normal — injectable oestrogen schedules vary a lot, follow your prescriber’s plan.',
+            },
+        },
+        {
+            presetId: 'spironolactone', name: 'Spironolactone', generic: 'Spironolactone', type: 'pill', category: 'HRT — feminising',
+            doses: [25, 50, 100, 150, 200], frequency: 1, halfLife: 0.65, timeToPeak: 0.2,
+            penCapacity: 28, pensPerPackage: 1, unit: 'mg', color: '#4ade80',
+            titration: [{ dose: 50, weeks: 4 }, { dose: 100, weeks: 8 }, { dose: 200, weeks: 12 }],
+            missedDose: {
+                takeWithinDays: 0.4, minGapDays: 0.4,
+                note: 'Take it when you remember that day (avoid late evening — it makes you pee); if it’s nearly time for the next dose, skip it. Never double up.',
+            },
+        },
+        {
+            presetId: 'cyproterone', name: 'Cyproterone', generic: 'Cyproterone acetate (Androcur)', type: 'pill', category: 'HRT — feminising',
+            doses: [6.25, 12.5, 25, 50], frequency: 1, halfLife: 1.7, timeToPeak: 0.15,
+            penCapacity: 28, pensPerPackage: 1, unit: 'mg', color: '#22d3ee',
+            missedDose: {
+                takeWithinDays: 0.4, minGapDays: 0.4,
+                note: 'Skip the missed dose and take the next at the usual time — its long half-life means one miss matters little. Never double up.',
+            },
+        },
+        {
+            presetId: 'bicalutamide', name: 'Bicalutamide', generic: 'Bicalutamide', type: 'pill', category: 'HRT — feminising',
+            doses: [25, 50], frequency: 1, halfLife: 6, timeToPeak: 1.3,
+            penCapacity: 28, pensPerPackage: 1, unit: 'mg', color: '#a3e635',
+            missedDose: {
+                takeWithinDays: 0, minGapDays: 0.5,
+                note: 'Skip the missed dose and take the next at the usual time — its ~6-day half-life keeps levels steady. Never double up.',
+            },
+        },
+        {
+            presetId: 'progesterone', name: 'Progesterone', generic: 'Micronised (Utrogestan, Prometrium)', type: 'pill', category: 'HRT — feminising',
+            doses: [100, 200, 300], frequency: 1, halfLife: 0.7, timeToPeak: 0.12,
+            penCapacity: 30, pensPerPackage: 1, unit: 'mg', color: '#facc15',
+            missedDose: {
+                takeWithinDays: 0, minGapDays: 0.5,
+                note: 'Skip the missed dose and take the next at your usual bedtime — never double up (it’s sedating).',
+            },
+        },
+
+        // ---------------- HRT — masculinising ----------------
+        {
+            presetId: 'testosterone-inj', name: 'Testosterone injection', generic: 'Enanthate / cypionate', type: 'injection', category: 'HRT — masculinising',
+            doses: [50, 75, 100, 125, 150, 200, 250], frequency: 7, halfLife: 4.5, timeToPeak: 1.5,
+            penCapacity: 10, pensPerPackage: 1, unit: 'mg', color: '#60a5fa',
+            titration: [{ dose: 50, weeks: 12 }, { dose: 100, weeks: 12 }],
+            missedDose: {
+                takeWithinDays: 3, minGapDays: 3,
+                note: 'A few days late is usually taken when remembered, then continue your normal schedule — plans vary (weekly vs fortnightly, Sustanon…), follow your prescriber.',
+            },
+        },
+        {
+            presetId: 'testosterone-gel', name: 'Testosterone gel', generic: 'Testogel / Tostran', type: 'gel', category: 'HRT — masculinising',
+            doses: [20.25, 40.5, 50, 81], frequency: 1, halfLife: 0.5, timeToPeak: 0.15,
+            penCapacity: 30, pensPerPackage: 1, unit: 'mg', color: '#818cf8',
+            missedDose: {
+                takeWithinDays: 0.5, minGapDays: 0.5,
+                note: 'Apply it when you remember; if the next application is due within about a day, skip the missed one — never apply double.',
+            },
+        },
     ];
+
+    // categories for the preset picker (new presets carry their own)
+    const PRESET_CATEGORY_MAP = {
+        mounjaro: 'GLP-1 & weight', zepbound: 'GLP-1 & weight', ozempic: 'GLP-1 & weight',
+        wegovy: 'GLP-1 & weight', saxenda: 'GLP-1 & weight',
+        rybelsus: 'Diabetes', metformin: 'Diabetes', trulicity: 'Diabetes',
+    };
+    const CATEGORY_ORDER = ['GLP-1 & weight', 'Diabetes', 'ADHD', 'HRT — feminising', 'HRT — masculinising', 'Other'];
+    MED_PRESETS.forEach(p => { if (!p.category) p.category = PRESET_CATEGORY_MAP[p.presetId] || 'Other'; });
 
     // Mounjaro / Zepbound KwikPen click reference (60 clicks = full pen-strength dose)
     // clicks needed for dose D from a pen of strength S = 60 * D / S
@@ -521,7 +708,8 @@
             const dayEnd = new Date(due);
             dayEnd.setHours(23, 59, 59, 999);
             if (now <= dayEnd.getTime()) return null;
-        } else if ((now - due.getTime()) / 86400000 < 0.25) {
+        } else if ((now - due.getTime()) / 86400000 < Math.min(0.25, freq * 0.25)) {
+            // sub-daily meds: grace scales with the dosing interval
             return null;
         }
         const daysLate = (now - due.getTime()) / 86400000;
@@ -533,6 +721,29 @@
             action = daysLate <= freq / 2 ? 'take' : 'skip';
         }
         return { daysLate, action, info };
+    }
+
+    // human-friendly duration (value stored in days) — "3 h", "18 h", "5d", "3.5d"
+    function fmtDur(days) {
+        if (days == null || isNaN(days)) return '—';
+        if (days < 0.99) {
+            const h = days * 24;
+            return `${h < 10 ? Math.round(h * 10) / 10 : Math.round(h)} h`;
+        }
+        return `${Math.round(days * 10) / 10}d`;
+    }
+
+    // human-friendly frequency (days between doses)
+    function fmtFreq(days) {
+        if (days == null || isNaN(days) || days <= 0) return '—';
+        if (days >= 6.5 && days <= 7.5) return 'weekly';
+        if (days >= 13 && days <= 15) return 'fortnightly';
+        if (days >= 3.2 && days <= 3.8) return 'twice weekly';
+        if (days >= 0.9 && days <= 1.1) return 'daily';
+        if (days >= 0.45 && days <= 0.55) return '2× a day';
+        if (days >= 0.3 && days <= 0.37) return '3× a day';
+        if (days < 0.9) return `every ${Math.round(days * 24)} h`;
+        return `every ${Math.round(days * 10) / 10}d`;
     }
 
     // "nice" chart axis step (1 / 2 / 2.5 / 5 × 10^n) for a given max value.
@@ -559,5 +770,6 @@
         recomputePenState, supplyByDose, suggestPenForShot,
         inferPensFromShots, estimateBackfillShots, predictNextDose,
         detectSchedule, lateDoseStatus, niceStep, DAY_NAMES,
+        fmtDur, fmtFreq, CATEGORY_ORDER,
     };
 })();
