@@ -10,10 +10,12 @@
     <link rel="manifest" href="/images/site.webmanifest" />
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Info Formatter</title>
+    <title>BBCode Template Maker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="bbcode_editor.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/builder.css">
+    <link rel="stylesheet" href="css/use.css">
     <link rel="canonical" href="https://rosestuffs.org/experiments/BBCode_editor/" />
 </head>
 
@@ -42,248 +44,20 @@
         </nav>
     </header>
 
-    <main id="app" class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 p-4 md:p-8">
-        <div class="space-y-6">
-            <header class="text-center">
-                <h1 class="text-3xl font-bold text-white">Game Info Formatter</h1>
-                <p class="text-gray-400 mt-2">Upload or paste game data to format it with custom templates.</p>
-            </header>
-            <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
-                <h2 class="text-xl font-semibold text-white mb-4">1. Add Game Data</h2>
-                <div id="file-drop-zone" class="file-drop-zone p-6 text-center rounded-lg cursor-pointer">
-                    <p class="text-gray-400">Drag & drop .txt files here, or click to select</p>
-                    <input type="file" id="file-input" multiple accept=".txt" class="hidden">
-                </div>
-                <div class="mt-4 text-center text-gray-400">or paste content below</div>
-                <textarea id="text-input"
-                    class="w-full h-32 mt-2 p-3 bg-gray-900 border border-gray-700 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    placeholder="Paste raw game info here..."></textarea>
-                <button id="process-text-btn"
-                    class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition-colors">Process
-                    Pasted Text</button>
-            </div>
-            <div id="customization-panel" class="bg-gray-800 p-6 rounded-lg shadow-lg hidden">
-                <h2 class="text-xl font-semibold text-white mb-4">2. Customize Output</h2>
-                <div class="mb-4">
-                    <label for="game-selector" class="block text-sm font-medium text-gray-300 mb-1">Select Game to
-                        Edit:</label>
-                    <select id="game-selector"
-                        class="w-full bg-gray-900 border border-gray-700 rounded-md p-2 focus:ring-2 focus:ring-blue-500"></select>
-                </div>
-                <div id="game-version-container" class="mb-4"></div>
-                <div class="flex border-b border-gray-700 mb-4">
-                    <button id="simple-mode-btn" class="tab-button active py-2 px-4 font-semibold">Builder</button>
-                    <button id="advanced-mode-btn" class="tab-button py-2 px-4 font-semibold">Template</button>
-                </div>
-                <div id="simple-mode-controls" class="space-y-4">
-                    <!-- Collapse Controls -->
-                    <div class="flex justify-end gap-2 mb-2">
-                        <button id="expand-all-btn" class="text-xs text-gray-400 hover:text-white">Expand All</button>
-                        <span class="text-gray-600">|</span>
-                        <button id="collapse-all-btn" class="text-xs text-gray-400 hover:text-white">Collapse
-                            All</button>
-                    </div>
+    <main id="app" class="max-w-7xl mx-auto w-full p-4 md:p-8">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-white">BBCode Template Maker</h1>
+            <p class="text-gray-400 mt-2">Build no-code templates that parse, store and format anything into BBCode.
+            </p>
+        </header>
 
-                    <!-- Main Group -->
-                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
-                        <div
-                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
-                            <h3 class="text-md font-bold text-white">Main Group (SteamDB)</h3>
-                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
-                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </div>
-                        <div class="p-4 border-t border-gray-700 module-content">
-                            <div id="main-group-container"></div>
-                        </div>
-                    </div>
+        <div id="template-bar" class="mb-6"></div>
 
-                    <!-- Additional Groups -->
-                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
-                        <div
-                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
-                            <h3 class="text-md font-bold text-white">Additional URL Groups</h3>
-                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
-                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </div>
-                        <div class="p-4 border-t border-gray-700 module-content">
-                            <div class="flex gap-2 mb-4">
-                                <select id="preset-selector"
-                                    class="bg-gray-800 border border-gray-600 text-xs rounded p-1 flex-grow text-white"></select>
-                                <button id="load-preset-btn"
-                                    class="bg-purple-600 hover:bg-purple-700 px-3 py-1 text-xs rounded text-white font-bold">Load</button>
-                                <button id="save-preset-btn"
-                                    class="bg-gray-600 hover:bg-gray-500 px-3 py-1 text-xs rounded text-white font-bold">Save
-                                    New</button>
-                            </div>
-                            <div id="custom-groups-container"></div>
-                            <button id="add-custom-group-btn"
-                                class="w-full py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded mt-2 shadow-sm transition-colors">+
-                                Add Group</button>
-                        </div>
-                    </div>
+        <div id="empty-state" class="hidden"></div>
+        <div id="build-root" class="hidden"></div>
+        <div id="use-root" class="hidden"></div>
 
-                    <!-- Crack Settings -->
-                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
-                        <div
-                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
-                            <h3 class="text-md font-bold text-white">Crack Settings</h3>
-                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
-                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </div>
-                        <div class="p-4 border-t border-gray-700 module-content">
-                            <div id="crack-toggles-container"></div>
-                        </div>
-                    </div>
-
-                    <!-- File Sizes -->
-                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
-                        <div
-                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
-                            <h3 class="text-md font-bold text-white">File Sizes</h3>
-                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
-                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </div>
-                        <div class="p-4 border-t border-gray-700 module-content">
-                            <p class="text-xs text-gray-500 mb-3">Sizes apply to main group and all custom link groups
-                            </p>
-                            <div id="file-sizes-container"></div>
-                        </div>
-                    </div>
-
-                    <!-- Updates -->
-                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
-                        <div
-                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
-                            <h3 class="text-md font-bold text-white">Update Files</h3>
-                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
-                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </div>
-                        <div class="p-4 border-t border-gray-700 module-content">
-                            <div id="updates-container"></div>
-                            <button id="add-update-btn"
-                                class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded mt-2 shadow-sm transition-colors">+
-                                Add Update Section</button>
-                        </div>
-                    </div>
-
-                    <!-- Patch Notes -->
-                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
-                        <div
-                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
-                            <h3 class="text-md font-bold text-white">Patch Notes</h3>
-                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
-                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </div>
-                        <div class="p-4 border-t border-gray-700 module-content">
-                            <div id="patchnotes-options" class="space-y-3">
-                                <div class="flex justify-between items-center">
-                                    <label class="text-xs text-gray-400 font-bold">Mini Title (e.g., Hotfix
-                                        Patch!)</label>
-                                    <input type="text" id="patchnotes-title-input" data-setting="patchNotesTitle"
-                                        class="bg-gray-800 border border-gray-600 text-xs p-1 rounded w-1/2">
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <input type="checkbox" id="patchnotes-mode-toggle" data-setting="patchNotesMode"
-                                        class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-                                    <label for="patchnotes-mode-toggle" class="text-xs text-gray-300">Single Patch Note
-                                        Link (Merged)</label>
-                                </div>
-                                <div id="patchnotes-url-container"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Colors -->
-                    <div class="bg-gray-900/50 rounded border border-gray-700 overflow-hidden">
-                        <div
-                            class="flex justify-between items-center p-4 bg-gray-800/40 cursor-pointer hover:bg-gray-700/50 transition-colors toggle-header select-none">
-                            <h3 class="text-md font-bold text-white">Colors</h3>
-                            <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200 chevron-icon"
-                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </div>
-                        <div class="p-4 border-t border-gray-700 module-content">
-                            <div class="grid grid-cols-2 gap-4">
-                                <div><label class="text-xs text-gray-400 block mb-1">Section Title</label><input
-                                        type="color" id="section-title-color"
-                                        class="w-full h-8 bg-gray-800 rounded cursor-pointer"></div>
-                                <div><label class="text-xs text-gray-400 block mb-1">Clean URLs</label><input
-                                        type="color" id="clean-url-color"
-                                        class="w-full h-8 bg-gray-800 rounded cursor-pointer"></div>
-                                <div><label class="text-xs text-gray-400 block mb-1">Cracked URLs</label><input
-                                        type="color" id="cracked-url-color"
-                                        class="w-full h-8 bg-gray-800 rounded cursor-pointer"></div>
-                                <div class="flex items-center justify-center">
-                                    <div class="flex items-center"><input type="checkbox" id="use-same-url-color"
-                                            class="mr-2 h-4 w-4"><label for="use-same-url-color"
-                                            class="text-xs text-gray-400">Match Clean</label></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div id="advanced-mode-controls" class="hidden space-y-4">
-                    <div>
-                        <label for="template-editor" class="block text-sm font-medium text-gray-300 mb-2">Full BBCode
-                            Template</label>
-                        <p class="text-xs text-gray-400 mb-2">Edit the full template below.</p>
-                        <textarea id="template-editor"
-                            class="w-full h-96 p-3 bg-gray-900 border border-gray-700 rounded-md font-mono text-xs focus:ring-2 focus:ring-blue-500 text-green-400"></textarea>
-                        <button id="reset-template-btn"
-                            class="mt-2 text-sm text-blue-400 hover:text-blue-300 underline">Reset to Default</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="space-y-6">
-            <div class="bg-gray-800 p-6 rounded-lg shadow-lg h-full flex flex-col">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-semibold text-white">3. Result</h2>
-                    <button id="copy-btn-top"
-                        class="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed text-sm"
-                        disabled>Copy Code</button>
-                </div>
-                <div class="flex border-b border-gray-700 mb-4">
-                    <button id="preview-tab-btn" class="tab-button active py-2 px-4 font-semibold">Preview</button>
-                    <button id="code-tab-btn" class="tab-button py-2 px-4 font-semibold">BBCode</button>
-                </div>
-                <div id="preview-pane"
-                    class="flex-grow preview-body overflow-auto border border-gray-700 rounded p-4 bg-black">
-                    <p class="text-gray-500">Preview will appear here...</p>
-                </div>
-                <div id="code-pane" class="hidden flex-grow"><textarea id="output-code" readonly
-                        class="w-full h-full p-3 bg-gray-900 border border-gray-700 rounded-md font-mono text-xs resize-none text-gray-300"></textarea>
-                </div>
-                <div class="mt-4 flex gap-4">
-                    <button id="copy-btn-bottom"
-                        class="flex-grow bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
-                        disabled>Copy BBCode</button>
-                    <button id="download-btn"
-                        class="flex-grow bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
-                        disabled>Download .txt</button>
-                </div>
-            </div>
-        </div>
+        <div id="toast-container"></div>
     </main>
 
     <div id="loginModal" class="auth-modal">
@@ -333,13 +107,11 @@
     <div id="syncModal" class="sync-modal">
         <div class="sync-modal-content"><span class="close-sync-modal" data-modal-id="syncModal">&times;</span>
             <h2>Local File Sync</h2>
-            <div class="input-group"><button id="exportData" class="btn-sync">Export</button></div>
+            <p style="color:#aaa;font-size:0.85em;margin-bottom:15px;">Export saves everything on this page (all
+                templates + all their data). Import accepts a full backup or a single template file.</p>
+            <div class="input-group"><button id="exportData" class="btn-sync">Export All Data</button></div>
             <div class="input-group"><label>Import:</label><input type="file" id="importData" accept=".json"
                     style="color:#ccc;"></div>
-            <hr style="border-color:#444;margin:20px 0;">
-            <div class="input-group"><button id="importOldData" class="btn-sync"
-                    style="background-color:#f0ad4e!important;border-color:#eea236!important;">Import Old Local
-                    Data</button></div>
             <div id="syncStatus" style="min-height:1em;margin-top:15px;"></div><button type="button"
                 class="close-sync-modal-button" data-modal-id="syncModal">Close</button>
         </div>
@@ -351,11 +123,13 @@
                 <div class="data-column">
                     <h3>Local</h3>
                     <p><strong>Updated:</strong> <span id="localLastUpdate">N/A</span></p>
+                    <p><strong>Templates:</strong> <span id="localTemplateCount">N/A</span></p>
                     <p><strong>Entries:</strong> <span id="localEntryCount">N/A</span></p>
                 </div>
                 <div class="data-column">
                     <h3>Server</h3>
                     <p><strong>Updated:</strong> <span id="serverLastUpdate">N/A</span></p>
+                    <p><strong>Templates:</strong> <span id="serverTemplateCount">N/A</span></p>
                     <p><strong>Entries:</strong> <span id="serverEntryCount">N/A</span></p>
                 </div>
             </div>
@@ -371,8 +145,9 @@
                     data-modal-id="settingsModal">Close</button></div>
         </div>
     </div>
+
     <script src="/auth.js"></script>
-    <script src="bbcode_editor.js"></script>
+    <script type="module" src="js/app.js"></script>
 </body>
 
 </html>

@@ -11,9 +11,9 @@
     --border: #1f2128;
     --border-strong: #2a2d35;
     --text: #e7e9ee;
-    --text-2: #a4a8b3;
-    --text-3: #6a6e78;
-    --text-4: #4a4d56;
+    --text-2: #aeb2bd;
+    --text-3: #8a8f9b;
+    --text-4: #666a75;
 
     --accent: #5fc8c8;
     --accent-soft: rgba(95, 200, 200, 0.14);
@@ -199,6 +199,38 @@ body.modal-open { overflow: hidden; }
     .desktop-nav { display: none; }
     .app-topbar { padding: 10px 16px; top: 46px; }
     .main { padding: 14px 14px calc(20px + var(--bottom-nav-h)); }
+
+    /* readability: phones get bigger type across the small data text */
+    html, body { font-size: 15.5px; }
+    .pill { font-size: 12.5px; }
+    .pill.sm { font-size: 11.5px; }
+    .dim-sm { font-size: 13px; }
+    .card-title { font-size: 12.5px; }
+    .card-eyebrow { font-size: 12px; }
+    .meta-cell .k { font-size: 11.5px; }
+    .meta-cell .v { font-size: 14.5px; }
+    .meta-cell .vsub { font-size: 12.5px; }
+    .when-sub { font-size: 13.5px; }
+    .quick-btn .qsub { font-size: 13px; }
+    .chart-sub { font-size: 14px; }
+    .stat .stat-label { font-size: 12.5px; }
+    .stat-delta { font-size: 13px; }
+    .supply-cell .sc-dose { font-size: 12px; }
+    .supply-cell .sc-sub { font-size: 11.5px; }
+    .pen-foot { font-size: 13px; }
+    .pen-foot .k { font-size: 11.5px; }
+    .tbl td { font-size: 13.5px; }
+    .tbl th { font-size: 11.5px; }
+    .mc-facts { font-size: 13.5px; }
+    .mc-facts .k { font-size: 11.5px; }
+    .mc-generic { font-size: 12.5px; }
+    .preset .p-meta { font-size: 12.5px; }
+    .cal-day { font-size: 12.5px; }
+    .cal-legend { font-size: 12px; }
+    .tl-sub { font-size: 12.5px; }
+    .field label, .field-label { font-size: 11.5px; }
+    .sr-label { font-size: 11.5px; }
+    .yaxis-label { font-size: 11px; }
 }
 
 /* ================================================
@@ -796,6 +828,17 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 .preset.dim { opacity: 0.55; }
 .preset .p-name { font-size: 13.5px; font-weight: 500; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .preset .p-meta { font-size: 11.5px; color: var(--text-3); font-family: var(--font-mono); margin-top: 3px; }
+.preset-cat {
+    grid-column: 1 / -1;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin: 8px 0 -2px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--border);
+}
+.preset-cat:first-child { margin-top: 0; }
 
 .dose-hl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; }
 .dose-hl-cell {
