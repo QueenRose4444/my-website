@@ -54,31 +54,39 @@
             return locs[(locs.indexOf(lastShot.location) + 1) % locs.length];
         })();
 
-        let dose = initial ? initial.dose : (med.preferredNextDose != null ? med.preferredNextDose : (lastShot ? lastShot.dose : med.doses[0]));
+        // slot-aware default: logging near the 23:00 slot pre-picks that slot's dose
+        const ndForDefault = !initial ? D.predictNextDose(med, shots, set) : null;
+        let dose = initial ? initial.dose
+            : (ndForDefault && ndForDefault.dose != null ? ndForDefault.dose
+                : (med.preferredNextDose != null ? med.preferredNextDose : (lastShot ? lastShot.dose : med.doses[0])));
         let loc = suggestedLoc;
         let penId = initial ? (initial.penId || '') : null; // null = auto
 
+        const cn = D.containerName(med);
         const penHintHtml = () => {
-            if (!isInjection) return '';
             const sug = D.suggestPenForShot(pens, med, dose);
             if (penId === '') return `<div class="pen-hint">Not drawing from supply.</div>`;
             const pen = penId ? pens.find(p => p.id === penId) : sug.pen;
-            if (!pen) return `<div class="pen-hint warn">${Icons.alert} No usable pen in supply for ${dose}${escapeHtml(med.unit)}. Save anyway, or add a pack first.</div>`;
+            if (!pen) return `<div class="pen-hint warn">${Icons.alert} No usable ${cn} in supply for ${dose}${escapeHtml(med.unit)}. Save anyway, or add one first.</div>`;
             const left = Math.round((pen.capacity - pen.used) * 100) / 100;
-            const splitNote = med.splitDose && pen.dose !== dose
-                ? ` · split: <strong>≈${Math.round(D.clicksForDose(dose, pen.dose, med.clicksPerDose))} clicks</strong> from the ${pen.dose}${escapeHtml(med.unit)} pen`
-                : '';
+            let splitNote = '';
+            if (pen.dose !== dose) {
+                if (med.splitDose) splitNote = ` · split: <strong>≈${Math.round(D.clicksForDose(dose, pen.dose, med.clicksPerDose))} clicks</strong> from the ${pen.dose}${escapeHtml(med.unit)} pen`;
+                else if (med.type === 'pill') splitNote = ` · <strong>${Math.round(D.doseConsumption(dose, pen) * 100) / 100}× ${pen.dose}${escapeHtml(med.unit)}</strong> tablets`;
+            }
             const openNote = (!penId && sug.isNewOpen) ? 'Will open new' : 'Using';
-            return `<div class="pen-hint">${openNote} <strong>${pen.dose}${escapeHtml(med.unit)}</strong> pen — ${left} dose${left === 1 ? '' : 's'} left${splitNote}.</div>`;
+            const doseWord = med.type === 'pill' ? 'tablet' : 'dose';
+            return `<div class="pen-hint">${openNote} <strong>${pen.dose}${escapeHtml(med.unit)}</strong> ${cn} — ${left} ${doseWord}${left === 1 ? '' : 's'} left${splitNote}.</div>`;
         };
 
+        const flexible = med.splitDose || (med.type && med.type !== 'injection');
         const eligiblePens = () => pens.filter(p => p.medId === med.id && !p.exhaustedDate &&
             ((p.capacity - p.used) >= D.doseConsumption(dose, p) - 0.001 || !p.openedDate) &&
-            (med.splitDose || p.dose === dose));
+            (flexible || p.dose === dose));
 
         openModal({
             title: initial ? `Edit ${med.name} ${isInjection ? 'shot' : 'dose'}` : `Log ${med.name} ${isInjection ? 'shot' : 'dose'}`,
-            sub: `${med.generic || 'custom'}${isInjection ? ` · pen capacity ${med.penCapacity}` : ''}`,
+            sub: `${med.generic || 'custom'} · ${med.penCapacity} per ${cn}`,
             bodyHtml: `
                 <div class="field">
                     <label>Dose (${escapeHtml(med.unit)})</label>
@@ -97,16 +105,15 @@
                         ${locs.map(L => `<button class="bd-loc ${loc === L ? 'active' : ''} ${L === suggestedLoc ? 'next' : ''}" data-loc="${escapeHtml(L)}">${escapeHtml(L)}</button>`).join('')}
                     </div>
                 </div>` : ''}
-                ${isInjection ? `
                 <div class="field">
-                    <label>From which pen</label>
+                    <label>From which ${cn}</label>
                     <select id="penSelect">
                         <option value="auto">Auto (smart routing)</option>
                         ${eligiblePens().map(p => `<option value="${escapeHtml(p.id)}" ${penId === p.id ? 'selected' : ''}>${p.dose}${escapeHtml(med.unit)} · ${Math.round((p.capacity - p.used) * 10) / 10} of ${p.capacity} left · ${p.openedDate ? 'opened ' + D.fmtDateShort(p.openedDate) : 'unopened'}</option>`).join('')}
                         <option value="" ${penId === '' ? 'selected' : ''}>— don't draw from supply —</option>
                     </select>
                     <div id="penHint">${penHintHtml()}</div>
-                </div>` : ''}`,
+                </div>`,
             footHtml: `
                 <button class="btn ghost" data-act="cancel">Cancel</button>
                 <button class="btn primary" data-act="save">${Icons.check} ${initial ? 'Save changes' : 'Save ' + (isInjection ? 'shot' : 'dose')}</button>`,
@@ -152,7 +159,7 @@
                     Store().update(s => {
                         // resolve pen
                         let usePenId = penId;
-                        if (isInjection && usePenId === null) {
+                        if (usePenId === null) {
                             const sug = D.suggestPenForShot(D.recomputePenState(s.pens.filter(p => p.medId === med.id), s.shots), med, dose);
                             if (sug.pen) {
                                 usePenId = sug.pen.id;
@@ -183,6 +190,56 @@
                     });
                     toast(initial ? 'Dose updated' : 'Dose logged');
                     close();
+                });
+            },
+        });
+    }
+
+    // ------------------------------------------------
+    // Log mini-menu — the centre button on the mobile bar
+    // ------------------------------------------------
+    function logSheet() {
+        const S = Store();
+        const set = S.state.settings;
+        const meds = S.state.meds;
+        if (!meds.length && set.weightTrackingEnabled === false) { addMed(); return; }
+        const rows = meds.map(m => {
+            const nd = D.predictNextDose(m, S.medShots(m.id), set);
+            const late = nd ? D.lateDoseStatus(m, nd) : null;
+            const sub = !nd ? 'no doses yet'
+                : late ? 'overdue'
+                : `next ${D.fmtTimeStr(nd.time, set)} ${D.dayLabel(nd.date).toLowerCase()} · ${nd.dose}${m.unit}`;
+            return `<button class="sheet-row" data-sheet-med="${escapeHtml(m.id)}">
+                <span class="ml-dot" style="background:${escapeHtml(m.color || '#5fc8c8')}"></span>
+                <span class="sheet-main">Log dose — ${escapeHtml(m.name)}</span>
+                <span class="sheet-sub ${late ? 'txt-danger' : ''}">${escapeHtml(sub)}</span>
+            </button>`;
+        }).join('');
+        openModal({
+            title: 'Log…',
+            bodyHtml: `<div class="sheet-rows">
+                ${rows}
+                ${set.weightTrackingEnabled !== false ? `<button class="sheet-row" data-sheet-weight>
+                    <span class="qicon sm">${Icons.scale}</span>
+                    <span class="sheet-main">Log weight</span>
+                </button>` : ''}
+                ${!meds.length ? `<button class="sheet-row" data-sheet-addmed>
+                    <span class="qicon sm">${Icons.plus}</span>
+                    <span class="sheet-main">Add a medication</span>
+                </button>` : ''}
+            </div>`,
+            onMount(modal, close) {
+                modal.addEventListener('click', e => {
+                    const medBtn = e.target.closest('[data-sheet-med]');
+                    if (medBtn) {
+                        const id = medBtn.dataset.sheetMed;
+                        Store().update(st => { st.activeMedId = id; }, { silent: true });
+                        close();
+                        logShot();
+                        return;
+                    }
+                    if (e.target.closest('[data-sheet-weight]')) { close(); logWeight(); }
+                    if (e.target.closest('[data-sheet-addmed]')) { close(); addMed(); }
                 });
             },
         });
@@ -280,7 +337,7 @@
 
         openModal({
             title: 'Add to supply',
-            sub: `One package of ${med.name} = ${pkgPens} pen${pkgPens === 1 ? '' : 's'} × ${med.penCapacity} dose${med.penCapacity === 1 ? '' : 's'}.`,
+            sub: `One package of ${med.name} = ${pkgPens} ${D.containerName(med)}${pkgPens === 1 ? '' : 's'} × ${med.penCapacity} ${med.type === 'pill' ? 'tablet' : 'dose'}${med.penCapacity === 1 ? '' : 's'}.`,
             bodyHtml: `
                 <div class="field">
                     <label>Dose (${escapeHtml(med.unit)})</label>
@@ -292,8 +349,8 @@
                 <div class="field">
                     <button class="link no-ml" id="advToggle">↓ adjust package size (rare)</button>
                     <div class="field-row" id="advRow" style="display:none;margin-top:10px">
-                        <div class="field nomb"><label>Pens in this package</label><input type="number" min="1" id="penCount" value="${pkgPens}"></div>
-                        <div class="field nomb"><label>Doses per pen</label><input type="number" min="1" id="penCap" value="${med.penCapacity}"></div>
+                        <div class="field nomb"><label>${(() => { const w = D.containerPlural(med, 2); return w.charAt(0).toUpperCase() + w.slice(1); })()} in this package</label><input type="number" min="1" id="penCount" value="${pkgPens}"></div>
+                        <div class="field nomb"><label>${med.type === 'pill' ? 'Tablets' : 'Doses'} per ${D.containerName(med)}</label><input type="number" min="1" id="penCap" value="${med.penCapacity}"></div>
                     </div>
                 </div>
                 <div class="pen-hint" id="penSummary"></div>`,
@@ -305,7 +362,7 @@
                 const refresh = () => {
                     const count = parseInt(modal.querySelector('#penCount').value) || 1;
                     const cap = parseInt(modal.querySelector('#penCap').value) || 1;
-                    summary.innerHTML = `Adding <strong>${count}</strong> pen${count === 1 ? '' : 's'} of <strong>${dose}${escapeHtml(med.unit)}</strong> = <strong>${count * cap}</strong> dose${count * cap === 1 ? '' : 's'} to supply.`;
+                    summary.innerHTML = `Adding <strong>${count}</strong> ${D.containerPlural(med, count)} of <strong>${dose}${escapeHtml(med.unit)}</strong> = <strong>${count * cap}</strong> ${med.type === 'pill' ? 'tablet' : 'dose'}${count * cap === 1 ? '' : 's'} to supply.`;
                 };
                 refresh();
                 modal.querySelector('#penDoseChips').addEventListener('click', e => {
@@ -388,25 +445,38 @@
                 ${durRow('cmFreq', 'How often — e.g. 12 hours, 1 day, 1 week', m ? m.frequency : 7, 7)}
             </div>
             <div class="field-row" id="cmPenRow">
-                <div class="field nomb"><label>Doses per pen</label><input type="number" id="cmCap" value="${m ? m.penCapacity : 4}"></div>
-                <div class="field nomb"><label>Pens per package</label><input type="number" id="cmPkg" value="${m ? m.pensPerPackage || 1 : 1}"></div>
+                <div class="field nomb"><label>Doses per pen / tablets per pack</label><input type="number" id="cmCap" value="${m ? m.penCapacity : 4}"></div>
+                <div class="field nomb"><label>Pens/packs per package</label><input type="number" id="cmPkg" value="${m ? m.pensPerPackage || 1 : 1}"></div>
             </div>
             <div class="field-row">
                 ${durRow('cmHl', 'Half-life', m ? m.halfLife : 5, 5)}
                 ${durRow('cmTtp', 'Time to peak (optional)', m && m.timeToPeak ? m.timeToPeak : null, '', '0')}
             </div>
-            <div class="field"><label>Colour</label><input type="color" id="cmColor" value="${m ? m.color || '#5fc8c8' : '#5fc8c8'}" class="color-input"></div>
+            <div class="field-row">
+                <div class="field nomb"><label>Colour</label><input type="color" id="cmColor" value="${m ? m.color || '#5fc8c8' : '#5fc8c8'}" class="color-input"></div>
+                <div class="field nomb"><label>Category (for grouping)</label>
+                    <select id="cmCategory">${D.CATEGORY_ORDER.map(c => `<option ${((m && m.category) || 'Other') === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
+            </div>
             <div class="field">
                 <label>Usual day of week (weekly meds) — Auto detects from your history</label>
                 <div class="chip-grp" id="cmSchedDay">
                     ${['auto'].concat(D.DAY_NAMES).map(dn => `<button class="chip sm ${(m && m.scheduleDay ? m.scheduleDay : 'auto') === dn ? 'active' : ''}" data-day="${dn}">${dn === 'auto' ? 'Auto' : dn.slice(0, 3)}</button>`).join('')}
                 </div>
             </div>
-            <div class="field-row">
-                <div class="field nomb"><label>Usual time of day (blank = auto)</label>
-                    <input type="time" id="cmSchedTime" value="${m && m.scheduleTime && m.scheduleTime !== 'auto' ? m.scheduleTime : ''}"></div>
-                <div class="field nomb"><label>Chart y-step (blank = auto)</label>
-                    <input type="number" step="0.1" min="0" id="cmGraphStep" value="${m && m.graphStep ? m.graphStep : ''}" placeholder="e.g. 2"></div>
+            <div class="field">
+                <label>Usual time(s) of day — one per daily dose, e.g. 08:00 / 13:00 / 18:00 (none = auto-detect)</label>
+                <div class="time-list" id="cmTimes">
+                    ${(() => {
+                        const slots = D.getScheduleSlots(m || {});
+                        const list = slots.length ? slots : (m && m.scheduleTime && m.scheduleTime !== 'auto' ? [{ time: m.scheduleTime, dose: null }] : []);
+                        return list.map(sl => `<span class="time-item"><input type="time" value="${sl.time}" data-schedtime><input type="number" min="0" step="any" value="${sl.dose != null ? sl.dose : ''}" data-scheddose placeholder="dose" title="Dose at this time (blank = usual)"><button type="button" class="icon-btn xs" data-deltime title="Remove">✕</button></span>`).join('');
+                    })()}
+                    <button type="button" class="btn small" id="cmAddTime">+ add time</button>
+                </div>
+            </div>
+            <div class="field">
+                <label>Chart y-step (blank = auto)</label>
+                <input type="number" step="0.1" min="0" id="cmGraphStep" value="${m && m.graphStep ? m.graphStep : ''}" placeholder="e.g. 2">
             </div>
             <div class="field-row">
                 <div class="field nomb"><label>Late dose OK within (days)</label>
@@ -431,6 +501,7 @@
                 <div id="presetWrap">
                     <div class="field"><input id="presetSearch" placeholder="Search presets…"></div>
                     <div class="preset-grid" id="presetGrid"></div>
+                    <div id="presetDetails"></div>
                 </div>`}
                 <div id="customWrap" style="display:${mode === 'custom' || isEdit ? '' : 'none'}">${customFormHtml(editMed)}</div>`,
             footHtml: `
@@ -467,6 +538,14 @@
                             return `<div class="preset-cat">${cat}</div>` + group.map(card).join('');
                         })
                         .join('') || '<div class="empty pad-sm"><div class="em-sub">No matches — try a custom med</div></div>';
+                    // details of the selected preset, with a route to tweak them
+                    const det = modal.querySelector('#presetDetails');
+                    if (det) det.innerHTML = !preset ? '' : `
+                        <div class="pen-hint col preset-details">
+                            <div><strong>${preset.name}</strong> — ${D.fmtFreq(preset.frequency)} · half-life ${D.fmtDur(preset.halfLife)}${preset.timeToPeak ? ` · peaks after ${D.fmtDur(preset.timeToPeak)}` : ''} · ${preset.penCapacity} ${preset.type === 'pill' ? 'tablets' : 'doses'} per ${D.containerName(preset)}</div>
+                            <div>Doses: ${preset.doses.join(', ')} ${preset.unit}</div>
+                            <button type="button" class="btn small" id="presetEditBtn" style="margin-top:6px">${Icons.edit} Edit these details before adding</button>
+                        </div>`;
                 };
                 renderPresets();
 
@@ -492,50 +571,85 @@
                     refreshSaveState();
                 });
 
-                // custom form behaviour
-                let cmSchedDay = editMed && editMed.scheduleDay ? editMed.scheduleDay : 'auto';
-                const schedDayChips = modal.querySelector('#cmSchedDay');
-                if (schedDayChips) schedDayChips.addEventListener('click', e => {
-                    const b = e.target.closest('[data-day]');
-                    if (!b) return;
-                    cmSchedDay = b.dataset.day;
-                    schedDayChips.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.day === cmSchedDay));
-                });
-                const typeChips = modal.querySelector('#cmType');
-                let cmType = editMed ? (editMed.type || 'injection') : 'injection';
-                if (typeChips) typeChips.addEventListener('click', e => {
-                    const b = e.target.closest('[data-type]');
-                    if (!b) return;
-                    cmType = b.dataset.type;
-                    typeChips.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.type === cmType));
-                    modal.querySelector('#cmPenRow').style.display = cmType === 'injection' ? '' : 'none';
-                });
-                if (modal.querySelector('#cmPenRow')) modal.querySelector('#cmPenRow').style.display = cmType === 'injection' ? '' : 'none';
+                // custom form behaviour — DELEGATED from customWrap so the form
+                // can be re-rendered (e.g. prefilled from a preset) without rebinding
+                const customWrap = modal.querySelector('#customWrap');
+                let customBase = editMed || null; // the med the form was rendered from
+                let cmSchedDay = customBase && customBase.scheduleDay ? customBase.scheduleDay : 'auto';
+                let cmType = customBase ? (customBase.type || 'injection') : 'injection';
 
-                const advToggle = modal.querySelector('#cmAdvToggle');
-                const doseHlWrap = modal.querySelector('#cmDoseHl');
                 const renderDoseHl = () => {
+                    const doseHlWrap = modal.querySelector('#cmDoseHl');
+                    if (!doseHlWrap) return;
                     const doses = parseDoses();
-                    const existing = (editMed && editMed.dose2halfLife) || {};
+                    const existing = (customBase && customBase.dose2halfLife) || {};
                     doseHlWrap.innerHTML = doses.length === 0
                         ? '<div class="pen-hint">Enter doses first.</div>'
                         : `<div class="dose-hl-grid">${doses.map(x => `
                             <div class="dose-hl-cell"><span>${x}</span><input type="number" step="0.1" data-dosehl="${x}" value="${existing[x] != null ? existing[x] : ''}" placeholder="${modal.querySelector('#cmHl').value || '5'}"><span class="dim-sm">d</span></div>`).join('')}</div>`;
                 };
-                if (advToggle) advToggle.addEventListener('click', () => {
-                    const show = doseHlWrap.style.display === 'none';
-                    doseHlWrap.style.display = show ? '' : 'none';
-                    advToggle.textContent = show ? 'hide' : 'show';
-                    if (show) renderDoseHl();
+
+                const renderCustomForm = m => {
+                    customBase = m || null;
+                    customWrap.innerHTML = customFormHtml(m);
+                    cmSchedDay = m && m.scheduleDay ? m.scheduleDay : 'auto';
+                    cmType = m ? (m.type || 'injection') : 'injection';
+                    if (m && m.dose2halfLife) renderDoseHl();
+                };
+
+                customWrap.addEventListener('click', e => {
+                    const dayBtn = e.target.closest('#cmSchedDay [data-day]');
+                    if (dayBtn) {
+                        cmSchedDay = dayBtn.dataset.day;
+                        customWrap.querySelectorAll('#cmSchedDay .chip').forEach(c => c.classList.toggle('active', c.dataset.day === cmSchedDay));
+                        return;
+                    }
+                    if (e.target.closest('#cmAddTime')) {
+                        const timesWrap = customWrap.querySelector('#cmTimes');
+                        const span = document.createElement('span');
+                        span.className = 'time-item';
+                        span.innerHTML = '<input type="time" data-schedtime><input type="number" min="0" step="any" data-scheddose placeholder="dose" title="Dose at this time (blank = usual)"><button type="button" class="icon-btn xs" data-deltime title="Remove">✕</button>';
+                        timesWrap.insertBefore(span, customWrap.querySelector('#cmAddTime'));
+                        return;
+                    }
+                    const del = e.target.closest('[data-deltime]');
+                    if (del) { del.closest('.time-item').remove(); return; }
+                    const typeBtn = e.target.closest('#cmType [data-type]');
+                    if (typeBtn) {
+                        cmType = typeBtn.dataset.type;
+                        customWrap.querySelectorAll('#cmType .chip').forEach(c => c.classList.toggle('active', c.dataset.type === cmType));
+                        return;
+                    }
+                    const advToggle = e.target.closest('#cmAdvToggle');
+                    if (advToggle) {
+                        const doseHlWrap = customWrap.querySelector('#cmDoseHl');
+                        const show = doseHlWrap.style.display === 'none';
+                        doseHlWrap.style.display = show ? '' : 'none';
+                        advToggle.textContent = show ? 'hide' : 'show';
+                        if (show) renderDoseHl();
+                    }
+                });
+                customWrap.addEventListener('input', e => {
+                    if (e.target.id === 'cmDoses') {
+                        const doseHlWrap = customWrap.querySelector('#cmDoseHl');
+                        if (doseHlWrap && doseHlWrap.style.display !== 'none') renderDoseHl();
+                        refreshSaveState();
+                    }
+                    if (e.target.id === 'cmName') refreshSaveState();
                 });
                 if (editMed && editMed.dose2halfLife) renderDoseHl();
-                const dosesInput = modal.querySelector('#cmDoses');
-                if (dosesInput) dosesInput.addEventListener('input', () => {
-                    if (doseHlWrap.style.display !== 'none') renderDoseHl();
+
+                // "Edit these details before adding" — preset values, custom form
+                modal.addEventListener('click', e => {
+                    if (!e.target.closest('#presetEditBtn') || !preset) return;
+                    mode = 'custom';
+                    const modeChipsEl = modal.querySelector('#modeChips');
+                    if (modeChipsEl) modeChipsEl.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.mode === 'custom'));
+                    modal.querySelector('#presetWrap').style.display = 'none';
+                    customWrap.style.display = '';
+                    renderCustomForm(Object.assign({}, preset));
                     refreshSaveState();
                 });
-                const nameInput = modal.querySelector('#cmName');
-                if (nameInput) nameInput.addEventListener('input', refreshSaveState);
 
                 modal.querySelector('[data-act="cancel"]').addEventListener('click', close);
                 saveBtn.addEventListener('click', () => {
@@ -567,28 +681,49 @@
                         frequency: durDays('cmFreq') || 7,
                         halfLife: durDays('cmHl') || 5,
                         timeToPeak: durDays('cmTtp') || 0,
-                        penCapacity: cmType === 'injection' ? (parseInt(modal.querySelector('#cmCap').value) || 4) : 1,
-                        pensPerPackage: cmType === 'injection' ? (parseInt(modal.querySelector('#cmPkg').value) || 1) : 1,
+                        penCapacity: parseInt(modal.querySelector('#cmCap').value) || 4,
+                        pensPerPackage: parseInt(modal.querySelector('#cmPkg').value) || 1,
                         unit: modal.querySelector('#cmUnit').value,
                         color: modal.querySelector('#cmColor').value,
+                        category: modal.querySelector('#cmCategory').value,
                         scheduleDay: cmSchedDay,
-                        scheduleTime: modal.querySelector('#cmSchedTime').value || 'auto',
+                        scheduleTimes: Array.from(modal.querySelectorAll('#cmTimes .time-item')).map(item => {
+                            const time = item.querySelector('[data-schedtime]').value;
+                            const dose = parseFloat(item.querySelector('[data-scheddose]').value);
+                            return /^\d{1,2}:\d{2}$/.test(time) ? { time, dose: (!isNaN(dose) && dose > 0) ? dose : null } : null;
+                        }).filter(Boolean),
                         graphStep: parseFloat(modal.querySelector('#cmGraphStep').value) || null,
                     };
+                    medPayload.scheduleTime = (medPayload.scheduleTimes[0] && medPayload.scheduleTimes[0].time) || 'auto';
+                    if (customBase && customBase.presetId) medPayload.presetId = customBase.presetId;
+                    // 2+ usual times a day only make sense with a multi-daily
+                    // frequency — derive it so the slot schedule actually applies
+                    if (medPayload.scheduleTimes.length >= 2 && medPayload.frequency >= 0.95) {
+                        medPayload.frequency = Math.round((1 / medPayload.scheduleTimes.length) * 100) / 100;
+                    }
                     // missed-dose window — keep the preset's note + source, override the numbers
                     const lateOk = parseFloat(modal.querySelector('#cmLateOk').value);
                     const minGap = parseFloat(modal.querySelector('#cmMinGap').value);
+                    // customBase = whatever the form was rendered from (an edited med
+                    // OR a preset being tweaked before adding) — keep its guidance
                     if (!isNaN(lateOk) || !isNaN(minGap)) {
-                        const base = (editMed && editMed.missedDose) || {};
+                        const base = (customBase && customBase.missedDose) || {};
                         medPayload.missedDose = Object.assign({}, base, {
                             takeWithinDays: !isNaN(lateOk) ? lateOk : (base.takeWithinDays || 0),
                             minGapDays: !isNaN(minGap) ? minGap : (base.minGapDays || 1),
                         });
-                    } else if (editMed && editMed.missedDose) {
-                        medPayload.missedDose = editMed.missedDose;
+                    } else if (customBase && customBase.missedDose) {
+                        medPayload.missedDose = customBase.missedDose;
+                    }
+                    // pharmacology extras the form has no fields for ride along too
+                    if (customBase) {
+                        ['titration', 'splitDose', 'clicksPerDose'].forEach(k => {
+                            if (customBase[k] != null && medPayload[k] == null) medPayload[k] = customBase[k];
+                        });
                     }
                     const hlInputs = modal.querySelectorAll('[data-dosehl]');
-                    if (doseHlWrap.style.display !== 'none' && hlInputs.length) {
+                    const doseHlWrap = modal.querySelector('#cmDoseHl');
+                    if (doseHlWrap && doseHlWrap.style.display !== 'none' && hlInputs.length) {
                         const map = {};
                         hlInputs.forEach(inp => {
                             const v = parseFloat(inp.value);
@@ -623,13 +758,29 @@
     function backfill(med, onDone) {
         const S = Store();
         let currentDose = med.preferredNextDose != null ? med.preferredNextDose : med.doses[Math.floor(med.doses.length / 2)] || med.doses[0];
-        let mode = 'auto'; // 'auto' | 'manual'
+        // multi-daily meds default straight to the daily-plan editor
+        let mode = (med.frequency || 7) < 0.9 ? 'plan' : 'auto'; // 'auto' | 'manual' | 'plan'
         let freqVal = med.frequency || 7, freqUnit = 'days';
 
         const stepRowsHtml = () => med.doses.filter(x => x <= currentDose).map(x => `
             <div class="bf-step"><span class="bf-dose">${x}${escapeHtml(med.unit)}</span>
             <input type="number" min="0" data-step="${x}" value="${x === currentDose ? '' : 4}" placeholder="${x === currentDose ? 'until today' : 'weeks'}">
             <span class="dim-sm">weeks</span></div>`).join('');
+
+        // daily plan rows: time + count × dose (e.g. 23:00 · 2 × 5mg = 10mg)
+        const existingSlots = D.getScheduleSlots(med);
+        const planDefaults = existingSlots.length
+            ? existingSlots.map(sl => ({ time: sl.time, count: 1, dose: sl.dose != null ? sl.dose : (med.doses[0] || 5) }))
+            : [{ time: '08:00', count: 1, dose: med.doses[0] || 5 }];
+        const planRowHtml = r => `
+            <div class="bf-plan-row">
+                <input type="time" value="${r ? r.time : ''}" data-plan-time>
+                <input type="number" min="1" step="1" value="${r ? r.count : 1}" data-plan-count title="How many at once">
+                <span class="dim-sm">×</span>
+                <input type="number" min="0" step="any" value="${r ? r.dose : ''}" data-plan-dose placeholder="dose">
+                <span class="dim-sm">${escapeHtml(med.unit)}</span>
+                <button type="button" class="icon-btn xs" data-plan-del title="Remove">✕</button>
+            </div>`;
 
         openModal({
             title: `Already taking ${med.name}?`,
@@ -659,15 +810,22 @@
                     <div class="field nomb"><label>Started the med on (optional)</label><input type="date" id="bfStart"></div>
                 </div>
                 <div class="field">
-                    <label>How should we estimate the steps before ${currentDose}${escapeHtml(med.unit)}?</label>
+                    <label>How should we estimate your history?</label>
                     <div class="chip-grp" id="bfMode">
-                        <button class="chip active" data-mode="auto">Standard schedule</button>
-                        <button class="chip" data-mode="manual">I'll detail each dose</button>
+                        <button class="chip ${mode === 'auto' ? 'active' : ''}" data-mode="auto">Standard schedule</button>
+                        <button class="chip ${mode === 'manual' ? 'active' : ''}" data-mode="manual">I'll detail each dose</button>
+                        <button class="chip ${mode === 'plan' ? 'active' : ''}" data-mode="plan">Daily plan (times × doses)</button>
                     </div>
                 </div>
-                <div id="bfManual" style="display:none">
+                <div id="bfManual" style="display:${mode === 'manual' ? '' : 'none'}">
                     <label class="field-label">Time spent at each dose</label>
                     <div id="bfSteps">${stepRowsHtml()}</div>
+                </div>
+                <div id="bfPlan" style="display:${mode === 'plan' ? '' : 'none'}">
+                    <label class="field-label">Your daily plan — e.g. 5pm 1×5${escapeHtml(med.unit)}, 8pm 1×5${escapeHtml(med.unit)}, 11pm 2×5${escapeHtml(med.unit)}</label>
+                    <div id="bfPlanRows">${planDefaults.map(planRowHtml).join('')}</div>
+                    <button type="button" class="btn small" id="bfPlanAdd" style="margin-top:6px">${Icons.plus} add time</button>
+                    <div class="dim-sm" style="margin-top:8px">This plan is also saved to the med, so “next dose” follows it from now on.</div>
                 </div>
                 <div class="pen-hint" id="bfPreview"></div>`,
             footHtml: `
@@ -679,6 +837,13 @@
                     const u = modal.querySelector('#bfFreqUnit').value;
                     return u === 'hours' ? v / 24 : u === 'weeks' ? v * 7 : v;
                 };
+                const collectPlanSlots = () => Array.from(modal.querySelectorAll('.bf-plan-row')).map(row => {
+                    const time = row.querySelector('[data-plan-time]').value;
+                    const count = parseInt(row.querySelector('[data-plan-count]').value) || 1;
+                    const dose = parseFloat(row.querySelector('[data-plan-dose]').value);
+                    return { time, dose: (!isNaN(dose) && dose > 0) ? Math.round(count * dose * 1000) / 1000 : null };
+                }).filter(sl => /^\d{1,2}:\d{2}$/.test(sl.time) && sl.dose > 0);
+
                 const buildOpts = () => {
                     const opts = {
                         med, currentDose,
@@ -689,7 +854,11 @@
                         locations: S.state.settings.shotLocationTrackingEnabled && (!med.type || med.type === 'injection')
                             ? S.state.settings.shotLocations : null,
                     };
-                    if (mode === 'manual') {
+                    if (mode === 'plan') {
+                        opts.dailySlots = collectPlanSlots();
+                        // daily plans need a start — default to 4 weeks back
+                        if (!opts.startDate) opts.startDate = D.ymd(D.addDays(new Date(), -28));
+                    } else if (mode === 'manual') {
                         const steps = [];
                         modal.querySelectorAll('[data-step]').forEach(inp => {
                             const stepDose = parseFloat(inp.dataset.step);
@@ -706,13 +875,26 @@
                 };
                 const preview = () => {
                     try {
-                        const shots = D.estimateBackfillShots(buildOpts());
+                        const opts = buildOpts();
+                        const shots = D.estimateBackfillShots(opts);
                         const first = shots[0];
+                        const tail = mode === 'plan'
+                            ? ` (${opts.dailySlots.length} per day: ${opts.dailySlots.map(sl => `${sl.time} ${sl.dose}${med.unit}`).join(', ')})`
+                            : `, ending on ${currentDose}${escapeHtml(med.unit)}`;
                         modal.querySelector('#bfPreview').innerHTML = shots.length
-                            ? `Will add <strong>${shots.length}</strong> estimated dose${shots.length === 1 ? '' : 's'} from <strong>${D.fmtDateShort(first.timestamp)}</strong> to <strong>${D.fmtDateShort(shots[shots.length - 1].timestamp)}</strong>, ending on ${currentDose}${escapeHtml(med.unit)}.`
+                            ? `Will add <strong>${shots.length}</strong> estimated dose${shots.length === 1 ? '' : 's'} from <strong>${D.fmtDateShort(first.timestamp)}</strong> to <strong>${D.fmtDateShort(shots[shots.length - 1].timestamp)}</strong>${tail}.`
                             : 'Nothing to add with these settings.';
                     } catch (e) { modal.querySelector('#bfPreview').textContent = 'Could not build a preview.'; }
                 };
+
+                // plan mode replaces the single-dose/frequency questions
+                const applyModeVisibility = () => {
+                    modal.querySelector('#bfManual').style.display = mode === 'manual' ? '' : 'none';
+                    modal.querySelector('#bfPlan').style.display = mode === 'plan' ? '' : 'none';
+                    modal.querySelector('#bfDose').closest('.field').style.display = mode === 'plan' ? 'none' : '';
+                    modal.querySelector('#bfFreqVal').closest('.field-row').style.display = mode === 'plan' ? 'none' : '';
+                };
+                applyModeVisibility();
                 preview();
 
                 modal.querySelector('#bfDose').addEventListener('click', e => {
@@ -728,9 +910,20 @@
                     if (!b) return;
                     mode = b.dataset.mode;
                     modal.querySelectorAll('#bfMode .chip').forEach(c => c.classList.toggle('active', c.dataset.mode === mode));
-                    modal.querySelector('#bfManual').style.display = mode === 'manual' ? '' : 'none';
+                    applyModeVisibility();
                     preview();
                 });
+                modal.querySelector('#bfPlanAdd').addEventListener('click', () => {
+                    const rows = modal.querySelector('#bfPlanRows');
+                    rows.insertAdjacentHTML('beforeend', planRowHtml(null));
+                    preview();
+                });
+                modal.querySelector('#bfPlan').addEventListener('click', e => {
+                    const del = e.target.closest('[data-plan-del]');
+                    if (del) { del.closest('.bf-plan-row').remove(); preview(); }
+                });
+                modal.querySelector('#bfPlan').addEventListener('input', preview);
+                modal.querySelector('#bfPlan').addEventListener('change', preview);
                 ['#bfFreqVal', '#bfFreqUnit', '#bfTime', '#bfLast', '#bfStart'].forEach(sel =>
                     modal.querySelector(sel).addEventListener('change', preview));
                 modal.querySelector('#bfManual').addEventListener('input', preview);
@@ -752,10 +945,21 @@
                             s.shots.forEach(x => { if (assignment[x.id]) x.penId = assignment[x.id]; });
                             s.pens = s.pens.concat(pens);
                         }
-                        // store the chosen frequency on the med if customised
+                        // keep the med's schedule in step with what was estimated
                         if (m) {
-                            const fd = buildOpts().frequencyDays;
-                            if (Math.abs(fd - m.frequency) > 0.01) m.frequency = Math.round(fd * 100) / 100;
+                            if (mode === 'plan') {
+                                // daily plan becomes the med's ongoing schedule so
+                                // "next dose" follows the right slot at the right dose
+                                const slots = collectPlanSlots();
+                                if (slots.length) {
+                                    m.scheduleTimes = slots;
+                                    m.scheduleTime = slots[0].time;
+                                    m.frequency = Math.round((1 / slots.length) * 100) / 100;
+                                }
+                            } else {
+                                const fd = buildOpts().frequencyDays;
+                                if (Math.abs(fd - m.frequency) > 0.01) m.frequency = Math.round(fd * 100) / 100;
+                            }
                         }
                     });
                     toast(`${shots.length} estimated doses added`);
@@ -924,6 +1128,13 @@
                 </div>
 
                 <div class="setting-block">
+                    <div class="sr-label">Mobile text size</div>
+                    <div class="setting-row"><span class="sr-sub">Bigger text on phones</span>
+                        <div class="chip-grp">${[['md', 'Normal'], ['lg', 'Large'], ['xl', 'Extra large']].map(([v, l]) =>
+                            `<button class="chip ${(set.textScale || 'lg') === v ? 'active' : ''}" data-set="textScale" data-val="${v}">${l}</button>`).join('')}</div></div>
+                </div>
+
+                <div class="setting-block">
                     <div class="sr-label">Formats</div>
                     <div class="setting-row"><span class="sr-sub">Time</span>
                         <div class="chip-grp">${chip('timeFormat', '12hr', '12h', set.timeFormat)}${chip('timeFormat', '24hr', '24h', set.timeFormat)}</div></div>
@@ -1005,7 +1216,7 @@
                     if (key === 'goalKg' || key === 'startKg') val = parseFloat(val);
                     s.settings[key] = val;
                 });
-                if (key === 'theme' || key === 'accent') window.App.applyTheme();
+                if (key === 'theme' || key === 'accent' || key === 'textScale') window.App.applyTheme();
                 render();
             }));
             drawer.querySelectorAll('[data-toggle]').forEach(t => t.addEventListener('click', () => {
@@ -1181,5 +1392,5 @@
         });
     }
 
-    window.Modals = { logShot, logWeight, addPens, addMed, backfill, importExport, settingsDrawer, authModal, changePasswordModal, syncConflict };
+    window.Modals = { logShot, logSheet, logWeight, addPens, addMed, backfill, importExport, settingsDrawer, authModal, changePasswordModal, syncConflict };
 })();

@@ -15,6 +15,14 @@
     const LOGGING = ENVIRONMENT === 'wip';
     const log = (...a) => { if (LOGGING) console.log('[STORE]', ...a); };
 
+    // settings that belong to THIS DEVICE (phone vs PC want different views);
+    // they are excluded from sync-conflict detection and never adopted from
+    // the server — each device keeps its own copy in DEVICE_KEY
+    const DEVICE_KEY = `${APP_NAME}_${ENVIRONMENT}_device`;
+    const DEVICE_KEYS = ['theme', 'accent', 'textScale', 'dashAll', 'chartOrder',
+        'showMedLevel', 'showWeight', 'showCalendar', 'showStats',
+        'medRange', 'medProjection', 'medLevelScope', 'medYDensity', 'medChartHeight', 'weightRange'];
+
     const DEFAULT_SETTINGS = {
         dateFormat: 'dd/mm/yyyy',
         timeFormat: '12hr',
@@ -43,6 +51,8 @@
         medYDensity: 'auto',
         medChartHeight: 'm',
         weightRange: 'm',
+        textScale: 'md',   // mobile text zoom: md | lg | xl
+        dashAll: false,     // dashboard shows the all-meds overview when multiple meds
         onboardedAt: null,
     };
 
@@ -56,7 +66,7 @@
         if (!preset) return m;
         const merged = Object.assign({}, m);
         if (!merged.presetId) merged.presetId = preset.presetId;
-        ['missedDose', 'titration', 'splitDose', 'clicksPerDose', 'timeToPeak', 'generic', 'type', 'pensPerPackage'].forEach(k => {
+        ['missedDose', 'titration', 'splitDose', 'clicksPerDose', 'timeToPeak', 'generic', 'type', 'pensPerPackage', 'category'].forEach(k => {
             if (merged[k] == null && preset[k] != null) merged[k] = preset[k];
         });
         // note + source text aren't user-editable, so always refresh them from
@@ -115,11 +125,18 @@
                     return;
                 }
             } catch (e) { console.error('Failed to load local state', e); }
-            this.state = emptyState();
+            this.state = this.normalize(emptyState());
         },
 
         saveLocal() {
-            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state)); }
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+                // device prefs live in their own blob so phone and PC don't
+                // fight over view state through account sync
+                const dev = { activeMedId: this.state.activeMedId, settings: {} };
+                DEVICE_KEYS.forEach(k => { dev.settings[k] = this.state.settings[k]; });
+                localStorage.setItem(DEVICE_KEY, JSON.stringify(dev));
+            }
             catch (e) { console.error('Failed to save local state', e); }
         },
 
@@ -132,7 +149,20 @@
             out.shots = (out.shots || []).filter(x => x && x.timestamp);
             out.weights = (out.weights || []).filter(x => x && x.timestamp && !isNaN(parseFloat(x.kg)));
             out.pens = out.pens || [];
-            if (!out.activeMedId && out.meds[0]) out.activeMedId = out.meds[0].id;
+            // device-specific keys never come from synced data: reset to defaults,
+            // then overlay whatever THIS device last used
+            DEVICE_KEYS.forEach(k => { out.settings[k] = DEFAULT_SETTINGS[k]; });
+            try {
+                const dev = JSON.parse(localStorage.getItem(DEVICE_KEY) || 'null');
+                if (dev) {
+                    DEVICE_KEYS.forEach(k => { if (dev.settings && dev.settings[k] != null) out.settings[k] = dev.settings[k]; });
+                    if (dev.activeMedId && out.meds.some(m => m.id === dev.activeMedId)) out.activeMedId = dev.activeMedId;
+                    else out.activeMedId = null; // fall through to next-due
+                }
+            } catch (e) { /* ignore corrupt device blob */ }
+            if (!out.activeMedId || !out.meds.some(m => m.id === out.activeMedId)) {
+                out.activeMedId = null; // resolved lazily to the next-due med
+            }
             return out;
         },
 
@@ -145,8 +175,25 @@
         },
 
         // ---------- derived helpers ----------
+        // the med whose next dose comes soonest (overdue counts as soonest)
+        nextDueMed() {
+            let best = null, bestTs = Infinity;
+            for (const med of this.state.meds) {
+                const nd = D.predictNextDose(med, this.medShots(med.id), this.state.settings);
+                const ts = nd ? new Date(nd.date).getTime() : Infinity - 1;
+                if (ts < bestTs) { best = med; bestTs = ts; }
+            }
+            return best;
+        },
+
         activeMed() {
-            return this.state.meds.find(m => m.id === this.state.activeMedId) || this.state.meds[0] || null;
+            const s = this.state;
+            let m = s.meds.find(x => x.id === s.activeMedId);
+            if (!m && s.meds.length) {
+                m = this.nextDueMed() || s.meds[0];
+                s.activeMedId = m.id;
+            }
+            return m || null;
         },
         medShots(medId) {
             return this.state.shots.filter(s => s.medId === medId).sort((a, b) => b.timestamp - a.timestamp);
@@ -224,9 +271,7 @@
         // only real data differences ask the user to pick a side.
         canonical(s) {
             if (!s) return null;
-            const VIEW_ONLY = ['theme', 'accent', 'chartOrder', 'showMedLevel', 'showWeight', 'showCalendar', 'showStats',
-                'medLevelRange', 'medRange', 'medProjection', 'medLevelScope', 'medYDensity', 'medChartHeight',
-                'weightRange', 'onboardedAt'];
+            const VIEW_ONLY = DEVICE_KEYS.concat(['medLevelRange', 'onboardedAt']);
             const shots = (s.shots || []).map(x => [x.timestamp, x.medId, x.dose, x.location || ''].join('|')).sort();
             const weights = (s.weights || []).map(x => [x.timestamp, Math.round(x.kg * 10) / 10].join('|')).sort();
             const pens = (s.pens || []).map(x => [x.id, x.dose, x.capacity].join('|')).sort();

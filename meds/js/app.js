@@ -21,6 +21,7 @@
             const set = window.Store.state.settings;
             const html = document.documentElement;
             html.dataset.theme = set.theme || 'dark';
+            html.dataset.ts = set.textScale || 'lg'; // mobile text zoom level
             const a = ACCENTS[set.accent] || ACCENTS.teal;
             html.style.setProperty('--accent', a.color);
             html.style.setProperty('--accent-soft', a.soft);
@@ -91,7 +92,14 @@
             switch (act) {
                 case 'select-med':
                 case 'select-med-page':
-                    S().update(s => { s.activeMedId = id; });
+                    S().update(s => { s.activeMedId = id; s.settings.dashAll = false; });
+                    break;
+                case 'dash-all':
+                    S().update(s => { s.settings.dashAll = true; });
+                    break;
+                case 'log-shot-for':
+                    S().update(s => { s.activeMedId = id; }, { silent: true });
+                    M.logShot();
                     break;
                 case 'add-med': M.addMed(); break;
                 case 'add-pens': M.addPens(); break;
@@ -281,6 +289,7 @@
         wire('logoutButton', () => window.Store.auth.logout());
         wire('settingsBtn', () => window.Modals.settingsDrawer());
         wire('settingsBtnMobile', () => window.Modals.settingsDrawer());
+        wire('navLog', () => window.Modals.logSheet());
         wire('themeBtn', () => {
             window.Store.update(s => { s.settings.theme = s.settings.theme === 'dark' ? 'light' : 'dark'; });
             App.applyTheme();

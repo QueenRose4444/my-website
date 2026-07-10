@@ -85,6 +85,7 @@
             const endTs = now + proj * 86400000;
             const totalMs = Math.max(1, endTs - startTs);
             const sampleCount = Math.min(500, Math.max(200, Math.floor(w / 2.5)));
+            const tickFont = w < 520 ? 12 : 10;
 
             // sample each med separately; exact points at every dose time and its
             // absorption peak keep the spikes sharp instead of sampling past them
@@ -114,7 +115,9 @@
                 ? opts.graphStep
                 : D.niceStep(dataMax, densityDivs[opts.density] || 5);
             while (dataMax / step > 24) step *= 2; // cap runaway gridline counts
-            const yTop = Math.max(step, Math.ceil((dataMax * 1.08) / step) * step);
+            // top of the chart hugs the data (+5%) so peaks stay tall;
+            // gridlines still land on round step multiples below it
+            const yTop = Math.max(step, dataMax * 1.05);
             const x = ts => PAD.l + ((ts - startTs) / totalMs) * innerW;
             const y = v => PAD.t + (1 - v / yTop) * innerH;
             const fmtTick = v => {
@@ -125,13 +128,13 @@
             let gridHtml = '';
             for (let v = 0; v <= yTop + step * 0.01; v += step) {
                 gridHtml += `<line x1="${PAD.l}" x2="${w - PAD.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)" stroke-dasharray="2 3"/>
-                    <text x="${PAD.l - 8}" y="${y(v) + 3}" text-anchor="end" font-size="10" fill="var(--text-3)" font-family="var(--font-mono)">${fmtTick(v)}</text>`;
+                    <text x="${PAD.l - 8}" y="${y(v) + 3}" text-anchor="end" font-size="${tickFont}" fill="var(--text-3)" font-family="var(--font-mono)">${fmtTick(v)}</text>`;
             }
             let xTickHtml = '';
             const xTickCount = w < 480 ? 3 : 5;
             for (let i = 0; i <= xTickCount; i++) {
                 const ts = startTs + (i / xTickCount) * totalMs;
-                xTickHtml += `<text x="${x(ts)}" y="${h - 8}" text-anchor="middle" font-size="10" fill="var(--text-3)" font-family="var(--font-mono)">${D.fmtDateShort(ts)}</text>`;
+                xTickHtml += `<text x="${x(ts)}" y="${h - 8}" text-anchor="middle" font-size="${tickFont}" fill="var(--text-3)" font-family="var(--font-mono)">${D.fmtDateShort(ts)}</text>`;
             }
 
             let seriesHtml = '', defsHtml = '', markerHtml = '';
@@ -162,7 +165,7 @@
                     <defs>${defsHtml}</defs>
                     ${gridHtml}${xTickHtml}
                     <line x1="${x(now)}" x2="${x(now)}" y1="${PAD.t}" y2="${PAD.t + innerH}" stroke="var(--text-3)" stroke-dasharray="3 4" stroke-width="1"/>
-                    <text x="${x(now)}" y="${PAD.t - 8}" text-anchor="middle" font-size="10" fill="var(--text-3)" font-family="var(--font-mono)">now</text>
+                    <text x="${x(now)}" y="${PAD.t - 8}" text-anchor="middle" font-size="${tickFont}" fill="var(--text-3)" font-family="var(--font-mono)">now</text>
                     ${seriesHtml}
                     ${markerHtml}
                     <g class="hover-g" style="display:none">
@@ -194,12 +197,18 @@
                         : `<div class="t-val"><span class="ml-dot" style="background:${sr.color}"></span>${sr.med.name}: ${s.level.toFixed(3)} ${sr.med.unit}</div>`;
                 });
                 tip.style.display = '';
-                tip.innerHTML = `<div class="t-label">${D.fmtDate(ts, settings)}</div>${rows.join('')}`;
+                tip.innerHTML = `<div class="t-label">${D.fmtDate(ts, settings)} · ${D.fmtTime(ts, settings)}</div>${rows.join('')}`;
                 tip.style.left = (x(ts) / w * 100) + '%';
                 tip.style.top = (y(topLevel) / h * 100) + '%';
             };
-            wrap.addEventListener('pointermove', e => showAt(e.clientX));
-            wrap.addEventListener('pointerleave', () => { hoverG.style.display = 'none'; tip.style.display = 'none'; });
+            // touch: tap shows the tooltip and it STAYS until the next tap;
+            // mouse keeps classic hover behaviour
+            wrap.addEventListener('pointermove', e => { if (e.pointerType !== 'touch') showAt(e.clientX); });
+            wrap.addEventListener('pointerdown', e => showAt(e.clientX));
+            wrap.addEventListener('pointerleave', e => {
+                if (e.pointerType === 'touch') return;
+                hoverG.style.display = 'none'; tip.style.display = 'none';
+            });
             watchResize(wrap, render);
         };
         render();
@@ -241,6 +250,7 @@
             const PAD = { t: 16, r: 14, b: 26, l: 46 };
             const innerW = w - PAD.l - PAD.r, innerH = h - PAD.t - PAD.b;
 
+            const tickFont = w < 520 ? 12 : 10;
             const val = kg => D.weightValue(kg, unit);
             const xs = data.map(d => d.timestamp);
             const ys = data.map(d => val(d.kg));
@@ -268,19 +278,19 @@
             for (let i = 0; i <= ticks; i++) {
                 const v = yLo + (i / ticks) * (yHi - yLo);
                 gridHtml += `<line x1="${PAD.l}" x2="${w - PAD.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)" stroke-dasharray="2 3"/>
-                    <text x="${PAD.l - 8}" y="${y(v) + 3}" text-anchor="end" font-size="10" fill="var(--text-3)" font-family="var(--font-mono)">${v.toFixed(1)}</text>`;
+                    <text x="${PAD.l - 8}" y="${y(v) + 3}" text-anchor="end" font-size="${tickFont}" fill="var(--text-3)" font-family="var(--font-mono)">${v.toFixed(1)}</text>`;
             }
             const xTickCount = Math.min(w < 480 ? 3 : 5, data.length);
             let xTickHtml = '';
             for (let i = 0; i < xTickCount; i++) {
                 const d = data[Math.round(i * (data.length - 1) / Math.max(1, xTickCount - 1))];
-                xTickHtml += `<text x="${x(d.timestamp)}" y="${h - 8}" text-anchor="middle" font-size="10" fill="var(--text-3)" font-family="var(--font-mono)">${D.fmtDateShort(d.timestamp)}</text>`;
+                xTickHtml += `<text x="${x(d.timestamp)}" y="${h - 8}" text-anchor="middle" font-size="${tickFont}" fill="var(--text-3)" font-family="var(--font-mono)">${D.fmtDateShort(d.timestamp)}</text>`;
             }
 
             let goalHtml = '';
             if (goalVal != null && goalVal >= yLo && goalVal <= yHi) {
                 goalHtml = `<line x1="${PAD.l}" x2="${w - PAD.r}" y1="${y(goalVal)}" y2="${y(goalVal)}" stroke="var(--success)" stroke-dasharray="3 4" stroke-width="1"/>
-                    <text x="${w - PAD.r}" y="${y(goalVal) - 4}" text-anchor="end" font-size="10" fill="var(--success)" font-family="var(--font-mono)">GOAL ${goalVal.toFixed(1)}</text>`;
+                    <text x="${w - PAD.r}" y="${y(goalVal) - 4}" text-anchor="end" font-size="${tickFont}" fill="var(--success)" font-family="var(--font-mono)">GOAL ${goalVal.toFixed(1)}</text>`;
             }
 
             const dotHtml = data.map((d, i) =>
@@ -315,12 +325,16 @@
                     if (Math.abs(diff) < 0.05) return '';
                     return `<div class="t-label">${diff > 0 ? '+' : '−'}${D.fmtWeight(Math.abs(diff), unit, true)} vs prev</div>`;
                 })() : '';
-                tip.innerHTML = `<div class="t-label">${D.fmtDate(d.timestamp, settings)}${d.estimated ? ' · est' : ''}</div><div class="t-val">${D.fmtWeight(d.kg, unit, true)}</div>${deltaTxt}`;
+                tip.innerHTML = `<div class="t-label">${D.fmtDate(d.timestamp, settings)} · ${D.fmtTime(d.timestamp, settings)}${d.estimated ? ' · est' : ''}</div><div class="t-val">${D.fmtWeight(d.kg, unit, true)}</div>${deltaTxt}`;
                 tip.style.left = (x(d.timestamp) / w * 100) + '%';
                 tip.style.top = (y(val(d.kg)) / h * 100) + '%';
             };
-            wrap.addEventListener('pointermove', e => showAt(e.clientX));
-            wrap.addEventListener('pointerleave', () => { hvLine.style.display = 'none'; tip.style.display = 'none'; });
+            wrap.addEventListener('pointermove', e => { if (e.pointerType !== 'touch') showAt(e.clientX); });
+            wrap.addEventListener('pointerdown', e => showAt(e.clientX));
+            wrap.addEventListener('pointerleave', e => {
+                if (e.pointerType === 'touch') return;
+                hvLine.style.display = 'none'; tip.style.display = 'none';
+            });
             watchResize(wrap, render);
         };
         render();
