@@ -25,7 +25,7 @@
         const shots = med ? Store.medShots(med.id) : [];
         const pens = med ? Store.medPens(med.id) : [];
         const isInjection = med ? (!med.type || med.type === 'injection') : false;
-        const supplyMap = med && isInjection ? D.supplyByDose(pens, med.id) : {};
+        const supplyMap = med ? D.supplyByDose(pens, med.id) : {};
         const totalSupply = Object.values(supplyMap).reduce((a, b) => a + b, 0);
         const lastShot = shots[0] || null;
         const nextDose = med ? D.predictNextDose(med, shots, s.settings) : null;
@@ -74,26 +74,72 @@
     // ------------------------------------------------
     // shared chrome: med switcher + low-supply banner
     // ------------------------------------------------
-    function medSwitcherHtml(d) {
+    function medSwitcherHtml(d, allowAll) {
         const meds = d.s.meds;
+        const allMode = allowAll && meds.length > 1 && d.s.settings.dashAll !== false;
         return `<div class="med-switcher">
+            ${allowAll && meds.length > 1 ? `
+                <button class="med-pill ${allMode ? 'active' : ''}" data-action="dash-all">All meds</button>` : ''}
             ${meds.map(m => `
-                <button class="med-pill ${m.id === d.s.activeMedId ? 'active' : ''}" data-action="select-med" data-id="${escapeHtml(m.id)}">
+                <button class="med-pill ${!allMode && m.id === d.s.activeMedId ? 'active' : ''}" data-action="select-med" data-id="${escapeHtml(m.id)}">
                     <span class="pill-swatch" style="background:${escapeHtml(m.color || '#5fc8c8')}"></span>${escapeHtml(m.name)}
                 </button>`).join('')}
             <button class="med-pill add" data-action="add-med">${Icons.plus} Add med</button>
         </div>`;
     }
 
+    // ------------------------------------------------
+    // All-meds overview — every med's level, next dose,
+    // est. peak/low, supply, and a log button in one card
+    // ------------------------------------------------
+    function overviewCardHtml(d) {
+        const Store = window.Store;
+        const set = d.s.settings;
+        const rows = d.s.meds.map(m => {
+            const shots = Store.medShots(m.id);
+            const pens = Store.medPens(m.id);
+            const nd = D.predictNextDose(m, shots, set);
+            const late = nd ? D.lateDoseStatus(m, nd) : null;
+            const level = D.medLevelAt(shots, m, Date.now());
+            const ext = shots.length ? D.levelExtremes(shots, m, nd ? new Date(nd.date).getTime() : null) : null;
+            const supply = D.supplyByDose(pens, m.id);
+            const totalSupply = Object.values(supply).reduce((a, b) => a + b, 0);
+            const nextTxt = !nd ? '<span class="dim">no doses yet</span>'
+                : late ? `<span class="txt-danger">overdue — was ${D.fmtTimeStr(nd.time, set)} ${D.dayLabel(nd.date).toLowerCase()}</span>`
+                : `${D.fmtTimeStr(nd.time, set)} <span class="dim-sm">${D.dayLabel(nd.date).toLowerCase()}</span> · ${nd.dose}${escapeHtml(m.unit)}`;
+            return `<div class="ov-row">
+                <div class="ov-med"><span class="ml-dot" style="background:${escapeHtml(m.color || '#5fc8c8')}"></span>${escapeHtml(m.name)}</div>
+                <div class="ov-cell"><span class="k">In system</span><span class="v tabular-mono">${level.toFixed(level >= 100 ? 0 : 2)} ${escapeHtml(m.unit)}</span></div>
+                <div class="ov-cell"><span class="k">Next dose</span><span class="v">${nextTxt}</span></div>
+                <div class="ov-cell"><span class="k">Peak / low</span><span class="v">${ext
+                    ? `${ext.peak.v.toFixed(ext.peak.v >= 100 ? 0 : 1)} @ ${D.fmtTime(ext.peak.ts, set)} · ${ext.low.v.toFixed(ext.low.v >= 100 ? 0 : 1)} @ ${D.fmtTime(ext.low.ts, set)}`
+                    : '<span class="dim">—</span>'}</span></div>
+                <div class="ov-cell"><span class="k">Supply</span><span class="v ${totalSupply === 0 ? 'txt-danger' : ''}">${totalSupply} dose${totalSupply === 1 ? '' : 's'}</span></div>
+                <button class="btn small primary" data-action="log-shot-for" data-id="${escapeHtml(m.id)}">${Icons.plus} Log</button>
+            </div>`;
+        }).join('');
+        return `<div class="card overview-card">
+            <div class="card-head"><div class="card-title">All medications — right now</div>
+                <span class="pill">${d.s.meds.length} meds</span></div>
+            <div class="ov-rows">${rows}</div>
+        </div>`;
+    }
+
     function bannerHtml(d) {
-        if (local.bannerDismissed || !d.med || !d.isInjection || d.targetDose == null) return '';
-        const left = d.supplyMap[d.targetDose] || 0;
+        if (local.bannerDismissed || !d.med || d.targetDose == null) return '';
+        // count how many of the NEXT dose the supply can actually serve —
+        // flexible meds (pills, split-dose pens) can pull from other strengths
+        const flexible = d.med.splitDose || (d.med.type && d.med.type !== 'injection');
+        const left = d.pens
+            .filter(p => !p.exhaustedDate && (flexible || p.dose === d.targetDose))
+            .reduce((a, p) => a + Math.max(0, Math.floor((p.capacity - p.used) / D.doseConsumption(d.targetDose, p) + 1e-6)), 0);
         if (left > 1) return '';
         const danger = left === 0;
+        const cn = D.containerName(d.med);
         return `<div class="banner ${danger ? 'danger' : ''}">
             <div class="b-icon">${danger ? Icons.alert : Icons.pen}</div>
             <div class="b-text">
-                <strong>${danger ? `No ${d.targetDose}${d.med.unit} pens in supply` : `${left} dose left in ${d.targetDose}${d.med.unit} supply`}</strong>
+                <strong>${danger ? `No ${d.targetDose}${d.med.unit} ${D.containerPlural(d.med, 2)} in supply` : `${left} dose left in ${d.targetDose}${d.med.unit} supply`}</strong>
                 <div class="b-sub">${danger ? 'Tell us when you’ve picked up a new pack so tracking stays right' : 'Order a refill soon to avoid running out'}</div>
             </div>
             <button class="btn primary small" data-action="add-pens">Got a new pack</button>
@@ -135,7 +181,11 @@
             </div>
             ${nd ? (() => {
                 const late = D.lateDoseStatus(d.med, nd);
-                const usual = nd.usualDay ? ` · usually ${nd.usualDay}s${nd.scheduleSource === 'auto' ? ' (detected)' : ''}` : '';
+                const usual = nd.usualDay
+                    ? ` · usually ${nd.usualDay}s${nd.scheduleSource === 'auto' ? ' (detected)' : ''}`
+                    : (nd.usualTimes && nd.usualTimes.length
+                        ? ` · usually ${nd.usualTimes.map(t => D.fmtTimeStr(t, set)).join(' / ')}${nd.scheduleSource === 'auto' ? ' (detected)' : ''}`
+                        : '');
                 let lateHtml = '';
                 if (late) {
                     const days = late.daysLate < 1.5 ? `${Math.round(late.daysLate * 24)} h` : `${Math.round(late.daysLate)} days`;
@@ -149,12 +199,16 @@
                         <span class="disclaimer">We're not doctors — check the source or ask your pharmacist.</span></div>
                     </div>`;
                 }
+                // multi-daily meds: the TIME is the headline, the day is secondary
+                const multiDaily = (d.med.frequency || 7) < 0.95;
+                const big = late ? 'Overdue' : (multiDaily ? D.fmtTimeStr(nd.time, set) : D.dayLabel(nd.date));
+                const small = late ? '' : (multiDaily ? D.dayLabel(nd.date) : D.fmtTimeStr(nd.time, set));
                 return `
                 <div class="when-line">
-                    <span class="when-day ${late ? 'overdue' : ''}">${late ? 'Overdue' : D.dayLabel(nd.date)}</span>
-                    <span class="when-time">${D.fmtTimeStr(nd.time, set)}</span>
+                    <span class="when-day ${late ? 'overdue' : ''}">${big}</span>
+                    ${small ? `<span class="when-time">${small}</span>` : ''}
                 </div>
-                <div class="when-sub">${late ? 'was due ' : ''}${D.fmtDate(nd.date, set)} · ${nd.dose}${escapeHtml(d.med.unit)}${locOn && nd.location ? ' · ' + escapeHtml(nd.location) : ''}${usual}</div>
+                <div class="when-sub">${late ? 'was due ' : ''}${D.fmtDate(nd.date, set)}${multiDaily && !late ? '' : ' · ' + D.fmtTimeStr(nd.time, set)} · ${nd.dose}${escapeHtml(d.med.unit)}${locOn && nd.location ? ' · ' + escapeHtml(nd.location) : ''}${usual}</div>
                 ${lateHtml}`;
             })() : `
                 <div class="when-line"><span class="when-day dim">—</span></div>
@@ -193,7 +247,7 @@
             <div class="stat-value lg">${d.latest ? D.fmtWeight(d.latest.kg, unit) : '—'}<span class="unit">${D.unitLabel(unit)}</span></div>
             ${d.latest && d.startKg != null && Math.abs(d.totalLost) > 0.04 ? `
                 <div class="stat-delta ${d.totalLost > 0 ? 'pos' : 'neg'}" style="margin-top:8px">
-                    ${d.totalLost > 0 ? Icons.arrowDn : Icons.arrowUp} ${D.fmtWeight(Math.abs(d.totalLost), unit, true)} from start
+                    ${d.totalLost > 0 ? Icons.arrowDn : Icons.arrowUp} ${D.fmtWeight(Math.abs(d.totalLost), unit, true)} lost${d.toGo != null && d.toGo > 0.04 ? ` <span class="dim-sm">· ${D.fmtWeight(d.toGo, unit, true)} to go</span>` : ''}
                 </div>` : ''}
             ${d.bmi != null ? `<div class="stat-delta neutral" style="margin-top:4px">BMI ${d.bmi.toFixed(1)}</div>` : ''}
             ${d.goalKg != null && d.startKg != null ? `
@@ -204,14 +258,11 @@
 
     function supplyCardHtml(d) {
         if (!d.med) return '';
-        if (!d.isInjection) {
-            return `<div class="card pen-card">
-                <div class="card-head"><div class="card-title">Supply</div><span class="pill">${escapeHtml(d.med.type)}</span></div>
-                <div class="empty"><div class="em-title">No pen tracking</div><div class="em-sub">${escapeHtml(d.med.type)} medication</div></div>
-            </div>`;
-        }
+        // works for every type: pens, pill packs, patch boxes, gel bottles…
+        const cn = D.containerName(d.med);
         const sortedDoses = Object.keys(d.supplyMap).map(Number).sort((a, b) => a - b);
         const pillCls = d.totalSupply === 0 ? 'danger' : d.totalSupply <= 2 ? 'warn' : 'success';
+        const doseWord = d.med.type === 'pill' ? 'tablet' : 'dose';
 
         const targetInProgress = d.pens.find(p => p.dose === d.targetDose && p.openedDate && p.used < p.capacity - 0.001 && !p.exhaustedDate);
         const targetUnopened = d.pens.find(p => p.dose === d.targetDose && !p.openedDate && !p.exhaustedDate);
@@ -224,28 +275,28 @@
             footHtml = `<div class="pen-foot">
                 <div><div class="k">${isOpen ? 'In progress' : 'Will open'}</div>
                     <div class="v">${footPen.dose}${escapeHtml(d.med.unit)} · ${(Math.round((footPen.capacity - footPen.used) * 10) / 10)}/${footPen.capacity} left</div></div>
-                <div style="text-align:right"><div class="k">Pen empties</div><div class="v">${D.fmtDateShort(est)}</div></div>
+                <div style="text-align:right"><div class="k">${cn.charAt(0).toUpperCase() + cn.slice(1)} empties</div><div class="v">${D.fmtDateShort(est)}</div></div>
             </div>`;
         }
 
         return `<div class="card pen-card">
             <div class="card-head">
                 <div class="card-title">Supply</div>
-                <span class="pill ${pillCls}"><span class="pill-dot"></span>${d.totalSupply} dose${d.totalSupply === 1 ? '' : 's'} left</span>
+                <span class="pill ${pillCls}"><span class="pill-dot"></span>${d.totalSupply} ${doseWord}${d.totalSupply === 1 ? '' : 's'} left</span>
             </div>
             ${sortedDoses.length ? `<div class="supply-grid">
                 ${sortedDoses.map(x => {
                     const isNext = d.targetDose === x;
                     const isInUse = d.inProgressPen && d.inProgressPen.dose === x;
                     const penCount = d.pens.filter(p => p.dose === x && !p.exhaustedDate && (p.capacity - p.used) > 0.001).length;
-                    const sub = [`${penCount} pen${penCount === 1 ? '' : 's'}`, isNext ? 'next shot' : (isInUse ? 'in use' : null)].filter(Boolean).join(' · ');
+                    const sub = [`${penCount} ${D.containerPlural(d.med, penCount)}`, isNext ? 'next dose' : (isInUse ? 'in use' : null)].filter(Boolean).join(' · ');
                     return `<div class="supply-cell ${isNext ? 'active' : ''}">
                         <div class="sc-dose">${x}${escapeHtml(d.med.unit)}</div>
                         <div class="sc-num">${d.supplyMap[x]}</div>
                         <div class="sc-sub">${sub}</div>
                     </div>`;
                 }).join('')}
-            </div>` : `<div class="empty pad-sm"><div class="em-title">No pens in supply</div><div class="em-sub">Add a package to start tracking</div></div>`}
+            </div>` : `<div class="empty pad-sm"><div class="em-title">Nothing in supply</div><div class="em-sub">Add a ${cn === 'pen' ? 'package' : cn} to start tracking</div></div>`}
             ${footHtml}
             <div class="btn-row">
                 <button class="btn grow" data-action="add-pens">${Icons.plus} Add to supply</button>
@@ -345,19 +396,27 @@
             ? (window.Charts.AUTO_PROJ[medRange] != null ? window.Charts.AUTO_PROJ[medRange] : 7)
             : Math.max(0, Number(set.medProjection) || 0);
 
-        // which meds the level chart shows: all-in-one (default) or a single med
+        // which meds the level chart shows: all-in-one (default), a category
+        // group ('cat:ADHD' — e.g. total stimulant picture), or a single med
         const multiMed = d.s.meds.length > 1;
-        const scope = multiMed && set.medLevelScope && set.medLevelScope !== 'all' && d.s.meds.some(m => m.id === set.medLevelScope)
-            ? set.medLevelScope : 'all';
-        const scopedSingle = scope === 'all'
-            ? (multiMed ? null : d.s.meds[0])
-            : d.s.meds.find(m => m.id === scope);
+        const medCat = m => m.category || 'Other';
+        // categories the user has 2+ meds in get their own group chip
+        const groupCats = D.CATEGORY_ORDER.filter(cat => d.s.meds.filter(m => medCat(m) === cat).length >= 2);
+        const rawScope = set.medLevelScope;
+        const scope = multiMed && rawScope && rawScope !== 'all'
+            && (rawScope.startsWith('cat:') ? groupCats.includes(rawScope.slice(4)) : d.s.meds.some(m => m.id === rawScope))
+            ? rawScope : 'all';
+        const scopedMeds = scope === 'all' ? d.s.meds
+            : scope.startsWith('cat:') ? d.s.meds.filter(m => medCat(m) === scope.slice(4))
+            : d.s.meds.filter(m => m.id === scope);
+        const scopedSingle = scopedMeds.length === 1 ? scopedMeds[0] : null;
         const density = set.medYDensity || 'auto';
         const hasCustomStep = !!(scopedSingle && scopedSingle.graphStep > 0);
         const scopeChips = `
             <div class="chart-scope-row">
                 ${multiMed ? `<div class="chip-grp chart-scope">
                     <button class="chip sm ${scope === 'all' ? 'active' : ''}" data-action="med-scope" data-id="all">All meds</button>
+                    ${groupCats.map(cat => `<button class="chip sm ${scope === 'cat:' + cat ? 'active' : ''}" data-action="med-scope" data-id="cat:${escapeHtml(cat)}">${escapeHtml(cat)}</button>`).join('')}
                     ${d.s.meds.map(m => `<button class="chip sm ${scope === m.id ? 'active' : ''}" data-action="med-scope" data-id="${escapeHtml(m.id)}"><span class="ml-dot" style="background:${escapeHtml(m.color || '#5fc8c8')}"></span>${escapeHtml(m.name)}</button>`).join('')}
                 </div>` : '<span></span>'}
                 <div class="yaxis-groups">
@@ -424,15 +483,25 @@
         const sections = set.chartOrder === 'weight-first'
             ? [weightSection, medLevelSection] : [medLevelSection, weightSection];
 
-        el.innerHTML = `
-            ${medSwitcherHtml(d)}
-            ${bannerHtml(d)}
-            <div class="hero-grid ${showWeight ? '' : 'no-weight'}">
+        // all-meds overview replaces the single-med hero when selected
+        const allMode = d.s.meds.length > 1 && set.dashAll !== false;
+        const heroHtml = allMode
+            ? `<div class="hero-grid ${showWeight ? 'ov-grid' : 'no-weight'}">
+                ${overviewCardHtml(d)}
+                ${showWeight ? weightCardHtml(d) : ''}
+            </div>`
+            : `<div class="hero-grid ${showWeight ? '' : 'no-weight'}">
                 ${nextDoseCardHtml(d)}
                 ${showWeight ? weightCardHtml(d) : ''}
                 ${supplyCardHtml(d)}
-            </div>
+            </div>`;
+
+        el.innerHTML = `
+            ${medSwitcherHtml(d, true)}
+            ${allMode ? '' : bannerHtml(d)}
+            ${heroHtml}
             <div class="quick-row ${showWeight ? '' : 'single'}">
+                ${allMode ? '' : `
                 <button class="quick-btn" data-action="log-shot" ${!d.med ? 'disabled' : ''}>
                     <span class="qicon">${Icons.syringe}</span>
                     <span class="qtext">
@@ -440,7 +509,7 @@
                         <span class="qsub">${d.med ? escapeHtml(d.med.name) + ' · ' + (d.lastShot ? 'last: ' + D.dayLabel(d.lastShot.date).toLowerCase() : 'no doses yet') : 'add a medication first'}</span>
                     </span>
                     <span class="qarrow">${Icons.chevR}</span>
-                </button>
+                </button>`}
                 ${showWeight ? `
                 <button class="quick-btn" data-action="log-weight">
                     <span class="qicon">${Icons.scale}</span>
@@ -457,8 +526,7 @@
         const ml = el.querySelector('#medLevelChart');
         if (ml) {
             const Store = window.Store;
-            const series = (scope === 'all' ? d.s.meds : d.s.meds.filter(m => m.id === scope))
-                .map(m => ({ med: m, shots: Store.medShots(m.id) }));
+            const series = scopedMeds.map(m => ({ med: m, shots: Store.medShots(m.id) }));
             const single = series.length === 1 ? series[0].med : null;
             window.Charts.medLevel(ml, {
                 series, range: medRange, projection: projDays,
@@ -564,7 +632,7 @@
             <div class="med-switcher tabs-row">
                 <button class="med-pill ${tab === 'shots' ? 'active' : ''}" data-action="history-tab" data-tab="shots">${Icons.syringe} Doses (${d.shots.length})</button>
                 ${d.s.settings.weightTrackingEnabled !== false ? `<button class="med-pill ${tab === 'weights' ? 'active' : ''}" data-action="history-tab" data-tab="weights">${Icons.scale} Weights (${weights.length})</button>` : ''}
-                ${d.isInjection ? `<button class="med-pill ${tab === 'pens' ? 'active' : ''}" data-action="history-tab" data-tab="pens">${Icons.pen} Pens (${d.pens.length})</button>` : ''}
+                ${d.med ? `<button class="med-pill ${tab === 'pens' ? 'active' : ''}" data-action="history-tab" data-tab="pens">${Icons.pen} Supply (${d.pens.length})</button>` : ''}
             </div>
             ${body}`;
     }
@@ -620,7 +688,7 @@
             const medShots = Store.medShots(m.id);
             const medPens = Store.medPens(m.id);
             const isInjection = !m.type || m.type === 'injection';
-            const supply = isInjection ? D.supplyByDose(medPens, m.id) : {};
+            const supply = D.supplyByDose(medPens, m.id);
             const totalSupply = Object.values(supply).reduce((a, b) => a + b, 0);
             const expanded = local.expandedMedId === m.id;
             const orphans = medShots.filter(x => !x.penId).length;
@@ -636,13 +704,26 @@
                     </div>
                     ${m.id === s.activeMedId ? `<span class="pill accent"><span class="pill-dot"></span>active</span>` : ''}
                 </div>
+                ${(() => {
+                    // live numbers: what's in the body right now + where it's heading
+                    const set2 = s.settings;
+                    const nd2 = D.predictNextDose(m, medShots, set2);
+                    const lvl = D.medLevelAt(medShots, m, Date.now());
+                    const ext2 = medShots.length ? D.levelExtremes(medShots, m, nd2 ? new Date(nd2.date).getTime() : null) : null;
+                    return `<div class="mc-facts mc-live">
+                        <div><div class="k">In system now</div><div class="txt-accent">${lvl.toFixed(lvl >= 100 ? 0 : 2)} ${escapeHtml(m.unit)}</div></div>
+                        <div><div class="k">Next dose</div><div>${nd2 ? `${D.fmtTimeStr(nd2.time, set2)} ${D.dayLabel(nd2.date).toLowerCase()} · ${nd2.dose}${escapeHtml(m.unit)}` : '—'}</div></div>
+                        <div><div class="k">Est. peak</div><div>${ext2 ? `${ext2.peak.v.toFixed(ext2.peak.v >= 100 ? 0 : 1)} @ ${D.fmtTime(ext2.peak.ts, set2)}` : '—'}</div></div>
+                        <div><div class="k">Est. low</div><div>${ext2 ? `${ext2.low.v.toFixed(ext2.low.v >= 100 ? 0 : 1)} @ ${D.fmtTime(ext2.low.ts, set2)}` : '—'}</div></div>
+                    </div>`;
+                })()}
                 <div class="mc-facts">
                     <div><div class="k">Frequency</div><div>${D.fmtFreq(m.frequency)}</div></div>
                     <div><div class="k">Half-life</div><div>${D.fmtDur(m.halfLife)}${m.dose2halfLife ? ' (varies)' : ''}</div></div>
                     <div><div class="k">Doses logged</div><div>${medShots.length}</div></div>
-                    ${isInjection ? `<div><div class="k">Supply</div><div>${totalSupply} dose${totalSupply === 1 ? '' : 's'}</div></div>` : ''}
+                    <div><div class="k">Supply</div><div>${totalSupply} dose${totalSupply === 1 ? '' : 's'}</div></div>
                 </div>
-                ${isInjection && expanded ? `
+                ${expanded ? `
                     <div class="mc-pens">
                         <div class="mc-pens-head">
                             <div class="k">All pens</div>
@@ -671,7 +752,7 @@
                     </div>` : ''}
                 <div class="btn-row bordered">
                     ${m.id !== s.activeMedId ? `<button class="btn small" data-action="select-med-page" data-id="${escapeHtml(m.id)}">Switch to</button>` : ''}
-                    ${isInjection ? `<button class="btn small ghost" data-action="toggle-pens" data-id="${escapeHtml(m.id)}">${expanded ? 'Hide' : 'Show'} pens</button>` : ''}
+                    <button class="btn small ghost" data-action="toggle-pens" data-id="${escapeHtml(m.id)}">${expanded ? 'Hide' : 'Show'} supply</button>
                     <button class="btn small ghost" data-action="backfill-med" data-id="${escapeHtml(m.id)}" title="Estimate past doses">${Icons.wand} Backfill</button>
                     <button class="btn small ghost" data-action="edit-med" data-id="${escapeHtml(m.id)}">${Icons.edit} Edit</button>
                     <button class="btn small danger push-right" data-action="trash-med" data-id="${escapeHtml(m.id)}">${Icons.trash}</button>

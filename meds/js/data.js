@@ -175,6 +175,28 @@
             },
         },
         {
+            presetId: 'dexamfetamine-ir', name: 'Dexamfetamine (IR)', generic: 'Dexamfetamine / Dexedrine, Amfexa', type: 'pill', category: 'ADHD',
+            doses: [2.5, 5, 10, 15, 20], frequency: 0.5, halfLife: 0.42, timeToPeak: 0.125,
+            penCapacity: 28, pensPerPackage: 1, unit: 'mg', color: '#fdba74',
+            titration: [{ dose: 5, weeks: 1 }, { dose: 10, weeks: 2 }, { dose: 20, weeks: 4 }],
+            missedDose: {
+                takeWithinDays: 0, minGapDays: 0.15,
+                note: 'Skip the missed dose and take the next at its usual time — taking it late in the day can affect sleep. Never double up.',
+            },
+        },
+        {
+            presetId: 'adderall-ir', name: 'Adderall (IR)', generic: 'Mixed amfetamine salts', type: 'pill', category: 'ADHD',
+            doses: [5, 10, 15, 20, 30], frequency: 0.5, halfLife: 0.42, timeToPeak: 0.125,
+            penCapacity: 30, pensPerPackage: 1, unit: 'mg', color: '#fca5a5',
+            titration: [{ dose: 5, weeks: 1 }, { dose: 10, weeks: 2 }, { dose: 20, weeks: 4 }],
+            missedDose: {
+                takeWithinDays: 0, minGapDays: 0.15,
+                note: 'Skip the missed dose and take the next at its usual time — taking it late in the day can affect sleep. Never double up.',
+                sourceLabel: 'Drugs.com — Adderall',
+                sourceUrl: 'https://www.drugs.com/adderall.html#:~:text=miss%20a%20dose',
+            },
+        },
+        {
             presetId: 'guanfacine-xr', name: 'Intuniv XR', generic: 'Guanfacine ER', type: 'pill', category: 'ADHD',
             doses: [1, 2, 3, 4], frequency: 1, halfLife: 0.71, timeToPeak: 0.21,
             penCapacity: 28, pensPerPackage: 1, unit: 'mg', color: '#34d399',
@@ -477,11 +499,11 @@
         return supply;
     }
 
-    // best pen for a new shot at `dose`:
+    // best pen/pack for a new dose at `dose`:
     //  1. opened, not exhausted, matching strength with enough left
     //  2. unopened matching strength
-    //  3. (split-dose meds) opened pen of another strength with enough left
-    //  4. (split-dose meds) unopened pen of another strength
+    //  3. (split-dose pens & all non-injection types) another strength with
+    //     enough left — pills etc. just take 2×5mg tablets for a 10mg dose
     function suggestPenForShot(pens, med, dose) {
         const eligible = pens.filter(p => p.medId === med.id && !p.exhaustedDate);
         const enough = p => (p.capacity - p.used) >= doseConsumption(dose, p) - 0.001;
@@ -492,7 +514,8 @@
         if (pen) return { pen, isNewOpen: false, split: false };
         pen = unopened.find(p => p.dose === dose);
         if (pen) return { pen, isNewOpen: true, split: false };
-        if (med.splitDose) {
+        const flexible = med.splitDose || (med.type && med.type !== 'injection');
+        if (flexible) {
             pen = opened.find(p => enough(p));
             if (pen) return { pen, isNewOpen: false, split: pen.dose !== dose };
             pen = unopened.find(p => enough(Object.assign({}, p, { used: 0 })));
@@ -557,6 +580,38 @@
         const freq = Math.max(0.02, opts.frequencyDays || med.frequency || 7);
         const time = opts.timeOfDay || '09:00';
         const locations = opts.locations || null;
+
+        // --- Daily-plan mode: fixed slots with their own doses, every day ---
+        // e.g. 17:00 → 5mg, 20:00 → 5mg, 23:00 → 10mg (2×5mg)
+        if (opts.dailySlots && opts.dailySlots.length) {
+            const slots = opts.dailySlots
+                .filter(sl => /^\d{1,2}:\d{2}$/.test(String(sl.time)) && sl.dose > 0)
+                .sort((a, b) => a.time.localeCompare(b.time));
+            if (!slots.length) return [];
+            const startD = new Date((opts.startDate || ymd(addDays(new Date(), -28))) + 'T00:00');
+            const endD = new Date((opts.lastDoseDate || ymd(new Date())) + 'T23:59:59');
+            const now = Date.now();
+            const shots = [];
+            let i = 0;
+            for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
+                for (const sl of slots) {
+                    const ts = new Date(ymd(d) + 'T' + sl.time).getTime();
+                    if (isNaN(ts) || ts > now) continue; // never invent future doses
+                    shots.push({
+                        id: `shot-est-${ts}-${i++}`,
+                        medId: med.id,
+                        dose: sl.dose,
+                        date: ymd(new Date(ts)), time: sl.time, timestamp: ts,
+                        location: locations ? locations[i % locations.length] : null,
+                        penId: null,
+                        estimated: true,
+                    });
+                }
+            }
+            shots.sort((a, b) => a.timestamp - b.timestamp);
+            return shots;
+        }
+
         const lastDose = opts.lastDoseDate ? new Date(opts.lastDoseDate + 'T' + time) : (() => {
             const d = new Date(); const [h, m] = time.split(':').map(Number);
             d.setHours(h || 9, m || 0, 0, 0); return d;
@@ -629,23 +684,45 @@
 
     // Estimate the user's usual day-of-week (weekly meds) and time of day
     // from their recent logs. Estimated doses are skipped — only real logs count.
+    const minsToHm = mins => `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(Math.round(mins) % 60).padStart(2, '0')}`;
+
     function detectSchedule(medShots, med) {
-        const recent = medShots.filter(s => !s.estimated).slice(0, 10);
-        if (!recent.length) return { day: null, time: null };
+        const recent = medShots.filter(s => !s.estimated).slice(0, 14);
+        if (!recent.length) return { day: null, time: null, times: null };
         const mins = recent
             .map(s => { const [h, m] = String(s.time || '09:00').split(':').map(Number); return (h || 0) * 60 + (m || 0); })
             .sort((a, b) => a - b);
         const median = mins[Math.floor(mins.length / 2)];
-        const time = `${String(Math.floor(median / 60)).padStart(2, '0')}:${String(median % 60).padStart(2, '0')}`;
+        const time = minsToHm(median);
         let day = null;
-        if ((med.frequency || 7) >= 5) {
+        const freq = med.frequency || 7;
+        if (freq >= 5) {
             const counts = {};
             recent.forEach(s => { const d = new Date(s.timestamp).getDay(); counts[d] = (counts[d] || 0) + 1; });
             const best = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
             // only trust it when it's a real pattern, not a coin flip
             if (best != null && counts[best] >= Math.max(2, Math.ceil(recent.length * 0.4))) day = Number(best);
         }
-        return { day, time };
+        // multi-daily meds (e.g. 2-3× a day stimulants): find the usual time
+        // SLOTS by splitting the sorted times-of-day into k groups
+        let times = null;
+        if (freq < 0.9 && mins.length >= 4) {
+            const k = Math.min(4, Math.max(2, Math.round(1 / freq)));
+            const per = Math.floor(mins.length / k);
+            if (per >= 2) {
+                times = [];
+                for (let i = 0; i < k; i++) {
+                    const group = mins.slice(i * per, i === k - 1 ? mins.length : (i + 1) * per);
+                    times.push(minsToHm(group[Math.floor(group.length / 2)]));
+                }
+                // groups must actually be distinct times of day (≥ 2 h apart)
+                const asMins = times.map(t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; });
+                for (let i = 1; i < asMins.length; i++) {
+                    if (asMins[i] - asMins[i - 1] < 120) { times = null; break; }
+                }
+            }
+        }
+        return { day, time, times };
     }
 
     // next dose prediction for a med.
@@ -665,9 +742,31 @@
 
         let time = (med.scheduleTime && med.scheduleTime !== 'auto') ? med.scheduleTime : (detected.time || last.time || '09:00');
 
+        // multi-daily slot schedule: user-set slots (with optional per-slot
+        // doses, e.g. 23:00 → 10mg) win, detected pattern otherwise
+        const userSlots = getScheduleSlots(med);
+        const slotList = userSlots.length >= 2 ? userSlots
+            : (freq < 0.9 && detected.times && detected.times.length >= 2
+                ? detected.times.map(t => ({ time: t, dose: null })) : null);
+
         const lastDt = new Date(last.date + 'T' + (last.time || '09:00'));
         let nextDate;
-        if (targetDay != null && freq >= 5 && freq <= 9) {
+        let usualTimes = null;
+        let slotDose = null;
+        if (freq < 0.95 && slotList) {
+            // next time-slot after the last dose (e.g. 08:00 / 13:00 / 18:00)
+            const slots = slotList
+                .map(sl => { const [h, m] = sl.time.split(':').map(Number); return { mins: (h || 0) * 60 + (m || 0), dose: sl.dose }; })
+                .sort((a, b) => a.mins - b.mins);
+            const lastMins = lastDt.getHours() * 60 + lastDt.getMinutes();
+            let slot = slots.find(sl => sl.mins > lastMins + 15);
+            nextDate = new Date(lastDt);
+            if (!slot) { slot = slots[0]; nextDate.setDate(nextDate.getDate() + 1); }
+            nextDate.setHours(Math.floor(slot.mins / 60), slot.mins % 60, 0, 0);
+            time = minsToHm(slot.mins);
+            slotDose = slot.dose;
+            usualTimes = slots.map(sl => minsToHm(sl.mins));
+        } else if (targetDay != null && freq >= 5 && freq <= 9) {
             // first occurrence of the usual weekday that keeps the minimum gap
             const minGap = Math.max(1, (med.missedDose && med.missedDose.minGapDays) || 3);
             nextDate = new Date(lastDt);
@@ -679,8 +778,10 @@
             nextDate = new Date(lastDt.getTime() + freq * 86400000);
             time = hm(nextDate); // sub-daily meds: clock time follows the interval
         }
-        const [th, tm] = time.split(':').map(Number);
-        nextDate.setHours(th || 9, tm || 0, 0, 0);
+        if (!usualTimes) {
+            const [th, tm] = time.split(':').map(Number);
+            nextDate.setHours(th || 9, tm || 0, 0, 0);
+        }
 
         const locs = (settings && settings.shotLocations && settings.shotLocations.length) ? settings.shotLocations : DEFAULT_LOCATIONS;
         const i = locs.indexOf(last.location);
@@ -688,11 +789,54 @@
         return {
             date: nextDate,
             time,
-            dose: (med.preferredNextDose != null ? med.preferredNextDose : last.dose),
+            // an explicit user override wins, then the slot's own dose
+            // (e.g. the 23:00 slot is 10mg), then whatever they took last
+            dose: med.preferredNextDose != null ? med.preferredNextDose : (slotDose != null ? slotDose : last.dose),
             location: nextLoc,
             usualDay: targetDay != null ? DAY_NAMES[targetDay] : null,
-            scheduleSource: (med.scheduleDay && med.scheduleDay !== 'auto') || (med.scheduleTime && med.scheduleTime !== 'auto') ? 'user' : (detected.day != null || detected.time ? 'auto' : null),
+            usualTimes,
+            scheduleSource: (med.scheduleDay && med.scheduleDay !== 'auto') || (med.scheduleTime && med.scheduleTime !== 'auto') || userSlots.length >= 2
+                ? 'user'
+                : (detected.day != null || detected.times || detected.time ? 'auto' : null),
         };
+    }
+
+    // what the med comes in — drives supply-tracking wording for every type
+    const CONTAINER_NAMES = { injection: 'pen', pill: 'pack', patch: 'box', gel: 'bottle', liquid: 'bottle', cream: 'tube' };
+    function containerName(med) {
+        return CONTAINER_NAMES[(med && med.type) || 'injection'] || 'pack';
+    }
+    function containerPlural(med, n) {
+        const cn = containerName(med);
+        if (n === 1) return cn;
+        return cn === 'box' ? 'boxes' : cn + 's';
+    }
+
+    // estimated peak and low of the level between now and the next dose
+    function levelExtremes(shots, med, nextDoseTs) {
+        const now = Date.now();
+        const horizon = Math.max(now + 3600000, nextDoseTs || (now + (med.frequency || 1) * 86400000));
+        let peak = { ts: now, v: -1 }, low = { ts: now, v: Infinity };
+        const steps = 96;
+        for (let i = 0; i <= steps; i++) {
+            const ts = now + (horizon - now) * (i / steps);
+            const v = medLevelAt(shots, med, ts);
+            if (v > peak.v) peak = { ts, v };
+            if (v < low.v) low = { ts, v };
+        }
+        if (!isFinite(low.v)) low = { ts: now, v: 0 };
+        return { peak, low };
+    }
+
+    // normalized schedule slots — entries may be 'HH:MM' strings (older data)
+    // or { time, dose } objects with an optional per-slot dose
+    function getScheduleSlots(med) {
+        if (!med || !Array.isArray(med.scheduleTimes)) return [];
+        return med.scheduleTimes.map(e => {
+            if (typeof e === 'string') return /^\d{1,2}:\d{2}$/.test(e) ? { time: e, dose: null } : null;
+            if (e && /^\d{1,2}:\d{2}$/.test(String(e.time))) return { time: e.time, dose: e.dose > 0 ? e.dose : null };
+            return null;
+        }).filter(Boolean);
     }
 
     // How late is the user, and what does official guidance suggest?
@@ -770,6 +914,7 @@
         recomputePenState, supplyByDose, suggestPenForShot,
         inferPensFromShots, estimateBackfillShots, predictNextDose,
         detectSchedule, lateDoseStatus, niceStep, DAY_NAMES,
-        fmtDur, fmtFreq, CATEGORY_ORDER,
+        fmtDur, fmtFreq, CATEGORY_ORDER, getScheduleSlots,
+        containerName, containerPlural, levelExtremes,
     };
 })();

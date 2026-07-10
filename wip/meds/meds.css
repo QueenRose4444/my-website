@@ -438,6 +438,7 @@ button.link.no-ml { margin-left: 0; }
 @media (max-width: 640px) { .quick-row { grid-template-columns: 1fr; } }
 .quick-btn {
     display: flex; align-items: center; gap: 14px;
+    min-width: 0; /* grid item: let the nowrap subtitle truncate, not overflow */
     padding: 15px 17px;
     background: var(--surface);
     border: 1px solid var(--border);
@@ -722,15 +723,17 @@ button.link.no-ml { margin-left: 0; }
     padding: 22px;
     width: 100%;
     max-width: 480px;
-    max-height: calc(100dvh - 36px);
+    max-height: 90svh;
     overflow-y: auto;
     animation: slideUp 200ms cubic-bezier(.2, .7, .2, 1);
 }
 .modal.wide { max-width: 620px; }
 @keyframes slideUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @media (max-width: 640px) {
-    .modal-back { padding: 0; align-items: flex-end; }
-    .modal { max-width: 100%; border-radius: var(--radius-lg) var(--radius-lg) 0 0; max-height: 92dvh; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
+    /* CENTERED on phones — bottom-sheet style fought the browser's own
+       bottom URL bar (Firefox/Chrome mobile) and sat too low */
+    .modal-back { padding: 14px; align-items: center; }
+    .modal { max-width: 100%; border-radius: var(--radius-lg); max-height: 86svh; padding: 18px 16px; }
 }
 .modal-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; gap: 8px; }
 .modal h2 { font-size: 18px; font-weight: 500; letter-spacing: -0.015em; }
@@ -962,7 +965,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
     width: 100%;
     padding: 28px;
     margin: auto;
-    max-height: calc(100dvh - 36px);
+    max-height: 90svh;
     overflow-y: auto;
 }
 @media (max-width: 640px) { .onb { padding: 22px 18px; } }
@@ -1011,3 +1014,207 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 .toast.show { opacity: 1; transform: translateY(0); }
 .toast svg { width: 14px; height: 14px; color: var(--success); }
 .toast.error svg { color: var(--danger); }
+
+/* ================================================
+   Mobile numbers — the big data values get big type
+   (kept at end so it wins over earlier rules)
+   ================================================ */
+@media (max-width: 720px) {
+    .stat .stat-value { font-size: 25px; }
+    .stat-value { font-size: 28px; }
+    .stat-value.lg { font-size: 38px; }
+    .big-num { font-size: 26px; }
+    .supply-cell .sc-num { font-size: 26px; }
+    .meta-cell .v { font-size: 15px; }
+    .meta-cell .vsub { font-size: 13px; }
+    .pen-foot .v { font-size: 14px; }
+    .next-dose .when-time { font-size: 15px; }
+    .tl-title { font-size: 14.5px; }
+    .chart-tooltip { font-size: 13px; }
+    .chart-tooltip .t-val { font-size: 14.5px; }
+    .chart-tooltip .t-label { font-size: 11.5px; }
+}
+
+/* ================================================
+   Mobile: everything-else text scale-up — buttons,
+   chips, inputs, modals, drawer, onboarding, nav
+   ================================================ */
+@media (max-width: 720px) {
+    .btn { font-size: 14.5px; }
+    .btn.small { font-size: 13px; }
+    .chip { font-size: 13.5px; padding: 8px 13px; }
+    .chip.sm { font-size: 12.5px; }
+    .med-pill { font-size: 14.5px; padding: 9px 15px; }
+    .banner { font-size: 14.5px; }
+    .banner .b-text .b-sub { font-size: 13px; }
+    .quick-btn .qlabel { font-size: 15.5px; }
+    .next-dose .when-day { font-size: 32px; }
+    button.link { font-size: 12.5px; }
+    .table-note { font-size: 13px; }
+    .cal-dow { font-size: 11px; }
+    .cal-title { font-size: 14.5px; }
+    .tl-mon { font-size: 11px; }
+    .tl-day { font-size: 19px; }
+    .mc-name { font-size: 16px; }
+    .meds-count { font-size: 21px; }
+    .trash-name { font-size: 15px; }
+    .pen-row { font-size: 13px; }
+    .pr-status, .pr-dose { font-size: 12.5px; }
+    .empty .em-title { font-size: 15.5px; }
+    .empty .em-sub { font-size: 13.5px; }
+    .error-text { font-size: 13.5px; }
+    .confirm-text { font-size: 14.5px; }
+    .pen-hint { font-size: 13px; }
+    .bd-loc { font-size: 13px; padding: 13px 8px; }
+    .preset .p-name { font-size: 15px; }
+    .preset .p-meta { font-size: 12.5px; }
+    .preset-cat { font-size: 11.5px; }
+    .modal h2 { font-size: 19.5px; }
+    .modal-sub { font-size: 13.5px; }
+    .drawer h2 { font-size: 17.5px; }
+    .setting-row .sr-sub { font-size: 14.5px; }
+    .sr-label { font-size: 12px; }
+    .loc-row { font-size: 13.5px; }
+    .onb h1 { font-size: 25px; }
+    .onb p { font-size: 14.5px; }
+    .onb-step { font-size: 12px; }
+    .toast { font-size: 14.5px; }
+    .bottom-nav button { font-size: 11.5px; }
+    .dose-hl-cell { font-size: 13px; }
+    .bf-dose { font-size: 13px; }
+
+    /* 16px inputs also stop phones auto-zooming on focus */
+    .field input, .field select, .field textarea,
+    .freq-row input, .freq-row select,
+    .bf-step input, .loc-add input,
+    .setting-input, .ystep-input { font-size: 16px; }
+}
+
+/* multi-time schedule editor */
+.time-list { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.time-item {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--surface-3); border: 1px solid var(--border);
+    border-radius: 8px; padding: 3px 4px 3px 8px;
+}
+.time-item input { border: none !important; background: transparent !important; padding: 4px 2px !important; min-height: 28px !important; width: auto !important; }
+
+/* backfill daily-plan rows */
+.bf-plan-row {
+    display: grid;
+    grid-template-columns: auto 64px 14px 90px auto 26px;
+    gap: 6px; align-items: center; margin-bottom: 6px;
+}
+.bf-plan-row input {
+    min-height: 36px;
+    background: var(--surface-3); border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px; padding: 6px 8px;
+    font-size: 13.5px; font-family: var(--font-mono); outline: none; width: 100%;
+}
+.bf-plan-row input:focus { border-color: var(--accent); }
+.time-item input[data-scheddose] { width: 70px !important; }
+
+/* ================================================
+   All-meds overview card
+   ================================================ */
+.overview-card { grid-column: 1 / -1; }
+.hero-grid.ov-grid { grid-template-columns: 2fr 1fr; }
+@media (max-width: 900px) { .hero-grid.ov-grid { grid-template-columns: 1fr; } }
+.ov-rows { display: flex; flex-direction: column; }
+.ov-row {
+    display: grid;
+    grid-template-columns: minmax(110px, 1.1fr) 1fr 1.4fr 1.8fr 0.8fr auto;
+    gap: 10px; align-items: center;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--border);
+}
+.ov-row:last-child { border-bottom: none; }
+.ov-med { font-weight: 500; font-size: 14px; display: flex; align-items: center; }
+.ov-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ov-cell .k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-3); }
+.ov-cell .v { font-size: 12.5px; font-family: var(--font-mono); color: var(--text); }
+@media (max-width: 720px) {
+    .ov-row { grid-template-columns: 1fr 1fr; }
+    .ov-med { grid-column: 1 / -1; }
+    .ov-row .btn { grid-column: 1 / -1; }
+    .ov-cell .v { font-size: 13.5px; }
+    .ov-cell .k { font-size: 11px; }
+}
+
+/* ================================================
+   Mobile text zoom (Settings → Mobile text size)
+   Large is the default; XL for max readability.
+   Everything the app renders scales together.
+   ================================================ */
+@media (max-width: 720px) {
+    /* zoomed static containers get compensated widths so the scaled result
+       still fits the real viewport; full-screen overlays (inset-pinned)
+       self-solve, so we zoom the BACKDROPS rather than the dialogs */
+    html[data-ts="lg"] .main, html[data-ts="lg"] .app-topbar { zoom: 1.18; width: calc(100vw / 1.18); }
+    html[data-ts="xl"] .main, html[data-ts="xl"] .app-topbar { zoom: 1.38; width: calc(100vw / 1.38); }
+    html[data-ts="lg"] .main, html[data-ts="xl"] .main { max-width: none; }
+
+    html[data-ts="lg"] .modal-back, html[data-ts="lg"] .onb-back { zoom: 1.18; }
+    html[data-ts="xl"] .modal-back, html[data-ts="xl"] .onb-back { zoom: 1.38; }
+    html[data-ts="lg"] .bottom-nav { zoom: 1.18; left: 0; right: auto; width: calc(100vw / 1.18); }
+    html[data-ts="xl"] .bottom-nav { zoom: 1.38; left: 0; right: auto; width: calc(100vw / 1.38); }
+
+    /* dvh units ignore zoom, so cap dialog heights in real-viewport terms */
+    html[data-ts="lg"] .modal { max-height: calc(86svh / 1.18); }
+    html[data-ts="xl"] .modal { max-height: calc(86svh / 1.38); }
+    html[data-ts="lg"] .onb { max-height: calc(90svh / 1.18); }
+    html[data-ts="xl"] .onb { max-height: calc(90svh / 1.38); }
+
+    html[data-ts="lg"] .drawer { zoom: 1.18; width: calc(100vw / 1.18); max-width: none; height: calc(100dvh / 1.18); }
+    html[data-ts="xl"] .drawer { zoom: 1.38; width: calc(100vw / 1.38); max-width: none; height: calc(100dvh / 1.38); }
+
+    html[data-ts="lg"] .toast-wrap, html[data-ts="xl"] .toast-wrap {
+        left: 0; right: auto; transform: none;
+    }
+    html[data-ts="lg"] .toast-wrap { zoom: 1.18; width: calc(100vw / 1.18); bottom: calc((18px + var(--bottom-nav-h)) / 1.18); }
+    html[data-ts="xl"] .toast-wrap { zoom: 1.38; width: calc(100vw / 1.38); bottom: calc((18px + var(--bottom-nav-h)) / 1.38); }
+}
+
+/* ================================================
+   Clean mobile: no site top bar, centre Log button
+   ================================================ */
+@media (max-width: 720px) {
+    .top-bar { display: none; }           /* login etc. live in Settings */
+    .app-topbar { top: 0; }
+    .quick-row { display: none; }         /* replaced by the centre Log button */
+
+    .nav-log { position: relative; overflow: visible; color: var(--text-3); }
+    .nav-log-circle {
+        width: 46px; height: 46px;
+        margin-top: -22px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: var(--accent-ink);
+        display: inline-flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), 0 0 0 5px var(--bg);
+    }
+    .nav-log-circle svg { width: 22px; height: 22px; }
+}
+@media (min-width: 721px) {
+    .nav-log { display: none; }           /* desktop keeps the quick-log row */
+}
+
+/* log mini-menu rows */
+.sheet-rows { display: flex; flex-direction: column; gap: 8px; }
+.sheet-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px;
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    text-align: left;
+    font-size: 14.5px;
+}
+.sheet-row:active { background: var(--surface-2); }
+.sheet-row .sheet-main { font-weight: 500; }
+.sheet-row .sheet-sub { margin-left: auto; font-size: 11.5px; color: var(--text-3); font-family: var(--font-mono); }
+.sheet-row .qicon.sm { width: 28px; height: 28px; border-radius: 7px; background: var(--accent-soft); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; }
+
+/* live stats strip on med cards */
+.mc-live { margin-bottom: 10px; }
+.mc-live > div > div:last-child { font-size: 12px; }
