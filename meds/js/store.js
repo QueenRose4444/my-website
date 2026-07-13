@@ -21,7 +21,8 @@
     const DEVICE_KEY = `${APP_NAME}_${ENVIRONMENT}_device`;
     const DEVICE_KEYS = ['theme', 'accent', 'textScale', 'dashAll', 'chartOrder',
         'showMedLevel', 'showWeight', 'showCalendar', 'showStats',
-        'medRange', 'medProjection', 'medLevelScope', 'medYDensity', 'medChartHeight', 'weightRange'];
+        'medRange', 'medProjection', 'medLevelScope', 'medYDensity', 'medYFit', 'medShowDots', 'medChartHeight', 'weightRange', 'historyPageSize',
+        'pushEnabled']; // push subscriptions are per-browser, so the toggle is too
 
     const DEFAULT_SETTINGS = {
         dateFormat: 'dd/mm/yyyy',
@@ -49,8 +50,13 @@
         medProjection: 'auto',
         medLevelScope: 'all',
         medYDensity: 'auto',
+        medYFit: false,     // float the y-axis floor near the lowest level instead of 0
+        medShowDots: true,  // dose markers along the bottom of the med chart
         medChartHeight: 'm',
         weightRange: 'm',
+        historyPageSize: 20,  // rows per page on the History tables
+        pushEnabled: false,   // dose/supply push reminders on THIS device
+        supplyAlertDays: 1,   // supply-low push when ≤ this many days of doses left
         textScale: 'md',   // mobile text zoom: md | lg | xl
         dashAll: false,     // dashboard shows the all-meds overview when multiple meds
         onboardedAt: null,
@@ -249,6 +255,9 @@
             }
         },
 
+        // null = server has no v2 data; 'error' = we couldn't find out.
+        // The two MUST stay distinct: treating a failed fetch as "empty"
+        // makes performSync overwrite the account copy with stale local data.
         async fetchFromServer() {
             if (!this.isLoggedIn()) return null;
             try {
@@ -260,7 +269,7 @@
                 return this.normalize(data);
             } catch (e) {
                 console.error('Server fetch failed:', e);
-                return null;
+                return 'error';
             }
         },
 
@@ -299,6 +308,12 @@
         async performSync() {
             if (!this.isLoggedIn()) return 'none';
             const server = await this.fetchFromServer();
+            if (server === 'error') {
+                // couldn't read the account copy — do NOT upload over it;
+                // keep working locally, next edit/login retries
+                this.syncStatus = 'error'; this.emit('sync');
+                return 'none';
+            }
             const localHas = this.hasData();
             const serverHas = server && (server.shots.length || server.weights.length || server.meds.length);
 
@@ -336,6 +351,17 @@
                 this.saveToServer();
             }
             this._pendingServerState = null;
+        },
+
+        // keep BOTH sides: union each section (doses/weights/meds/supply,
+        // dedup by content keys via mergeIn), then push the combined copy up
+        resolveConflictMerge() {
+            if (this._pendingServerState) this.mergeIn(this._pendingServerState);
+            this._pendingServerState = null;
+            this.saveLocal();
+            this.emit('change');
+            this._serverDirty = true;
+            this.saveToServer();
         },
 
         // ---------- v1 detection + migration ----------
@@ -458,6 +484,11 @@
             const wKeys = new Set(s.weights.map(x => x.timestamp + '|' + x.kg));
             const medIds = new Set(s.meds.map(m => m.id));
             incoming.meds.forEach(m => { if (!medIds.has(m.id)) s.meds.push(m); });
+            // trashed meds ride along too — their kept doses need a med to belong to
+            const trashIds = new Set((s.trashedMeds || []).map(m => m.id));
+            (incoming.trashedMeds || []).forEach(m => {
+                if (!medIds.has(m.id) && !trashIds.has(m.id)) (s.trashedMeds = s.trashedMeds || []).push(m);
+            });
             incoming.shots.forEach(x => { if (!shotKeys.has(x.timestamp + '|' + x.dose + '|' + x.medId)) s.shots.push(x); });
             incoming.weights.forEach(x => { if (!wKeys.has(x.timestamp + '|' + x.kg)) s.weights.push(x); });
             const penIds = new Set(s.pens.map(p => p.id));

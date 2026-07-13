@@ -9,7 +9,19 @@
 
     function clearChart(wrap) {
         if (wrap._ro) { wrap._ro.disconnect(); wrap._ro = null; }
+        if (wrap._offTap) { document.removeEventListener('pointerdown', wrap._offTap, true); wrap._offTap = null; }
         wrap.innerHTML = '';
+    }
+
+    // touch tooltips stay pinned after the finger lifts — tapping anywhere
+    // outside the chart dismisses them. Self-cleans once the chart is gone.
+    function bindOffTapHide(wrap, hide) {
+        if (wrap._offTap) document.removeEventListener('pointerdown', wrap._offTap, true);
+        wrap._offTap = e => {
+            if (!document.contains(wrap)) { document.removeEventListener('pointerdown', wrap._offTap, true); wrap._offTap = null; return; }
+            if (!wrap.contains(e.target)) hide();
+        };
+        document.addEventListener('pointerdown', wrap._offTap, true);
     }
 
     function watchResize(wrap, render) {
@@ -110,23 +122,29 @@
             // y axis: round steps (1/2/2.5/5×10ⁿ). Density chips pick how many
             // gridlines; an exact per-med step (single-med view) wins over both.
             const dataMax = Math.max(0.5, ...series.map(sr => Math.max(...sr.samples.map(s => s.level))));
+            const dataMin = Math.min(...series.map(sr => Math.min(...sr.samples.map(s => s.level))));
+            // "Fit" mode floats the axis floor just under the lowest visible
+            // level, with the same breathing room below as above the peaks
+            const fitMin = !!opts.fitMin && dataMin > 0.001 && dataMax - dataMin > 0.001;
+            const span = fitMin ? dataMax - dataMin : dataMax;
             const densityDivs = { fine: 9, auto: 5, coarse: 3 };
             let step = (series.length === 1 && opts.graphStep > 0)
                 ? opts.graphStep
-                : D.niceStep(dataMax, densityDivs[opts.density] || 5);
-            while (dataMax / step > 24) step *= 2; // cap runaway gridline counts
+                : D.niceStep(span, densityDivs[opts.density] || 5);
+            while (span / step > 24) step *= 2; // cap runaway gridline counts
             // top of the chart hugs the data (+5%) so peaks stay tall;
             // gridlines still land on round step multiples below it
-            const yTop = Math.max(step, dataMax * 1.05);
+            const yBottom = fitMin ? Math.max(0, dataMin - span * 0.05) : 0;
+            const yTop = fitMin ? dataMax + span * 0.05 : Math.max(step, dataMax * 1.05);
             const x = ts => PAD.l + ((ts - startTs) / totalMs) * innerW;
-            const y = v => PAD.t + (1 - v / yTop) * innerH;
+            const y = v => PAD.t + (1 - (v - yBottom) / (yTop - yBottom)) * innerH;
             const fmtTick = v => {
                 if (step >= 1) return String(Math.round(v * 100) / 100);
                 return v.toFixed(step >= 0.25 ? 1 : 2);
             };
 
             let gridHtml = '';
-            for (let v = 0; v <= yTop + step * 0.01; v += step) {
+            for (let v = Math.ceil(yBottom / step - 0.001) * step; v <= yTop + step * 0.01; v += step) {
                 gridHtml += `<line x1="${PAD.l}" x2="${w - PAD.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)" stroke-dasharray="2 3"/>
                     <text x="${PAD.l - 8}" y="${y(v) + 3}" text-anchor="end" font-size="${tickFont}" fill="var(--text-3)" font-family="var(--font-mono)">${fmtTick(v)}</text>`;
             }
@@ -148,11 +166,13 @@
                     seriesHtml += `<path d="${pathD} L ${x(endTs).toFixed(1)} ${(PAD.t + innerH).toFixed(1)} L ${x(startTs).toFixed(1)} ${(PAD.t + innerH).toFixed(1)} Z" fill="url(#ml-grad)"/>`;
                 }
                 seriesHtml += `<path d="${pathD}" fill="none" stroke="${sr.color}" stroke-width="2" stroke-linejoin="round"/>`;
-                sr.shots.filter(s => s.timestamp >= startTs && s.timestamp <= now).forEach(s => {
-                    const lvl = D.medLevelAt(sr.shots, sr.med, s.timestamp);
-                    markerHtml += `<line x1="${x(s.timestamp)}" x2="${x(s.timestamp)}" y1="${PAD.t + innerH}" y2="${y(lvl)}" stroke="${sr.color}" stroke-width="1" stroke-dasharray="1 2" opacity="0.5"/>
-                        <circle cx="${x(s.timestamp)}" cy="${PAD.t + innerH - 2}" r="3" fill="${s.estimated ? 'var(--surface)' : sr.color}" stroke="${sr.color}" stroke-width="1.5"/>`;
-                });
+                if (opts.showDots !== false) {
+                    sr.shots.filter(s => s.timestamp >= startTs && s.timestamp <= now).forEach(s => {
+                        const lvl = D.medLevelAt(sr.shots, sr.med, s.timestamp);
+                        markerHtml += `<line x1="${x(s.timestamp)}" x2="${x(s.timestamp)}" y1="${PAD.t + innerH}" y2="${y(lvl)}" stroke="${sr.color}" stroke-width="1" stroke-dasharray="1 2" opacity="0.5"/>
+                            <circle cx="${x(s.timestamp)}" cy="${PAD.t + innerH - 2}" r="3" fill="${s.estimated ? 'var(--surface)' : sr.color}" stroke="${sr.color}" stroke-width="1.5"/>`;
+                    });
+                }
             });
 
             // legend only when comparing meds
@@ -202,13 +222,15 @@
                 tip.style.top = (y(topLevel) / h * 100) + '%';
             };
             // touch: tap shows the tooltip and it STAYS until the next tap;
-            // mouse keeps classic hover behaviour
+            // tapping outside the chart closes it. Mouse keeps hover behaviour.
+            const hideTip = () => { hoverG.style.display = 'none'; tip.style.display = 'none'; };
             wrap.addEventListener('pointermove', e => { if (e.pointerType !== 'touch') showAt(e.clientX); });
             wrap.addEventListener('pointerdown', e => showAt(e.clientX));
             wrap.addEventListener('pointerleave', e => {
                 if (e.pointerType === 'touch') return;
-                hoverG.style.display = 'none'; tip.style.display = 'none';
+                hideTip();
             });
+            bindOffTapHide(wrap, hideTip);
             watchResize(wrap, render);
         };
         render();
@@ -329,12 +351,14 @@
                 tip.style.left = (x(d.timestamp) / w * 100) + '%';
                 tip.style.top = (y(val(d.kg)) / h * 100) + '%';
             };
+            const hideTip = () => { hvLine.style.display = 'none'; tip.style.display = 'none'; };
             wrap.addEventListener('pointermove', e => { if (e.pointerType !== 'touch') showAt(e.clientX); });
             wrap.addEventListener('pointerdown', e => showAt(e.clientX));
             wrap.addEventListener('pointerleave', e => {
                 if (e.pointerType === 'touch') return;
-                hvLine.style.display = 'none'; tip.style.display = 'none';
+                hideTip();
             });
+            bindOffTapHide(wrap, hideTip);
             watchResize(wrap, render);
         };
         render();

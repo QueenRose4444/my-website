@@ -62,6 +62,7 @@
                         <label>What should we call you? (optional)</label>
                         <input id="obName" value="${escapeHtml(ctx.name)}" placeholder="Your name or nickname" autocomplete="nickname">
                     </div>
+                    ${!window.Store.isLoggedIn() ? `<div class="pen-hint">Already have an account? <button class="link" id="obLogin">Log in</button> and your data syncs straight onto this device — no setup needed. New here but want sync? <button class="link" id="obRegister">Register</button></div>` : ''}
                     ${v1Local ? `<div class="pen-hint">${Icons.refresh} We found <strong>${v1Local.shotHistory.length} doses</strong> and <strong>${v1Local.weightHistory.length} weights</strong> from the old meds page on this device — you can import them in the next step.</div>` : ''}`;
             }
 
@@ -209,6 +210,15 @@
                 stepIndex++;
                 render();
             });
+
+            if (step === 'welcome') {
+                const wire = (id, mode) => {
+                    const b = overlay.querySelector(id);
+                    if (b) b.addEventListener('click', () => window.Modals.authModal(mode));
+                };
+                wire('#obLogin', 'login');
+                wire('#obRegister', 'register');
+            }
 
             if (step === 'import') {
                 overlay.querySelectorAll('[data-import]').forEach(b => b.addEventListener('click', () => {
@@ -419,5 +429,17 @@
         render();
     }
 
-    window.Onboarding = { start, maybeStart };
+    // called by app.js after a mid-wizard login finishes syncing: if the
+    // account brought data down, the wizard's job is done — close it
+    function notifySynced(result) {
+        if (!overlay) return;
+        const S = window.Store;
+        if ((result === 'downloaded' || result === 'in-sync') && S.hasData()) {
+            S.update(s => { s.settings.onboardedAt = s.settings.onboardedAt || Date.now(); });
+            overlay.remove(); overlay = null;
+            toast('Welcome back — your account data is loaded');
+        }
+    }
+
+    window.Onboarding = { start, maybeStart, notifySynced };
 })();

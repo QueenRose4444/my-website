@@ -13,6 +13,10 @@
     // splitDose: pen can be dialed to take partial doses
     // (clicks). 60 clicks = 1 full dose at pen strength.
     // ------------------------------------------------
+    // SINGLE source of truth for the project repo — every link in the app
+    // (settings footer, site top bar via [data-repo-link]) reads this.
+    const REPO_URL = 'https://github.com/QueenRose4444/my-website';
+
     const MED_PRESETS = [
         {
             presetId: 'mounjaro', name: 'Mounjaro', generic: 'Tirzepatide', type: 'injection',
@@ -36,8 +40,8 @@
             missedDose: {
                 takeWithinDays: 4, minGapDays: 3,
                 note: 'Take a missed dose within 4 days (96 h). More than 4 days late: skip it and take the next dose on your usual day. Never take 2 doses within 3 days of each other.',
-                sourceLabel: 'Drugs.com — Zepbound dosage (FDA label)',
-                sourceUrl: 'https://www.drugs.com/dosage/zepbound.html#:~:text=missed%20dose',
+                sourceLabel: 'Lilly — Zepbound prescribing information',
+                sourceUrl: 'https://uspl.lilly.com/zepbound/zepbound.html#pi',
             },
         },
         {
@@ -54,7 +58,7 @@
         },
         {
             presetId: 'wegovy', name: 'Wegovy', generic: 'Semaglutide', type: 'injection',
-            doses: [0.25, 0.5, 1, 1.7, 2.4], frequency: 7, halfLife: 7, timeToPeak: 2,
+            doses: [0.25, 0.5, 1, 1.7, 2.4, 7.2], frequency: 7, halfLife: 7, timeToPeak: 2,
             penCapacity: 4, pensPerPackage: 1, unit: 'mg', color: '#a78bfa',
             titration: [{ dose: 0.25, weeks: 4 }, { dose: 0.5, weeks: 4 }, { dose: 1, weeks: 4 }, { dose: 1.7, weeks: 4 }, { dose: 2.4, weeks: 4 }],
             missedDose: {
@@ -67,18 +71,20 @@
         {
             presetId: 'saxenda', name: 'Saxenda', generic: 'Liraglutide', type: 'injection',
             doses: [0.6, 1.2, 1.8, 2.4, 3.0], frequency: 1, halfLife: 0.55, timeToPeak: 0.45,
-            penCapacity: 17, pensPerPackage: 5, unit: 'mg', color: '#f0b955',
+            // each pen holds 18mg total — 6 doses at the 3.0mg maintenance dose
+            // (30 at 0.6mg; edit capacity to match your dose level)
+            penCapacity: 6, pensPerPackage: 5, unit: 'mg', color: '#f0b955',
             titration: [{ dose: 0.6, weeks: 1 }, { dose: 1.2, weeks: 1 }, { dose: 1.8, weeks: 1 }, { dose: 2.4, weeks: 1 }, { dose: 3.0, weeks: 1 }],
             missedDose: {
                 takeWithinDays: 0, minGapDays: 0.75,
                 note: 'Missed a daily dose: skip it and take the next dose at the usual time — don’t take extra to catch up. If more than 3 days have passed since your last dose, talk to your prescriber: official guidance is to re-start at 0.6 mg and titrate up again.',
-                sourceLabel: 'Drugs.com — Saxenda dosage (FDA label)',
-                sourceUrl: 'https://www.drugs.com/dosage/saxenda.html#:~:text=missed',
+                sourceLabel: 'DailyMed — Saxenda label (FDA)',
+                sourceUrl: 'https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=3946d389-0926-4f77-a708-0acb8153b143',
             },
         },
         {
             presetId: 'rybelsus', name: 'Rybelsus', generic: 'Semaglutide', type: 'pill',
-            doses: [3, 7, 14], frequency: 1, halfLife: 7, timeToPeak: 1,
+            doses: [3, 7, 14], frequency: 1, halfLife: 7, timeToPeak: 0.04,
             penCapacity: 30, pensPerPackage: 1, unit: 'mg', color: '#fbbf24',
             titration: [{ dose: 3, weeks: 4 }, { dose: 7, weeks: 4 }, { dose: 14, weeks: 4 }],
             missedDose: {
@@ -108,15 +114,15 @@
             missedDose: {
                 takeWithinDays: 4, minGapDays: 3,
                 note: 'Take a missed dose as soon as possible if there are at least 3 days (72 h) until your next scheduled dose. If less than 3 days remain, skip it and take the next dose on your usual day.',
-                sourceLabel: 'Drugs.com — Trulicity dosage (FDA label)',
-                sourceUrl: 'https://www.drugs.com/dosage/trulicity.html#:~:text=missed',
+                sourceLabel: 'Lilly — Trulicity prescribing information',
+                sourceUrl: 'https://uspl.lilly.com/trulicity/trulicity.html#pi',
             },
         },
 
         // ---------------- ADHD ----------------
         {
             presetId: 'vyvanse', name: 'Vyvanse / Elvanse', generic: 'Lisdexamfetamine', type: 'pill', category: 'ADHD',
-            doses: [20, 30, 40, 50, 60, 70], frequency: 1, halfLife: 0.46, timeToPeak: 0.16,
+            doses: [10, 20, 30, 40, 50, 60, 70], frequency: 1, halfLife: 0.46, timeToPeak: 0.16,
             penCapacity: 30, pensPerPackage: 1, unit: 'mg', color: '#c084fc',
             titration: [{ dose: 30, weeks: 1 }, { dose: 50, weeks: 2 }, { dose: 70, weeks: 4 }],
             missedDose: {
@@ -140,7 +146,7 @@
         },
         {
             presetId: 'ritalin-ir', name: 'Ritalin (IR)', generic: 'Methylphenidate', type: 'pill', category: 'ADHD',
-            doses: [5, 10, 15, 20], frequency: 0.5, halfLife: 0.13, timeToPeak: 0.09,
+            doses: [5, 10, 20], frequency: 0.5, halfLife: 0.13, timeToPeak: 0.09,
             penCapacity: 30, pensPerPackage: 1, unit: 'mg', color: '#f87171',
             titration: [{ dose: 5, weeks: 1 }, { dose: 10, weeks: 2 }, { dose: 20, weeks: 4 }],
             missedDose: {
@@ -152,7 +158,7 @@
         },
         {
             presetId: 'concerta', name: 'Concerta XL', generic: 'Methylphenidate ER', type: 'pill', category: 'ADHD',
-            doses: [18, 27, 36, 54, 72], frequency: 1, halfLife: 0.15, timeToPeak: 0.29,
+            doses: [18, 27, 36, 54], frequency: 1, halfLife: 0.15, timeToPeak: 0.29,
             penCapacity: 30, pensPerPackage: 1, unit: 'mg', color: '#f59e0b',
             titration: [{ dose: 18, weeks: 1 }, { dose: 36, weeks: 2 }, { dose: 54, weeks: 4 }],
             missedDose: {
@@ -267,7 +273,7 @@
         {
             presetId: 'cyproterone', name: 'Cyproterone', generic: 'Cyproterone acetate (Androcur)', type: 'pill', category: 'HRT — feminising',
             doses: [6.25, 12.5, 25, 50], frequency: 1, halfLife: 1.7, timeToPeak: 0.15,
-            penCapacity: 28, pensPerPackage: 1, unit: 'mg', color: '#22d3ee',
+            penCapacity: 56, pensPerPackage: 1, unit: 'mg', color: '#22d3ee',
             missedDose: {
                 takeWithinDays: 0.4, minGapDays: 0.4,
                 note: 'Skip the missed dose and take the next at the usual time — its long half-life means one miss matters little. Never double up.',
@@ -478,7 +484,10 @@
             const penShots = shots.filter(s => s.penId === pen.id).sort((a, b) => a.timestamp - b.timestamp);
             let used = 0;
             for (const s of penShots) used += doseConsumption(s.dose, pen);
-            used = Math.round(used * 1000) / 1000;
+            // usedOffset = manual correction from the edit-supply modal, on top
+            // of whatever the assigned doses consumed
+            used = Math.round((used + (pen.usedOffset || 0)) * 1000) / 1000;
+            used = Math.max(0, Math.min(used, pen.capacity));
             const openedDate = pen.openedDate || (penShots[0] ? penShots[0].date : null);
             const full = used >= pen.capacity - 0.001;
             const exhaustedDate = full
@@ -530,25 +539,33 @@
     // capacity-sized pens per dose.
     // ------------------------------------------------
     function inferPensFromShots(shots, med) {
-        if (!med) return { pens: [], assignment: {} };
+        if (!med || !shots.length) return { pens: [], assignment: {} };
         const cap = med.penCapacity || 4;
         const sorted = shots.slice().sort((a, b) => a.timestamp - b.timestamp);
-        const stacks = {}; // dose -> pens
+        // Pills/patches/gels come in ONE strength per pack — a 10mg dose is
+        // 2×5mg tablets from the same pack, not a separate 10mg pack. So all
+        // doses draw from packs at the smallest logged strength. Injections
+        // keep per-strength pens (you buy the strength you inject).
+        const flexible = med.type && med.type !== 'injection';
+        const baseDose = flexible ? Math.min(...sorted.map(s => s.dose)) : null;
+        const stacks = {}; // container strength -> containers
         const assignment = {};
         let seq = 0;
         for (const s of sorted) {
-            if (!stacks[s.dose]) stacks[s.dose] = [];
-            const stack = stacks[s.dose];
+            const strength = flexible ? baseDose : s.dose;
+            const need = strength > 0 ? s.dose / strength : 1; // tablets consumed
+            if (!stacks[strength]) stacks[strength] = [];
+            const stack = stacks[strength];
             let cur = stack[stack.length - 1];
-            if (!cur || cur.used >= cur.capacity - 0.001) {
+            if (!cur || cur.used > cur.capacity - need + 0.001) {
                 cur = {
-                    id: `pen-inf-${med.id}-${s.dose}-${seq++}-${Date.now().toString(36)}`,
-                    medId: med.id, dose: s.dose, capacity: cap, used: 0,
+                    id: `pen-inf-${med.id}-${strength}-${seq++}-${Date.now().toString(36)}`,
+                    medId: med.id, dose: strength, capacity: cap, used: 0,
                     openedDate: s.date, exhaustedDate: null, note: 'inferred from history',
                 };
                 stack.push(cur);
             }
-            cur.used += 1;
+            cur.used = Math.round((cur.used + need) * 1000) / 1000;
             if (cur.used >= cur.capacity - 0.001) cur.exhaustedDate = s.date;
             assignment[s.id] = cur.id;
         }
@@ -651,12 +668,16 @@
         }
 
         // Walk backward from lastDose so the series always ends "now".
+        // Never generate before the user's stated start date — compressed
+        // titration plans can otherwise overflow past it.
+        const startTs = opts.startDate ? new Date(opts.startDate + 'T00:00').getTime() : -Infinity;
         const totalCount = plan.reduce((a, s) => a + s.count, 0);
         const shots = [];
         let idx = totalCount - 1; // 0 = oldest
         for (let p = plan.length - 1; p >= 0; p--) {
             for (let c = 0; c < plan[p].count; c++) {
                 const ts = lastDose.getTime() - (totalCount - 1 - idx) * freq * 86400000;
+                if (ts < startTs) { idx--; continue; }
                 const dt = new Date(ts);
                 shots.push({
                     id: `shot-est-${ts}-${idx}`,
@@ -737,7 +758,8 @@
         const detected = detectSchedule(medShots, med);
 
         let targetDay = null;
-        if (med.scheduleDay && med.scheduleDay !== 'auto' && DAY_INDEX[med.scheduleDay] != null) targetDay = DAY_INDEX[med.scheduleDay];
+        if (med.scheduleDay === 'daily') targetDay = null; // explicit "every day": never anchor to a weekday
+        else if (med.scheduleDay && med.scheduleDay !== 'auto' && DAY_INDEX[med.scheduleDay] != null) targetDay = DAY_INDEX[med.scheduleDay];
         else if (detected.day != null) targetDay = detected.day;
 
         let time = (med.scheduleTime && med.scheduleTime !== 'auto') ? med.scheduleTime : (detected.time || last.time || '09:00');
@@ -753,34 +775,46 @@
         let nextDate;
         let usualTimes = null;
         let slotDose = null;
+        let minGapMs = 0; // weekly branch re-checks the gap after the clock time lands
         if (freq < 0.95 && slotList) {
-            // next time-slot after the last dose (e.g. 08:00 / 13:00 / 18:00)
+            // next time-slot after the last dose (e.g. 08:00 / 13:00 / 18:00).
+            // A dose up to 90 min EARLY still counts as its slot taken — a
+            // 07:30 dose against an 08:00 slot must predict the NEXT slot,
+            // not 08:00 again half an hour later.
             const slots = slotList
                 .map(sl => { const [h, m] = sl.time.split(':').map(Number); return { mins: (h || 0) * 60 + (m || 0), dose: sl.dose }; })
                 .sort((a, b) => a.mins - b.mins);
             const lastMins = lastDt.getHours() * 60 + lastDt.getMinutes();
-            let slot = slots.find(sl => sl.mins > lastMins + 15);
+            const near = slots.findIndex(sl => Math.abs(sl.mins - lastMins) <= 90);
+            let slot = near >= 0 ? slots[near + 1] : slots.find(sl => sl.mins > lastMins + 15);
             nextDate = new Date(lastDt);
             if (!slot) { slot = slots[0]; nextDate.setDate(nextDate.getDate() + 1); }
             nextDate.setHours(Math.floor(slot.mins / 60), slot.mins % 60, 0, 0);
             time = minsToHm(slot.mins);
             slotDose = slot.dose;
             usualTimes = slots.map(sl => minsToHm(sl.mins));
-        } else if (targetDay != null && freq >= 5 && freq <= 9) {
-            // first occurrence of the usual weekday that keeps the minimum gap
+        } else if (targetDay != null && freq >= 5) {
+            // first occurrence of the usual weekday that keeps the minimum gap;
+            // beyond-weekly meds (e.g. fortnightly) aim near the full interval
             const minGap = Math.max(1, (med.missedDose && med.missedDose.minGapDays) || 3);
+            const baseDays = freq <= 9 ? Math.ceil(minGap) : Math.max(Math.ceil(minGap), Math.round(freq) - 6);
             nextDate = new Date(lastDt);
-            nextDate.setDate(nextDate.getDate() + Math.ceil(minGap));
+            nextDate.setDate(nextDate.getDate() + baseDays);
             while (nextDate.getDay() !== targetDay) nextDate.setDate(nextDate.getDate() + 1);
+            minGapMs = minGap * 86400000;
         } else if (freq >= 0.75 && freq <= 1.25) {
             nextDate = addDays(lastDt, Math.round(freq) || 1);
         } else {
             nextDate = new Date(lastDt.getTime() + freq * 86400000);
-            time = hm(nextDate); // sub-daily meds: clock time follows the interval
+            if (freq < 0.95) time = hm(nextDate); // sub-daily: clock follows the interval
         }
         if (!usualTimes) {
             const [th, tm] = time.split(':').map(Number);
             nextDate.setHours(th || 9, tm || 0, 0, 0);
+            // landing on an earlier clock time can undercut the minimum gap by
+            // a few hours (Sat 10:30 dose → Tue 09:00 = 70.5h < 72h) — skip
+            // to the following usual weekday instead
+            if (minGapMs && nextDate.getTime() - lastDt.getTime() < minGapMs) nextDate.setDate(nextDate.getDate() + 7);
         }
 
         const locs = (settings && settings.shotLocations && settings.shotLocations.length) ? settings.shotLocations : DEFAULT_LOCATIONS;
@@ -789,16 +823,51 @@
         return {
             date: nextDate,
             time,
-            // an explicit user override wins, then the slot's own dose
-            // (e.g. the 23:00 slot is 10mg), then whatever they took last
-            dose: med.preferredNextDose != null ? med.preferredNextDose : (slotDose != null ? slotDose : last.dose),
+            // slot schedules own their doses (the 23:00 slot IS 10mg — a
+            // "change next dose" override must not trample every slot);
+            // otherwise an explicit user override wins over the last dose
+            dose: slotDose != null ? slotDose
+                : (med.preferredNextDose != null ? med.preferredNextDose : last.dose),
             location: nextLoc,
-            usualDay: targetDay != null ? DAY_NAMES[targetDay] : null,
+            // the usual-weekday chip only means something for weekly-ish meds
+            usualDay: targetDay != null && freq >= 5 ? DAY_NAMES[targetDay] : null,
             usualTimes,
             scheduleSource: (med.scheduleDay && med.scheduleDay !== 'auto') || (med.scheduleTime && med.scheduleTime !== 'auto') || userSlots.length >= 2
                 ? 'user'
                 : (detected.day != null || detected.times || detected.time ? 'auto' : null),
         };
+    }
+
+    // slot doses store the TOTAL taken (23:00 → 10mg meaning 2×5mg tablets).
+    // The tablet strength the user actually STOCKS is the ground truth for
+    // the breakdown — presets list many strengths (2.5/5/10…), so "smallest
+    // dose" would wrongly split a 5mg tablet into 2× 2.5mg.
+    function doseBreakdown(med, dose, pens) {
+        const plain = { count: 1, per: dose };
+        if (!med || dose == null || !(med.type && med.type !== 'injection')) return plain;
+        // what the user TYPED into a schedule slot is the strongest signal —
+        // "2 × 5mg" must never come back as "1 × 10mg"
+        const slot = getScheduleSlots(med).find(sl => sl.dose === dose && sl.count >= 2 && sl.per > 0);
+        if (slot) return { count: slot.count, per: slot.per };
+        const owned = [...new Set((pens || []).filter(p => p.medId === med.id && !p.exhaustedDate).map(p => p.dose))];
+        let base = owned.length === 1 ? owned[0] : 0;
+        if (!base) {
+            // no supply signal: a dose that exists as a strength IS one tablet
+            if ((med.doses || []).indexOf(dose) >= 0) return plain;
+            const divisors = (med.doses || []).filter(x => x > 0 && dose / x >= 1.99 && Math.abs(dose / x - Math.round(dose / x)) < 0.01);
+            base = divisors.length ? Math.max.apply(null, divisors) : 0;
+        }
+        if (base > 0 && dose > base) {
+            const n = dose / base;
+            if (Math.round(n) >= 2 && Math.abs(n - Math.round(n)) < 0.01) return { count: Math.round(n), per: base };
+        }
+        return plain;
+    }
+    function fmtDoseCount(med, dose, pens) {
+        if (!med || dose == null || dose === '') return '';
+        const unit = med.unit || 'mg';
+        const b = doseBreakdown(med, dose, pens);
+        return b.count >= 2 ? `${dose}${unit} (${b.count}× ${b.per}${unit})` : `${dose}${unit}`;
     }
 
     // what the med comes in — drives supply-tracking wording for every type
@@ -834,7 +903,13 @@
         if (!med || !Array.isArray(med.scheduleTimes)) return [];
         return med.scheduleTimes.map(e => {
             if (typeof e === 'string') return /^\d{1,2}:\d{2}$/.test(e) ? { time: e, dose: null } : null;
-            if (e && /^\d{1,2}:\d{2}$/.test(String(e.time))) return { time: e.time, dose: e.dose > 0 ? e.dose : null };
+            if (e && /^\d{1,2}:\d{2}$/.test(String(e.time))) {
+                // count/per remember HOW the user entered the dose (2 × 5mg),
+                // so the editor round-trips exactly what they typed
+                const slot = { time: e.time, dose: e.dose > 0 ? e.dose : null };
+                if (e.count >= 1 && e.per > 0) { slot.count = e.count; slot.per = e.per; }
+                return slot;
+            }
             return null;
         }).filter(Boolean);
     }
@@ -870,6 +945,7 @@
     // human-friendly duration (value stored in days) — "3 h", "18 h", "5d", "3.5d"
     function fmtDur(days) {
         if (days == null || isNaN(days)) return '—';
+        if (days > 0 && days < 1 / 24) return `${Math.round(days * 1440)} min`;
         if (days < 0.99) {
             const h = days * 24;
             return `${h < 10 ? Math.round(h * 10) / 10 : Math.round(h)} h`;
@@ -904,6 +980,7 @@
     }
 
     window.MedData = {
+        REPO_URL,
         MED_PRESETS, DEFAULT_LOCATIONS, MONTHS, DAYS,
         ymd, hm, addDays, daysBetween,
         fmtDate, fmtDateShort, fmtTime, fmtTimeStr, dayLabel,
@@ -915,6 +992,6 @@
         inferPensFromShots, estimateBackfillShots, predictNextDose,
         detectSchedule, lateDoseStatus, niceStep, DAY_NAMES,
         fmtDur, fmtFreq, CATEGORY_ORDER, getScheduleSlots,
-        containerName, containerPlural, levelExtremes,
+        containerName, containerPlural, levelExtremes, fmtDoseCount, doseBreakdown,
     };
 })();
