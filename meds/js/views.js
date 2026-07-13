@@ -9,10 +9,13 @@
     // view-local state that survives re-renders
     const local = {
         historyTab: 'shots',
+        historyAllMeds: true,  // history defaults to every med
+        historyPage: 0,
         calMonth: null,   // {y, m}
         expandedMedId: null,
         pickingNextDose: false,
         bannerDismissed: false,
+        penGroups: {},    // supply group collapse: 'medId:dose'|'medId:spent' -> open?
     };
 
     // ------------------------------------------------
@@ -106,7 +109,7 @@
             const totalSupply = Object.values(supply).reduce((a, b) => a + b, 0);
             const nextTxt = !nd ? '<span class="dim">no doses yet</span>'
                 : late ? `<span class="txt-danger">overdue — was ${D.fmtTimeStr(nd.time, set)} ${D.dayLabel(nd.date).toLowerCase()}</span>`
-                : `${D.fmtTimeStr(nd.time, set)} <span class="dim-sm">${D.dayLabel(nd.date).toLowerCase()}</span> · ${nd.dose}${escapeHtml(m.unit)}`;
+                : `${D.fmtTimeStr(nd.time, set)} <span class="dim-sm">${D.dayLabel(nd.date).toLowerCase()}</span> · ${escapeHtml(D.fmtDoseCount(m, nd.dose, pens))}`;
             return `<div class="ov-row">
                 <div class="ov-med"><span class="ml-dot" style="background:${escapeHtml(m.color || '#5fc8c8')}"></span>${escapeHtml(m.name)}</div>
                 <div class="ov-cell"><span class="k">In system</span><span class="v tabular-mono">${level.toFixed(level >= 100 ? 0 : 2)} ${escapeHtml(m.unit)}</span></div>
@@ -130,19 +133,32 @@
         // count how many of the NEXT dose the supply can actually serve —
         // flexible meds (pills, split-dose pens) can pull from other strengths
         const flexible = d.med.splitDose || (d.med.type && d.med.type !== 'injection');
-        const left = d.pens
-            .filter(p => !p.exhaustedDate && (flexible || p.dose === d.targetDose))
+        const activePens = d.pens.filter(p => !p.exhaustedDate);
+        const left = activePens
+            .filter(p => flexible || p.dose === d.targetDose)
             .reduce((a, p) => a + Math.max(0, Math.floor((p.capacity - p.used) / D.doseConsumption(d.targetDose, p) + 1e-6)), 0);
-        if (left > 1) return '';
+        // threshold scales with how fast the med burns supply: one dose left
+        // is a week of runway for Mounjaro but ~6 hours for a 3×/day med
+        const slots = D.getScheduleSlots(d.med);
+        const freq = d.med.frequency || 7;
+        const dailyUse = (freq < 0.95 && slots.length >= 2)
+            ? slots.reduce((a, sl) => a + (sl.dose != null ? sl.dose : d.targetDose || 0), 0)
+            : (d.targetDose || 0) / Math.max(freq, 1 / 24);
+        const remainingAmt = activePens.reduce((a, p) => a + Math.max(0, p.capacity - p.used) * (p.dose || 0), 0);
+        const daysLeft = dailyUse > 0 ? remainingAmt / dailyUse : Infinity;
+        if (left > 1 && daysLeft > 3) return '';
         const danger = left === 0;
         const cn = D.containerName(d.med);
+        const runway = daysLeft === Infinity ? '' : daysLeft < 1 ? `about ${D.fmtDur(daysLeft)}` : `about ${Math.round(daysLeft * 10) / 10} days`;
         return `<div class="banner ${danger ? 'danger' : ''}">
             <div class="b-icon">${danger ? Icons.alert : Icons.pen}</div>
             <div class="b-text">
-                <strong>${danger ? `No ${d.targetDose}${d.med.unit} ${D.containerPlural(d.med, 2)} in supply` : `${left} dose left in ${d.targetDose}${d.med.unit} supply`}</strong>
-                <div class="b-sub">${danger ? 'Tell us when you’ve picked up a new pack so tracking stays right' : 'Order a refill soon to avoid running out'}</div>
+                <strong>${danger
+                    ? (flexible ? `Nothing left in supply for your next dose (${escapeHtml(D.fmtDoseCount(d.med, d.targetDose, activePens))})` : `No ${d.targetDose}${escapeHtml(d.med.unit)} ${D.containerPlural(d.med, 2)} in supply`)
+                    : `Supply running low — ${runway} of doses left`}</strong>
+                <div class="b-sub">${danger ? `Tell us when you’ve picked up a new ${cn} so tracking stays right` : 'Order a refill soon to avoid running out'}</div>
             </div>
-            <button class="btn primary small" data-action="add-pens">Got a new pack</button>
+            <button class="btn primary small" data-action="add-pens">Got a new ${cn === 'pen' ? 'pack' : cn}</button>
             <button class="b-close icon-btn" data-action="dismiss-banner">${Icons.close}</button>
         </div>`;
     }
@@ -167,7 +183,7 @@
             <div class="chip-grp" style="margin-top:6px;gap:4px">
                 ${d.med.doses.map(x => `<button class="chip sm ${nd && nd.dose === x ? 'active' : ''}" data-action="set-next-dose" data-dose="${x}">${x}${escapeHtml(d.med.unit)}</button>`).join('')}
             </div>` : (nd ? `
-            <div class="v">${nd.dose}${escapeHtml(d.med.unit)} · ${D.fmtDateShort(nd.date)}</div>
+            <div class="v">${escapeHtml(D.fmtDoseCount(d.med, nd.dose, d.pens))} · ${D.fmtDateShort(nd.date)}</div>
             ${locOn && nd.location ? `<div class="vsub">${escapeHtml(nd.location)}</div>` : ''}` : `<div class="v dim">—</div>`);
 
         const estCount = d.shots.filter(x => x.estimated).length;
@@ -191,7 +207,7 @@
                     const days = late.daysLate < 1.5 ? `${Math.round(late.daysLate * 24)} h` : `${Math.round(late.daysLate)} days`;
                     const info = late.info;
                     const advice = late.action === 'take'
-                        ? `Official guidance: it's OK to take it now${info && info.takeWithinDays ? ` (within ${info.takeWithinDays} days)` : ''}, then continue your usual schedule.`
+                        ? `Official guidance: it's OK to take it now${info && info.takeWithinDays ? ` (within ${D.fmtDur(info.takeWithinDays)})` : ''}, then continue your usual schedule.`
                         : (info ? info.note : 'This late, it\'s usually best to skip to your next scheduled dose.');
                     lateHtml = `<div class="pen-hint warn late-hint">
                         <div><strong>${days} overdue.</strong> ${escapeHtml(advice)}
@@ -208,7 +224,7 @@
                     <span class="when-day ${late ? 'overdue' : ''}">${big}</span>
                     ${small ? `<span class="when-time">${small}</span>` : ''}
                 </div>
-                <div class="when-sub">${late ? 'was due ' : ''}${D.fmtDate(nd.date, set)}${multiDaily && !late ? '' : ' · ' + D.fmtTimeStr(nd.time, set)} · ${nd.dose}${escapeHtml(d.med.unit)}${locOn && nd.location ? ' · ' + escapeHtml(nd.location) : ''}${usual}</div>
+                <div class="when-sub">${late ? 'was due ' : ''}${D.fmtDate(nd.date, set)}${multiDaily && !late ? '' : ' · ' + D.fmtTimeStr(nd.time, set)} · ${escapeHtml(D.fmtDoseCount(d.med, nd.dose, d.pens))}${locOn && nd.location ? ' · ' + escapeHtml(nd.location) : ''}${usual}</div>
                 ${lateHtml}`;
             })() : `
                 <div class="when-line"><span class="when-day dim">—</span></div>
@@ -217,7 +233,7 @@
                 <div class="meta-cell">
                     <div class="k">Last ${d.isInjection ? 'shot' : 'dose'}</div>
                     ${d.lastShot ? `
-                        <div class="v">${d.lastShot.dose}${escapeHtml(d.med.unit)} · ${D.fmtDateShort(d.lastShot.date)}</div>
+                        <div class="v">${escapeHtml(D.fmtDoseCount(d.med, d.lastShot.dose, d.pens))} · ${D.fmtDateShort(d.lastShot.date)}</div>
                         ${locOn && d.lastShot.location ? `<div class="vsub">${escapeHtml(d.lastShot.location)}</div>` : ''}`
                         : '<div class="v dim">—</div>'}
                 </div>
@@ -228,10 +244,29 @@
                 </div>
                 <div class="meta-cell">
                     <div class="k k-flex"><span>Next ${d.isInjection ? 'shot' : 'dose'}</span>
-                        ${nd ? `<button class="link" data-action="toggle-next-dose-pick">${local.pickingNextDose ? 'cancel' : 'change'}</button>` : ''}
+                        ${nd && !(nd.usualTimes && nd.usualTimes.length) ? `<button class="link" data-action="toggle-next-dose-pick">${local.pickingNextDose ? 'cancel' : 'change'}</button>` : ''}
                     </div>
                     ${dosePicker}
                 </div>
+                ${(() => {
+                    // est. peak / low between now and the next dose — same numbers
+                    // as the meds page, so the dashboard tells the whole story
+                    const ext = d.shots.length ? D.levelExtremes(d.shots, d.med, nd ? new Date(nd.date).getTime() : null) : null;
+                    if (!ext) return '';
+                    const fmtV = v => v.toFixed(v >= 100 ? 0 : v >= 10 ? 1 : 2);
+                    const ttp = d.med.timeToPeak;
+                    return `
+                <div class="meta-cell">
+                    <div class="k">Est. peak</div>
+                    <div class="v tabular-mono">${fmtV(ext.peak.v)} <span class="dim-sm">${escapeHtml(d.med.unit)}</span></div>
+                    <div class="vsub">@ ${D.fmtTime(ext.peak.ts, set)}${ttp ? ` · peaks ${D.fmtDur(ttp)} after a dose` : ''}</div>
+                </div>
+                <div class="meta-cell">
+                    <div class="k">Est. low</div>
+                    <div class="v tabular-mono">${fmtV(ext.low.v)} <span class="dim-sm">${escapeHtml(d.med.unit)}</span></div>
+                    <div class="vsub">@ ${D.fmtTime(ext.low.ts, set)}</div>
+                </div>`;
+                })()}
             </div>
         </div>`;
     }
@@ -264,14 +299,27 @@
         const pillCls = d.totalSupply === 0 ? 'danger' : d.totalSupply <= 2 ? 'warn' : 'success';
         const doseWord = d.med.type === 'pill' ? 'tablet' : 'dose';
 
-        const targetInProgress = d.pens.find(p => p.dose === d.targetDose && p.openedDate && p.used < p.capacity - 0.001 && !p.exhaustedDate);
-        const targetUnopened = d.pens.find(p => p.dose === d.targetDose && !p.openedDate && !p.exhaustedDate);
+        // flexible meds (pills etc.) serve any dose from any strength, so the
+        // "in progress" pack doesn't need to match the next dose exactly
+        const flexibleFoot = d.med.splitDose || (d.med.type && d.med.type !== 'injection');
+        const targetInProgress = d.pens.find(p => (flexibleFoot || p.dose === d.targetDose) && p.openedDate && p.used < p.capacity - 0.001 && !p.exhaustedDate);
+        const targetUnopened = d.pens.find(p => (flexibleFoot || p.dose === d.targetDose) && !p.openedDate && !p.exhaustedDate);
         const footPen = targetInProgress || targetUnopened;
         let footHtml = '';
         if (footPen) {
             const isOpen = !!targetInProgress;
             const firstDoseDate = footPen.openedDate || (d.nextDose ? d.nextDose.date : new Date());
-            const est = D.addDays(firstDoseDate, Math.max(0, Math.ceil(footPen.capacity - footPen.used) - 1) * (d.med.frequency || 7));
+            // empties when the drug amount runs out at the SCHEDULED burn rate —
+            // a 3-slot/day plan empties a pack far faster than 1-per-interval
+            const freq = d.med.frequency || 7;
+            const slots = D.getScheduleSlots(d.med);
+            const dailyUse = (freq < 0.95 && slots.length >= 2)
+                ? slots.reduce((a, sl) => a + (sl.dose != null ? sl.dose : d.targetDose || 0), 0)
+                : (d.targetDose || 0) / Math.max(freq, 1 / 24);
+            const remainingAmt = Math.max(0, footPen.capacity - footPen.used) * (footPen.dose || 0);
+            const estDays = dailyUse > 0 ? remainingAmt / dailyUse
+                : Math.max(0, Math.ceil(footPen.capacity - footPen.used) - 1) * freq;
+            const est = new Date(new Date(firstDoseDate).getTime() + estDays * 86400000);
             footHtml = `<div class="pen-foot">
                 <div><div class="k">${isOpen ? 'In progress' : 'Will open'}</div>
                     <div class="v">${footPen.dose}${escapeHtml(d.med.unit)} · ${(Math.round((footPen.capacity - footPen.used) * 10) / 10)}/${footPen.capacity} left</div></div>
@@ -328,7 +376,10 @@
     }
 
     function calendarCardHtml(d) {
-        return `<div class="card calendar-card" id="dashCalendar">${miniCalendarHtml(d, local.calMonth)}</div>`;
+        // the Calendar page has no bottom-nav slot on mobile — this button is
+        // the mobile route to the full calendar + upcoming/recent timeline
+        return `<div class="card calendar-card" id="dashCalendar">${miniCalendarHtml(d, local.calMonth)}
+            <button class="btn small ghost cal-full-btn" data-action="goto-calendar">Full calendar & timeline ${Icons.chevR}</button></div>`;
     }
 
     function miniCalendarHtml(d, view) {
@@ -430,6 +481,8 @@
                         <button class="chip sm ${!hasCustomStep && density === 'auto' ? 'active' : ''}" data-action="med-ydensity" data-val="auto">Auto</button>
                         <button class="chip sm ${!hasCustomStep && density === 'fine' ? 'active' : ''}" data-action="med-ydensity" data-val="fine">Fine</button>
                         <button class="chip sm ${!hasCustomStep && density === 'coarse' ? 'active' : ''}" data-action="med-ydensity" data-val="coarse">Coarse</button>
+                        <button class="chip sm ${set.medYFit ? 'active' : ''}" data-action="med-yfit" title="Start the axis just below your lowest level instead of at 0 — same breathing room below the dips as above the peaks">Fit</button>
+                        <button class="chip sm ${set.medShowDots !== false ? 'active' : ''}" data-action="med-dots" title="Dots along the bottom mark each logged dose">Dots</button>
                         ${scopedSingle ? `<input class="ystep-input ${hasCustomStep ? 'active' : ''}" type="number" min="0" step="0.1" inputmode="decimal"
                             placeholder="step ${escapeHtml(scopedSingle.unit)}" value="${hasCustomStep ? scopedSingle.graphStep : ''}"
                             data-ystep data-id="${escapeHtml(scopedSingle.id)}" title="Exact spacing, e.g. 2 → 0/2/4/6 ${escapeHtml(scopedSingle.unit)}">` : ''}
@@ -532,6 +585,8 @@
                 series, range: medRange, projection: projDays,
                 graphStep: single && single.graphStep > 0 ? single.graphStep : null,
                 density: set.medYDensity || 'auto',
+                fitMin: !!set.medYFit,
+                showDots: set.medShowDots !== false,
                 settings: set,
             });
         }
@@ -546,24 +601,59 @@
         const d = derive();
         const set = d.s.settings;
         const tab = local.historyTab;
+        // history defaults to EVERY med; picking a med pill filters to it
+        const multiMed = d.s.meds.length > 1;
+        const allMeds = multiMed && local.historyAllMeds !== false;
+        const medById = {};
+        d.s.meds.concat(d.s.trashedMeds || []).forEach(m => { medById[m.id] = m; });
+        const shotMed = x => medById[x.medId] || d.med;
+
+        const shots = allMeds ? d.s.shots.slice().sort((a, b) => b.timestamp - a.timestamp) : d.shots;
+        const allPens = (allMeds ? d.s.pens.slice() : d.pens.slice()).sort((a, b) => {
+            const order = p => p.exhaustedDate ? 2 : (p.openedDate ? 0 : 1);
+            if (order(a) !== order(b)) return order(a) - order(b);
+            if (a.openedDate && b.openedDate) return new Date(b.openedDate) - new Date(a.openedDate);
+            return String(a.id).localeCompare(String(b.id));
+        });
         const weights = d.weights.slice().sort((a, b) => b.timestamp - a.timestamp);
-        const hasEstimated = d.shots.some(x => x.estimated);
+        const hasEstimated = shots.some(x => x.estimated);
+
+        // pagination — page size lives in Settings; page resets on tab/med switch
+        const pageSize = Math.max(5, Number(set.historyPageSize) || 20);
+        const paginate = arr => {
+            const pages = Math.max(1, Math.ceil(arr.length / pageSize));
+            const p = Math.min(Math.max(0, local.historyPage || 0), pages - 1);
+            local.historyPage = p;
+            return { rows: arr.slice(p * pageSize, (p + 1) * pageSize), pages, p, total: arr.length, start: p * pageSize };
+        };
+        const pagerHtml = pg => pg.pages > 1 ? `
+            <div class="pager">
+                <button class="btn small ghost" data-action="history-page" data-dir="-1" ${pg.p === 0 ? 'disabled' : ''}>${Icons.chevL} Prev</button>
+                <span class="pager-info">${pg.start + 1}–${Math.min(pg.total, pg.start + pageSize)} of ${pg.total}</span>
+                <button class="btn small ghost" data-action="history-page" data-dir="1" ${pg.p >= pg.pages - 1 ? 'disabled' : ''}>Next ${Icons.chevR}</button>
+            </div>` : '';
+        const medCell = x => {
+            const m = medById[x.medId];
+            return `<td class="med-cell"><span class="ml-dot" style="background:${escapeHtml((m && m.color) || '#5fc8c8')}"></span>${escapeHtml(m ? m.name : '—')}</td>`;
+        };
 
         let body = '';
         if (tab === 'shots') {
+            const pg = paginate(shots);
             body = `<div class="card table-card">
                 ${hasEstimated ? `<div class="table-note">
                     <span>${Icons.wand} Doses marked <span class="pill sm">est</span> were estimated during onboarding.</span>
                     <button class="btn small" data-action="clear-estimated">Remove estimated</button>
                 </div>` : ''}
                 <div class="tbl-scroll"><table class="tbl">
-                    <thead><tr><th>Date</th><th>Time</th><th>Dose</th>${set.shotLocationTrackingEnabled ? '<th>Location</th>' : ''}<th></th></tr></thead>
+                    <thead><tr><th>Date</th><th>Time</th>${allMeds ? '<th>Med</th>' : ''}<th>Dose</th>${set.shotLocationTrackingEnabled ? '<th>Location</th>' : ''}<th></th></tr></thead>
                     <tbody>
-                    ${d.shots.length === 0 ? `<tr><td colspan="5"><div class="empty"><div class="em-title">No doses yet</div></div></td></tr>` : ''}
-                    ${d.shots.map(x => `<tr>
+                    ${pg.total === 0 ? `<tr><td colspan="6"><div class="empty"><div class="em-title">No doses yet</div></div></td></tr>` : ''}
+                    ${pg.rows.map(x => `<tr>
                         <td>${D.fmtDate(x.timestamp, set)}</td>
                         <td>${D.fmtTimeStr(x.time, set)}</td>
-                        <td>${x.dose}${d.med ? escapeHtml(d.med.unit) : 'mg'}${x.estimated ? ' <span class="pill sm">est</span>' : ''}</td>
+                        ${allMeds ? medCell(x) : ''}
+                        <td>${shotMed(x) ? escapeHtml(D.fmtDoseCount(shotMed(x), x.dose, d.s.pens)) : x.dose + 'mg'}${x.estimated ? ' <span class="pill sm">est</span>' : ''}</td>
                         ${set.shotLocationTrackingEnabled ? `<td>${escapeHtml(x.location || '—')}</td>` : ''}
                         <td><div class="tbl-actions">
                             <button data-action="edit-shot" data-id="${escapeHtml(x.id)}" title="Edit">${Icons.edit}</button>
@@ -572,14 +662,16 @@
                     </tr>`).join('')}
                     </tbody>
                 </table></div>
+                ${pagerHtml(pg)}
             </div>`;
         } else if (tab === 'weights') {
+            const pg = paginate(weights);
             body = `<div class="card table-card"><div class="tbl-scroll"><table class="tbl">
                 <thead><tr><th>Date</th><th>Time</th><th>Weight</th><th>Δ prev</th><th></th></tr></thead>
                 <tbody>
-                ${weights.length === 0 ? `<tr><td colspan="5"><div class="empty"><div class="em-title">No weights yet</div></div></td></tr>` : ''}
-                ${weights.map((x, i) => {
-                    const next = weights[i + 1];
+                ${pg.total === 0 ? `<tr><td colspan="5"><div class="empty"><div class="em-title">No weights yet</div></div></td></tr>` : ''}
+                ${pg.rows.map((x, i) => {
+                    const next = weights[pg.start + i + 1];
                     const delta = next ? x.kg - next.kg : null;
                     return `<tr>
                         <td>${D.fmtDate(x.timestamp, set)}</td>
@@ -595,44 +687,50 @@
                     </tr>`;
                 }).join('')}
                 </tbody>
-            </table></div></div>`;
+            </table></div>${pagerHtml(pg)}</div>`;
         } else {
-            const pens = d.pens.slice().sort((a, b) => {
-                const order = p => p.exhaustedDate ? 2 : (p.openedDate ? 0 : 1);
-                if (order(a) !== order(b)) return order(a) - order(b);
-                if (a.openedDate && b.openedDate) return new Date(b.openedDate) - new Date(a.openedDate);
-                return String(a.id).localeCompare(String(b.id));
-            });
+            const pg = paginate(allPens);
             body = `<div class="card table-card"><div class="tbl-scroll"><table class="tbl">
-                <thead><tr><th>Dose</th><th>Status</th><th>Opened</th><th>Used</th><th>Note</th><th></th></tr></thead>
+                <thead><tr>${allMeds ? '<th>Med</th>' : ''}<th>Dose</th><th>Status</th><th>Opened</th><th>Used</th><th>Note</th><th></th></tr></thead>
                 <tbody>
-                ${pens.length === 0 ? `<tr><td colspan="6"><div class="empty"><div class="em-title">No pens yet</div><div class="em-sub">Add to supply from the dashboard, or import a backup</div></div></td></tr>` : ''}
-                ${pens.map(p => {
+                ${pg.total === 0 ? `<tr><td colspan="7"><div class="empty"><div class="em-title">No ${!allMeds && d.med ? D.containerPlural(d.med, 2) : 'supply'} yet</div><div class="em-sub">Add to supply from the dashboard, or import a backup</div></div></td></tr>` : ''}
+                ${pg.rows.map(p => {
+                    const pm = medById[p.medId] || d.med;
                     const status = p.exhaustedDate ? 'done' : (p.openedDate ? 'in use' : 'unopened');
                     const cells = Math.min(20, Math.ceil(p.capacity));
                     return `<tr>
-                        <td>${p.dose}${d.med ? escapeHtml(d.med.unit) : 'mg'}</td>
+                        ${allMeds ? medCell(p) : ''}
+                        <td>${p.dose}${pm ? escapeHtml(pm.unit) : 'mg'}</td>
                         <td><span class="pill sm ${status === 'in use' ? 'accent' : status === 'done' ? 'warn' : ''}"><span class="pill-dot"></span>${status}</span></td>
-                        <td>${p.openedDate ? D.fmtDate(p.openedDate, set) : '<span class="dim">—</span>'}</td>
+                        <td>${p.openedDate ? D.fmtDate(p.openedDate, set) : (p.acquiredDate ? `<span class="dim-sm">got ${D.fmtDateShort(p.acquiredDate)}</span>` : '<span class="dim">—</span>')}</td>
                         <td><span class="used-cells">${(Math.round(p.used * 10) / 10)}/${p.capacity}
                             <span class="pr-cells">${Array.from({ length: cells }).map((_, i) => `<span class="pr-cell ${i < Math.floor(p.used + 0.001) ? 'used' : ''}"></span>`).join('')}</span>
                         </span></td>
                         <td class="dim-sm">${escapeHtml(p.note || '—')}</td>
                         <td><div class="tbl-actions">
+                            <button data-action="edit-pen" data-id="${escapeHtml(p.id)}" title="Edit">${Icons.edit}</button>
                             <button data-action="delete-pen" data-id="${escapeHtml(p.id)}" title="Delete">${Icons.trash}</button>
                         </div></td>
                     </tr>`;
                 }).join('')}
                 </tbody>
-            </table></div></div>`;
+            </table></div>${pagerHtml(pg)}</div>`;
         }
 
+        const switcher = `<div class="med-switcher">
+            ${multiMed ? `<button class="med-pill ${allMeds ? 'active' : ''}" data-action="history-all">All meds</button>` : ''}
+            ${d.s.meds.map(m => `
+                <button class="med-pill ${!allMeds && m.id === d.s.activeMedId ? 'active' : ''}" data-action="select-med" data-id="${escapeHtml(m.id)}">
+                    <span class="pill-swatch" style="background:${escapeHtml(m.color || '#5fc8c8')}"></span>${escapeHtml(m.name)}
+                </button>`).join('')}
+        </div>`;
+
         el.innerHTML = `
-            ${medSwitcherHtml(d)}
+            ${switcher}
             <div class="med-switcher tabs-row">
-                <button class="med-pill ${tab === 'shots' ? 'active' : ''}" data-action="history-tab" data-tab="shots">${Icons.syringe} Doses (${d.shots.length})</button>
+                <button class="med-pill ${tab === 'shots' ? 'active' : ''}" data-action="history-tab" data-tab="shots">${Icons.syringe} Doses (${shots.length})</button>
                 ${d.s.settings.weightTrackingEnabled !== false ? `<button class="med-pill ${tab === 'weights' ? 'active' : ''}" data-action="history-tab" data-tab="weights">${Icons.scale} Weights (${weights.length})</button>` : ''}
-                ${d.med ? `<button class="med-pill ${tab === 'pens' ? 'active' : ''}" data-action="history-tab" data-tab="pens">${Icons.pen} Supply (${d.pens.length})</button>` : ''}
+                ${(allMeds || d.med) ? `<button class="med-pill ${tab === 'pens' ? 'active' : ''}" data-action="history-tab" data-tab="pens">${Icons.pen} Supply (${allPens.length})</button>` : ''}
             </div>
             ${body}`;
     }
@@ -645,10 +743,10 @@
         const set = d.s.settings;
         const timeline = [];
         if (d.nextDose && d.med) {
-            timeline.push({ date: d.nextDose.date, upcoming: true, title: `${d.med.name} ${d.nextDose.dose}${d.med.unit}`, sub: `${set.shotLocationTrackingEnabled && d.nextDose.location ? d.nextDose.location + ' · ' : ''}predicted` });
+            timeline.push({ date: d.nextDose.date, upcoming: true, title: `${d.med.name} ${D.fmtDoseCount(d.med, d.nextDose.dose, d.pens)}`, sub: `${set.shotLocationTrackingEnabled && d.nextDose.location ? d.nextDose.location + ' · ' : ''}predicted` });
         }
         d.shots.slice(0, 10).forEach(x => {
-            timeline.push({ date: new Date(x.timestamp), title: `${d.med ? d.med.name : ''} ${x.dose}${d.med ? d.med.unit : ''}`, sub: `${set.shotLocationTrackingEnabled && x.location ? x.location + ' · ' : ''}${D.fmtTimeStr(x.time, set)}${x.estimated ? ' · est' : ''}` });
+            timeline.push({ date: new Date(x.timestamp), title: `${d.med ? d.med.name + ' ' + D.fmtDoseCount(d.med, x.dose, d.pens) : x.dose}`, sub: `${set.shotLocationTrackingEnabled && x.location ? x.location + ' · ' : ''}${D.fmtTimeStr(x.time, set)}${x.estimated ? ' · est' : ''}` });
         });
 
         el.innerHTML = `
@@ -712,7 +810,7 @@
                     const ext2 = medShots.length ? D.levelExtremes(medShots, m, nd2 ? new Date(nd2.date).getTime() : null) : null;
                     return `<div class="mc-facts mc-live">
                         <div><div class="k">In system now</div><div class="txt-accent">${lvl.toFixed(lvl >= 100 ? 0 : 2)} ${escapeHtml(m.unit)}</div></div>
-                        <div><div class="k">Next dose</div><div>${nd2 ? `${D.fmtTimeStr(nd2.time, set2)} ${D.dayLabel(nd2.date).toLowerCase()} · ${nd2.dose}${escapeHtml(m.unit)}` : '—'}</div></div>
+                        <div><div class="k">Next dose</div><div>${nd2 ? `${D.fmtTimeStr(nd2.time, set2)} ${D.dayLabel(nd2.date).toLowerCase()} · ${escapeHtml(D.fmtDoseCount(m, nd2.dose, medPens))}` : '—'}</div></div>
                         <div><div class="k">Est. peak</div><div>${ext2 ? `${ext2.peak.v.toFixed(ext2.peak.v >= 100 ? 0 : 1)} @ ${D.fmtTime(ext2.peak.ts, set2)}` : '—'}</div></div>
                         <div><div class="k">Est. low</div><div>${ext2 ? `${ext2.low.v.toFixed(ext2.low.v >= 100 ? 0 : 1)} @ ${D.fmtTime(ext2.low.ts, set2)}` : '—'}</div></div>
                     </div>`;
@@ -723,37 +821,69 @@
                     <div><div class="k">Doses logged</div><div>${medShots.length}</div></div>
                     <div><div class="k">Supply</div><div>${totalSupply} dose${totalSupply === 1 ? '' : 's'}</div></div>
                 </div>
-                ${expanded ? `
+                ${expanded ? (() => {
+                    // supply list: grouped by strength (each group collapsible),
+                    // spent containers tucked into their own collapsed group, and
+                    // the whole list scrolls inside the card instead of the page
+                    const cnPl = D.containerPlural(m, 2);
+                    const rowHtml = p => `
+                        <div class="pen-row">
+                            <span class="pr-dose">${p.dose}${escapeHtml(m.unit)}</span>
+                            <span>
+                                <span class="pr-used-txt">${Math.round(p.used * 10) / 10}/${p.capacity}</span>
+                                <span class="pr-cells">${Array.from({ length: Math.min(20, Math.ceil(p.capacity)) }).map((_, i) => `<span class="pr-cell ${i < Math.floor(p.used + 0.001) ? 'used' : ''}"></span>`).join('')}</span>
+                                ${p.note ? `<span class="pr-note">${escapeHtml(p.note)}</span>` : ''}
+                            </span>
+                            <span class="pr-status ${p.exhaustedDate ? 'exhausted' : (p.openedDate ? 'open' : '')}">${p.exhaustedDate ? 'done' : (p.openedDate ? 'in use' : 'unopened')}</span>
+                            <span class="pr-date">${p.openedDate ? D.fmtDateShort(p.openedDate) : (p.acquiredDate ? 'got ' + D.fmtDateShort(p.acquiredDate) : '—')}</span>
+                            <span class="pr-actions">
+                                <button class="icon-btn xs" data-action="edit-pen" data-id="${escapeHtml(p.id)}" title="Edit">${Icons.edit}</button>
+                                <button class="icon-btn xs" data-action="delete-pen" data-id="${escapeHtml(p.id)}" title="Delete">${Icons.trash}</button>
+                            </span>
+                        </div>`;
+                    const active = medPens.filter(p => !p.exhaustedDate)
+                        .sort((a, b) => (a.dose - b.dose) || ((a.openedDate ? 0 : 1) - (b.openedDate ? 0 : 1)));
+                    const spent = medPens.filter(p => p.exhaustedDate)
+                        .sort((a, b) => new Date(b.exhaustedDate) - new Date(a.exhaustedDate));
+                    const groupHtml = (key, label, sub, list, defaultOpen) => {
+                        const open = local.penGroups[key] != null ? local.penGroups[key] : defaultOpen;
+                        return `<div class="pen-group">
+                            <button class="pen-group-head" data-action="toggle-pen-group" data-key="${escapeHtml(key)}" data-open="${defaultOpen}">
+                                <span class="pg-chev ${open ? 'open' : ''}">${Icons.chevR}</span>
+                                <span class="pg-label">${label}</span>
+                                <span class="pg-sub">${sub}</span>
+                            </button>
+                            ${open ? list.map(rowHtml).join('') : ''}
+                        </div>`;
+                    };
+                    const doseGroups = [...new Set(active.map(p => p.dose))].sort((a, b) => a - b).map(dose => {
+                        const list = active.filter(p => p.dose === dose);
+                        const left = Math.round(list.reduce((a, p) => a + Math.max(0, p.capacity - p.used), 0) * 10) / 10;
+                        return groupHtml(`${m.id}:${dose}`, `${dose}${escapeHtml(m.unit)}`,
+                            `${list.length} ${D.containerPlural(m, list.length)} · ${left} dose${left === 1 ? '' : 's'} left`, list, true);
+                    }).join('');
+                    const spentHtml = spent.length
+                        ? groupHtml(`${m.id}:spent`, 'Spent', `${spent.length} ${D.containerPlural(m, spent.length)} used up`, spent, false)
+                        : '';
+                    return `
                     <div class="mc-pens">
                         <div class="mc-pens-head">
-                            <div class="k">All pens</div>
+                            <div class="k">Supply — ${escapeHtml(cnPl)}</div>
                             <div class="btn-cluster">
-                                ${orphans > 0 ? `<button class="btn small" data-action="infer-pens" data-id="${escapeHtml(m.id)}" title="Generate pens from dose history">${Icons.refresh} From history</button>` : ''}
+                                ${orphans > 0 ? `<button class="btn small" data-action="infer-pens" data-id="${escapeHtml(m.id)}" title="Rebuild supply from dose history">${Icons.refresh} From history</button>` : ''}
+                                ${medPens.length ? `<button class="btn small ghost danger-text" data-action="clear-pens" data-id="${escapeHtml(m.id)}" title="Made a mess? Wipe this med's supply records and start over — doses stay logged">Clear supply</button>` : ''}
                                 <button class="btn small" data-action="add-pens-for" data-id="${escapeHtml(m.id)}">${Icons.plus} Add</button>
                             </div>
                         </div>
-                        ${medPens.length === 0 ? `<div class="empty pad-sm"><div class="em-sub">No pens yet${orphans ? ` — use <strong>From history</strong> to build pens from your ${orphans} logged dose${orphans === 1 ? '' : 's'}` : ''}</div></div>`
-                        : `<div class="pen-list">
-                            ${medPens.slice().sort((a, b) => {
-                                const order = p => p.exhaustedDate ? 2 : (p.openedDate ? 0 : 1);
-                                return order(a) - order(b);
-                            }).map(p => `
-                                <div class="pen-row">
-                                    <span class="pr-dose">${p.dose}${escapeHtml(m.unit)}</span>
-                                    <span>
-                                        <span class="pr-cells">${Array.from({ length: Math.min(20, Math.ceil(p.capacity)) }).map((_, i) => `<span class="pr-cell ${i < Math.floor(p.used + 0.001) ? 'used' : ''}"></span>`).join('')}</span>
-                                        ${p.note ? `<span class="pr-note">${escapeHtml(p.note)}</span>` : ''}
-                                    </span>
-                                    <span class="pr-status ${p.exhaustedDate ? 'exhausted' : (p.openedDate ? 'open' : '')}">${p.exhaustedDate ? 'done' : (p.openedDate ? 'in use' : 'unopened')}</span>
-                                    <span class="pr-date">${p.openedDate ? D.fmtDateShort(p.openedDate) : '—'}</span>
-                                    <button class="icon-btn xs" data-action="delete-pen" data-id="${escapeHtml(p.id)}">${Icons.trash}</button>
-                                </div>`).join('')}
-                        </div>`}
-                    </div>` : ''}
+                        ${medPens.length === 0 ? `<div class="empty pad-sm"><div class="em-sub">No ${escapeHtml(cnPl)} yet${orphans ? ` — use <strong>From history</strong> to build ${escapeHtml(cnPl)} from your ${orphans} logged dose${orphans === 1 ? '' : 's'}` : ''}</div></div>`
+                        : `<div class="pen-list">${doseGroups}${spentHtml}</div>`}
+                    </div>`;
+                })() : ''}
                 <div class="btn-row bordered">
                     ${m.id !== s.activeMedId ? `<button class="btn small" data-action="select-med-page" data-id="${escapeHtml(m.id)}">Switch to</button>` : ''}
                     <button class="btn small ghost" data-action="toggle-pens" data-id="${escapeHtml(m.id)}">${expanded ? 'Hide' : 'Show'} supply</button>
                     <button class="btn small ghost" data-action="backfill-med" data-id="${escapeHtml(m.id)}" title="Estimate past doses">${Icons.wand} Backfill</button>
+                    ${window.MED_ENVIRONMENT === 'wip' ? `<button class="btn small ghost" data-action="dev-clear-med" data-id="${escapeHtml(m.id)}" title="WIP-only test helper — wipes this med's doses + supply">🧪 Clear data</button>` : ''}
                     <button class="btn small ghost" data-action="edit-med" data-id="${escapeHtml(m.id)}">${Icons.edit} Edit</button>
                     <button class="btn small danger push-right" data-action="trash-med" data-id="${escapeHtml(m.id)}">${Icons.trash}</button>
                 </div>

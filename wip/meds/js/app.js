@@ -92,7 +92,18 @@
             switch (act) {
                 case 'select-med':
                 case 'select-med-page':
+                    V.local.historyAllMeds = false;
+                    V.local.historyPage = 0;
                     S().update(s => { s.activeMedId = id; s.settings.dashAll = false; });
+                    break;
+                case 'history-all':
+                    V.local.historyAllMeds = true;
+                    V.local.historyPage = 0;
+                    App.render();
+                    break;
+                case 'history-page':
+                    V.local.historyPage = Math.max(0, (V.local.historyPage || 0) + Number(el.dataset.dir));
+                    App.render();
                     break;
                 case 'dash-all':
                     S().update(s => { s.settings.dashAll = true; });
@@ -139,6 +150,12 @@
                 case 'med-height':
                     S().update(s => { s.settings.medChartHeight = el.dataset.val; });
                     break;
+                case 'med-yfit':
+                    S().update(s => { s.settings.medYFit = !s.settings.medYFit; });
+                    break;
+                case 'med-dots':
+                    S().update(s => { s.settings.medShowDots = s.settings.medShowDots === false; });
+                    break;
                 case 'med-ydensity':
                     S().update(s => {
                         s.settings.medYDensity = el.dataset.val;
@@ -152,6 +169,9 @@
                 case 'cal-day':
                     M.logShot(null, { date: el.dataset.date });
                     break;
+                case 'goto-calendar':
+                    App.setPage('calendar');
+                    break;
                 case 'cal-prev': case 'cal-next': case 'cal-today': {
                     const now = new Date();
                     const cur = V.local.calMonth || { y: now.getFullYear(), m: now.getMonth() };
@@ -163,6 +183,7 @@
                 }
                 case 'history-tab':
                     V.local.historyTab = el.dataset.tab;
+                    V.local.historyPage = 0;
                     App.render();
                     break;
                 case 'edit-shot': {
@@ -185,8 +206,30 @@
                         S().update(s => { s.weights = s.weights.filter(x => x.id !== id); });
                     break;
                 }
+                case 'edit-pen':
+                    M.editPen(id);
+                    break;
+                case 'clear-pens': {
+                    const med = S().state.meds.find(m => m.id === id);
+                    if (!med) break;
+                    const n = S().state.pens.filter(p => p.medId === id).length;
+                    if (!n) break;
+                    if (await confirmModal(`Clear ${med.name}'s entire supply history — all ${n} ${D.containerPlural(med, n)}? Logged doses stay, they just lose their ${D.containerName(med)} assignment. Use this to start supply tracking over after a mistake.`, { danger: true, yesLabel: 'Clear supply' })) {
+                        S().update(s => {
+                            const ids = new Set(s.pens.filter(p => p.medId === id).map(p => p.id));
+                            s.pens = s.pens.filter(p => p.medId !== id);
+                            s.shots.forEach(x => { if (ids.has(x.penId)) x.penId = null; });
+                        });
+                        if (S().flushToServer) S().flushToServer();
+                        toast(`${med.name}: supply history cleared`);
+                    }
+                    break;
+                }
                 case 'delete-pen': {
-                    if (await confirmModal('Delete this pen? Doses assigned to it stay logged but become unassigned.', { danger: true, yesLabel: 'Delete pen' }))
+                    const pen = S().state.pens.find(p => p.id === id);
+                    const penMed = pen && S().state.meds.find(m => m.id === pen.medId);
+                    const cn = penMed ? D.containerName(penMed) : 'container';
+                    if (await confirmModal(`Delete this ${cn}? Doses assigned to it stay logged but become unassigned.`, { danger: true, yesLabel: `Delete ${cn}` }))
                         S().update(s => {
                             s.pens = s.pens.filter(p => p.id !== id);
                             s.shots.forEach(x => { if (x.penId === id) x.penId = null; });
@@ -195,7 +238,7 @@
                 }
                 case 'clear-estimated': {
                     const count = S().state.shots.filter(x => x.estimated).length;
-                    if (await confirmModal(`Remove all ${count} estimated doses (and their estimated pens)?`, { danger: true, yesLabel: 'Remove estimated' }))
+                    if (await confirmModal(`Remove all ${count} estimated doses (and their estimated supply)?`, { danger: true, yesLabel: 'Remove estimated' }))
                         S().update(s => {
                             const estPenIds = new Set(s.pens.filter(p => p.note === 'estimated').map(p => p.id));
                             s.shots = s.shots.filter(x => !x.estimated);
@@ -207,12 +250,22 @@
                     V.local.expandedMedId = V.local.expandedMedId === id ? null : id;
                     App.render();
                     break;
+                case 'toggle-pen-group': {
+                    const key = el.dataset.key;
+                    const cur = V.local.penGroups[key] != null
+                        ? V.local.penGroups[key] : el.dataset.open === 'true';
+                    V.local.penGroups[key] = !cur;
+                    App.render();
+                    break;
+                }
                 case 'infer-pens': {
                     const med = S().state.meds.find(m => m.id === id);
                     if (!med) break;
                     const orphans = S().state.shots.filter(x => x.medId === id && !x.penId);
                     if (!orphans.length) break;
-                    if (await confirmModal(`Build pen history from ${orphans.length} dose${orphans.length === 1 ? '' : 's'} without pens? Each pen holds ${med.penCapacity} dose${med.penCapacity === 1 ? '' : 's'}.`, { yesLabel: 'Build pens' }))
+                    const icn = D.containerName(med);
+                    const unitWord = med.type === 'pill' ? 'tablet' : 'dose';
+                    if (await confirmModal(`Build ${icn} history from ${orphans.length} dose${orphans.length === 1 ? '' : 's'} without an assigned ${icn}? Each ${icn} holds ${med.penCapacity} ${unitWord}${med.penCapacity === 1 ? '' : 's'}.`, { yesLabel: `Build ${D.containerPlural(med, 2)}` }))
                         S().update(s => {
                             const { pens, assignment } = D.inferPensFromShots(orphans, med);
                             s.shots.forEach(x => { if (assignment[x.id]) x.penId = assignment[x.id]; });
@@ -223,6 +276,25 @@
                 case 'backfill-med': {
                     const med = S().state.meds.find(m => m.id === id);
                     if (med) M.backfill(med);
+                    break;
+                }
+                case 'dev-clear-med': {
+                    // WIP-only test helper (button never renders on the live build):
+                    // wipe one med's history + supply to re-test backfill/import
+                    const med = S().state.meds.find(m => m.id === id);
+                    if (!med) break;
+                    const nShots = S().state.shots.filter(x => x.medId === id).length;
+                    const nPens = S().state.pens.filter(p => p.medId === id).length;
+                    if (!(await confirmModal(`DEV: wipe ${med.name}'s ${nShots} logged dose${nShots === 1 ? '' : 's'} and ${nPens} supply item${nPens === 1 ? '' : 's'}? The med itself stays. Your server copy updates too.`, { danger: true, yesLabel: 'Wipe history + supply' }))) break;
+                    if (!(await confirmModal(`Really sure? ${med.name}'s history is deleted permanently — this is the WIP test button, not for real data.`, { danger: true, yesLabel: 'Yes, wipe it' }))) break;
+                    S().update(s => {
+                        s.shots = s.shots.filter(x => x.medId !== id);
+                        s.pens = s.pens.filter(p => p.medId !== id);
+                        const m2 = s.meds.find(x => x.id === id);
+                        if (m2) m2.preferredNextDose = null;
+                    });
+                    if (S().flushToServer) S().flushToServer();
+                    toast(`${med.name}: history + supply cleared (dev)`);
                     break;
                 }
                 case 'edit-med': {
@@ -305,6 +377,8 @@
         else if (result === 'uploaded') toast('Local data uploaded to your account');
         else if (result === 'downloaded') toast('Account data loaded');
         App.render();
+        // a login from inside the setup wizard closes it once data arrives
+        if (window.Onboarding && window.Onboarding.notifySynced) window.Onboarding.notifySynced(result);
         return result;
     }
 
@@ -329,6 +403,8 @@
         });
         App.applyTheme();
         bindActions();
+        // every repo link in static HTML follows the one URL in data.js
+        document.querySelectorAll('[data-repo-link]').forEach(a => { a.href = D.REPO_URL; });
         App.render();
 
         if (window.Store.auth.isLoggedIn()) {

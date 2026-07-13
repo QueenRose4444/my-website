@@ -576,6 +576,7 @@ button.link.no-ml { margin-left: 0; }
 .cal-legend .swatch.dose { background: var(--accent-soft); }
 .cal-legend .swatch.predicted { background: transparent; border: 1px dashed var(--accent-line); }
 
+.cal-full-btn { width: 100%; margin-top: 10px; justify-content: center; }
 .cal-page-grid { display: grid; grid-template-columns: 2fr 1fr; gap: var(--gap); }
 @media (max-width: 900px) { .cal-page-grid { grid-template-columns: 1fr; } }
 
@@ -624,6 +625,12 @@ button.link.no-ml { margin-left: 0; }
 .tbl td { padding: 11px 12px; border-bottom: 1px solid var(--border); font-family: var(--font-mono); font-size: 12.5px; white-space: nowrap; }
 .tbl tr:last-child td { border-bottom: none; }
 .tbl tbody tr:hover td { background: var(--surface-3); }
+/* action column stays pinned while the rest of a wide table scrolls past it */
+.tbl th:last-child, .tbl td:last-child {
+    position: sticky; right: 0;
+    background: var(--surface);
+    box-shadow: -6px 0 8px -6px rgba(0, 0, 0, 0.35);
+}
 .tbl-actions { display: flex; gap: 4px; justify-content: flex-end; }
 .tbl-actions button { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; color: var(--text-3); }
 .tbl-actions button:hover { background: var(--surface-3); color: var(--text); }
@@ -659,10 +666,61 @@ button.link.no-ml { margin-left: 0; }
 .mc-pens { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 .mc-pens-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .mc-pens-head .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); }
-.pen-list { background: var(--surface-3); border-radius: 8px; border: 1px solid var(--border); }
+.pen-list {
+    background: var(--surface-3); border-radius: 8px; border: 1px solid var(--border);
+    max-height: 264px; overflow-y: auto;   /* long supply scrolls inside the card */
+    scrollbar-gutter: stable;              /* scrollbar sits beside the buttons, not on them */
+}
+.pen-row > span:nth-child(2) { min-width: 0; overflow: hidden; }
+.pr-actions { display: inline-flex; gap: 2px; }
+.pr-used-txt { display: none; font-family: var(--font-mono); font-size: 12px; color: var(--text-2); }
+@media (max-width: 720px) {
+    /* narrow screens: swap the decorative usage cells for a compact count,
+       keep edit/delete always in reach */
+    .pen-row { grid-template-columns: 44px minmax(0, 1fr) auto auto; gap: 6px; }
+    .pen-row .pr-cells { display: none; }
+    .pen-row .pr-date { display: none; }
+    .pr-used-txt { display: inline; }
+    .pr-actions button { width: 30px; height: 30px; }
+}
+.pen-group + .pen-group { border-top: 1px solid var(--border); }
+
+/* history pagination */
+.pager {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 10px 14px;
+    border-top: 1px solid var(--border);
+}
+.pager-info { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-3); }
+
+/* settings drawer footer */
+.drawer-foot {
+    margin-top: 22px; padding: 14px 0 4px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+}
+.drawer-foot a {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-3); text-decoration: none;
+}
+.drawer-foot a:hover { color: var(--text); }
+.tbl .med-cell { white-space: nowrap; }
+.tbl .med-cell .ml-dot { margin-right: 6px; }
+.pen-group-head {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%; padding: 9px 10px;
+    color: var(--text-2); font-size: 12px; text-align: left;
+    position: sticky; top: 0; background: var(--surface-3); z-index: 1;
+}
+.pen-group-head:hover { background: var(--surface-2); }
+.pg-chev { display: inline-flex; color: var(--text-3); transition: transform 140ms; }
+.pg-chev.open { transform: rotate(90deg); }
+.pg-chev svg { width: 13px; height: 13px; }
+.pg-label { font-family: var(--font-mono); font-weight: 600; font-size: 12px; color: var(--text); }
+.pg-sub { color: var(--text-3); font-size: 11.5px; }
 .pen-row {
     display: grid;
-    grid-template-columns: 58px 1fr 70px 56px 24px;
+    grid-template-columns: 52px minmax(0, 1fr) auto auto auto;
     align-items: center;
     gap: 8px;
     padding: 9px 10px;
@@ -711,7 +769,7 @@ button.link.no-ml { margin-left: 0; }
     background: rgba(0, 0, 0, 0.55);
     backdrop-filter: blur(4px);
     display: flex; align-items: center; justify-content: center;
-    z-index: 1200;
+    z-index: 1400; /* above onboarding (1300): the sync-conflict modal must never hide behind the wizard */
     padding: 18px;
     animation: fadeIn 140ms ease;
 }
@@ -1113,6 +1171,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 }
 .bf-plan-row input:focus { border-color: var(--accent); }
 .time-item input[data-scheddose] { width: 70px !important; }
+.time-item input[data-schedcount] { width: 50px !important; }
 
 /* ================================================
    All-meds overview card
@@ -1180,7 +1239,7 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
    ================================================ */
 @media (max-width: 720px) {
     .top-bar { display: none; }           /* login etc. live in Settings */
-    .app-topbar { top: 0; }
+    .app-topbar { display: none; }        /* theme/sync/settings live in Settings via bottom bar */
     .quick-row { display: none; }         /* replaced by the centre Log button */
 
     .nav-log { position: relative; overflow: visible; color: var(--text-3); }
