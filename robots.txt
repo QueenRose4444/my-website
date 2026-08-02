@@ -1,4 +1,14 @@
+# WIP pages are kept out of search results by:
+#   1. a per-page  <meta name="robots" content="noindex, nofollow">  (works on
+#      every host, including the dev site — this is the one that matters), and
+#   2. the  /wip/*  X-Robots-Tag rule in  _headers  (Cloudflare Pages only).
+#
+# Do NOT add "Disallow: /wip/" back here. Blocking the crawl stops Google from
+# ever fetching the page, so it never reads the noindex — and bare /wip/ URLs
+# can then still show up in a "site:" search. Crawl must be allowed for the
+# noindex to do its job.
+
 User-agent: *
-Disallow: /wip/
+Allow: /
 
 Sitemap: https://rosestuffs.org/sitemap.xml
