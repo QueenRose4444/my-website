@@ -24,6 +24,46 @@
         'medRange', 'medProjection', 'medLevelScope', 'medYDensity', 'medYFit', 'medShowDots', 'medChartHeight', 'weightRange', 'historyPageSize',
         'pushEnabled']; // push subscriptions are per-browser, so the toggle is too
 
+    // Settings the sync fingerprint ignores. Two lists, deliberately:
+    //
+    //   DEVICE_KEYS          never leave this device at all — they generate no sync
+    //                        operation and none is ever applied to them, so flipping
+    //                        a chart range on your phone is not news for your PC.
+    //   VIEW_ONLY_SETTINGS   the above plus two that DO sync but must never look
+    //                        like a data conflict. They ride along as ordinary
+    //                        settings changes, exactly as they always have.
+    const VIEW_ONLY_SETTINGS = DEVICE_KEYS.concat(['medLevelRange', 'onboardedAt']);
+
+    // What the sync engine treats as items. /sync-wip.js knows nothing about doses —
+    // it is told which fields are collections, how to identify an item, and (where
+    // it exists) which clock the item carries. Everything here is keyed by `id`,
+    // which every dose, weight, med and pen has had since v2.
+    //
+    // Not listed: `version` (a constant) and `activeMedId` (per device — normalize()
+    // resets it from the device blob anyway). Neither generates an operation.
+    const SYNC_COLLECTIONS = [
+        { name: 'meds', identity: m => m.id },
+        { name: 'trashedMeds', identity: m => m.id },
+        { name: 'shots', identity: x => x.id, timestamp: x => x.timestamp },
+        { name: 'weights', identity: x => x.id, timestamp: x => x.timestamp },
+        { name: 'pens', identity: p => p.id },
+        { name: 'settings', kind: 'map', ignore: DEVICE_KEYS },
+        { name: 'user', kind: 'map' },
+    ];
+
+    // Collection names are wire identifiers; these are what a person is shown.
+    // Used by the import preview and by anything else that has to name a
+    // collection out loud.
+    const COLLECTION_LABELS = {
+        shots: 'doses',
+        weights: 'weights',
+        meds: 'medications',
+        trashedMeds: 'archived medications',
+        pens: 'supply',
+        settings: 'settings',
+        user: 'profile',
+    };
+
     const DEFAULT_SETTINGS = {
         dateFormat: 'dd/mm/yyyy',
         timeFormat: '12hr',
@@ -120,9 +160,14 @@
 
         // The sync engine that used to live in this file now lives in
         // /sync-wip.js so every page gets it. Everything meds-specific — what
-        // counts as data vs view state, how two copies merge — is handed to it
-        // here, so the behaviour is exactly what it was, plus the server-side
-        // version check that closes the both-devices-write-at-once race.
+        // counts as data vs view state, what an item is, how two copies merge —
+        // is handed to it here.
+        //
+        // It ships CHANGES, not the whole blob: what was added, edited or deleted
+        // since this device last synced, with the server assigning the version
+        // numbers. Being behind is no longer a conflict, a deletion is no longer
+        // undone by the next merge, and "both devices changed" no longer stops the
+        // user to ask a question the log can already answer.
         initSync() {
             const self = this;
             this.sync = new SyncWip.SyncClient({
@@ -139,6 +184,44 @@
                 merge: (theirs) => { self.mergeIn(theirs); return self.state; },
                 debounceMs: 1200,
                 onStatus: (status) => { self.syncStatus = status; self.emit('sync'); },
+
+                // Doses, weights, meds and supply are items with ids, so the sync
+                // engine can ship what CHANGED rather than the whole blob — and a
+                // deletion travels as a deletion instead of being un-done by the
+                // next union merge.
+                collections: SYNC_COLLECTIONS,
+                // Which med is on screen belongs to this device (normalize() takes
+                // it from the device blob), so it is not a change worth shipping.
+                // Anything else outside SYNC_COLLECTIONS that changes — `version`,
+                // if the schema is ever bumped — forces a whole-state save rather
+                // than being quietly left behind.
+                ignoreKeys: ['activeMedId'],
+
+                // The one thing sync will not decide by itself: a dose deleted on
+                // one device and edited on the other. Asked per entry, AFTER the
+                // rest of the merge has already been saved, and never destructive
+                // unless the answer says so — dismissing keeps the entry.
+                onItemConflict: (info) => {
+                    if (!window.Modals || !window.Modals.syncItemConflicts) return undefined;
+                    return window.Modals.syncItemConflicts(info.collisions);
+                },
+
+                // Both devices changed something else? That is no longer a question
+                // for the user: their changes are applied, mine go on top, and the
+                // app just says what happened. The modal below is now only reached
+                // when there is no base to reason from (a first sync, cleared
+                // storage, or a device away past a compaction).
+                onMerged: (info) => {
+                    self.emit('change');
+                    if (!window.UI || !window.UI.toast) return;
+                    const n = info.changesFromOtherDevice;
+                    let msg = `Merged ${n} change${n === 1 ? '' : 's'} from your other device`;
+                    if (info.stats.myEditWon) msg += ` · ${info.stats.myEditWon} kept from this device`;
+                    if (info.awaitingDecision) {
+                        msg += ` · ${info.awaitingDecision} need${info.awaitingDecision === 1 ? 's' : ''} a decision`;
+                    }
+                    window.UI.toast(msg);
+                },
 
                 // meds has its own conflict modal. It is opened from here rather
                 // than from the performSync caller, because a conflict can now
@@ -258,8 +341,9 @@
 
         scheduleServerSave() { if (this.sync) this.sync.scheduleSave(); },
 
-        // immediate write — used after destructive ops (reset / import-replace)
-        // so a quick reload can't resurrect the old server copy
+        // immediate write, for a change that must not sit in the debounce.
+        // NOT for a reset or a replace-import: those go through replaceAllOnServer,
+        // because a flush would ship them as one deletion per entry.
         async flushToServer() { return this.sync ? this.sync.flush() : false; },
 
         async saveToServer() { return this.sync ? this.sync.saveToServer() : false; },
@@ -276,6 +360,15 @@
 
         // the server copy parked while a conflict is open (Modals.syncConflict reads this)
         get _pendingServerState() { return this.sync ? this.sync.pendingServerState : null; },
+
+        // Set when that parked copy is there because ANOTHER device replaced all of
+        // its data from a backup. The conflict modal reads it to ask the specific
+        // question — "N of your entries are not in it" — instead of the generic one.
+        get _pendingReplaceNotice() { return this.sync ? this.sync.pendingReplaceNotice : null; },
+
+        // Human labels for the sync collections, so the modals do not each invent
+        // their own names for the same things.
+        collectionLabel(name) { return COLLECTION_LABELS[name] || name; },
 
         // Open the conflict modal at most once. Called from the sync client; also
         // safe for app.js to call after performSync returns 'conflict'.
@@ -302,7 +395,7 @@
         // only real data differences ask the user to pick a side.
         canonical(s) {
             if (!s) return null;
-            const VIEW_ONLY = DEVICE_KEYS.concat(['medLevelRange', 'onboardedAt']);
+            const VIEW_ONLY = VIEW_ONLY_SETTINGS;
             const shots = (s.shots || []).map(x => [x.timestamp, x.medId, x.dose, x.location || ''].join('|')).sort();
             const weights = (s.weights || []).map(x => [x.timestamp, Math.round(x.kg * 10) / 10].join('|')).sort();
             const pens = (s.pens || []).map(x => [x.id, x.dose, x.capacity].join('|')).sort();
@@ -462,8 +555,13 @@
         },
 
         // merge another v2-shaped state into current (dedup by timestamp+dose / timestamp+kg)
-        mergeIn(incoming) {
-            const s = this.state;
+        //
+        // ADDITIVE ONLY. It joins; it never removes. `target` lets a caller merge
+        // into a scratch copy — that is how the import preview counts what a merge
+        // would do without doing it, using the real merge rather than a description
+        // of it that could drift away from the code.
+        mergeIn(incoming, target) {
+            const s = target || this.state;
             const shotKeys = new Set(s.shots.map(x => x.timestamp + '|' + x.dose + '|' + x.medId));
             const wKeys = new Set(s.weights.map(x => x.timestamp + '|' + x.kg));
             const medIds = new Set(s.meds.map(m => m.id));
@@ -539,10 +637,60 @@
             throw new Error('Unrecognised backup format');
         },
 
-        importBackup(parsed, mode) {
-            // mode: 'merge' | 'replace'
+        // What an import WOULD do, per collection, before anything is touched.
+        //
+        // The client asked for this outright, and the reason is the bug that
+        // produced it: a replace-import of a backup that is not a superset deletes
+        // everything the backup lacks, and until now nothing said so. "This will
+        // delete 1084 entries" is the sentence that would have prevented it.
+        //
+        // Merge is computed by actually merging into a scratch copy, so the number
+        // shown is the number the real merge produces and cannot drift from it.
+        //
+        // @returns {{mode, kind, incoming, summary, collections, totals}}
+        previewImport(parsed, mode) {
             const incoming = parsed.kind === 'v2' ? parsed.state : this.convertV1(parsed.payload);
+            const specs = SyncWip.normaliseCollections(SYNC_COLLECTIONS);
+
+            let target;
             if (mode === 'replace') {
+                target = incoming;
+            } else {
+                target = JSON.parse(JSON.stringify(this.state));
+                this.mergeIn(incoming, target);
+            }
+
+            const summary = SyncWip.diffSummary(this.state, target, specs);
+            return {
+                mode: mode === 'replace' ? 'replace' : 'merge',
+                kind: parsed.kind,
+                incoming,
+                target,
+                summary,
+                collections: summary.collections.map(row => Object.assign({
+                    label: COLLECTION_LABELS[row.name] || row.name,
+                }, row)),
+                totals: summary.totals,
+            };
+        },
+
+        // mode: 'merge' | 'replace'
+        //
+        // MERGE is additive and travels as ordinary operations, because that is
+        // what it is: some entries were added.
+        //
+        // REPLACE does NOT. Diffing a wholesale replacement against the last synced
+        // state turns it into one `del` per entry the backup does not contain, and
+        // every other device applies a `del` without asking. Two devices importing
+        // two different backups then delete each other's data — which is precisely
+        // what happened here, silently, to real medication history. It goes up as a
+        // marked whole-state replacement instead, and the other device is asked.
+        importBackup(parsed, mode) {
+            const replacing = mode === 'replace';
+            const preview = this.previewImport(parsed, mode);
+            const incoming = preview.incoming;
+
+            if (replacing) {
                 incoming.settings.onboardedAt = incoming.settings.onboardedAt || Date.now();
                 this.state = incoming;
             } else {
@@ -550,14 +698,32 @@
             }
             this.saveLocal();
             this.emit('change');
-            this.flushToServer();
+
+            if (!replacing) return this.flushToServer();
+            return this.replaceAllOnServer({
+                source: 'import',
+                removed: preview.totals.removed,
+                kept: preview.totals.identical + preview.totals.changed,
+            });
         },
 
         resetAll() {
+            // A reset is the same kind of event as a replace-import: everything
+            // goes. Sent as per-item deletes it would empty the other device too,
+            // with no way for that device to know why.
+            const specs = SyncWip.normaliseCollections(SYNC_COLLECTIONS);
+            const gone = SyncWip.diffSummary(this.state, emptyState(), specs).totals.removed;
             this.state = emptyState();
             this.saveLocal();
             this.emit('change');
-            this.flushToServer();
+            return this.replaceAllOnServer({ source: 'reset', removed: gone, kept: 0 });
+        },
+
+        // Publish the current state as a whole-state replacement rather than as a
+        // set of edits. Falls back to a plain flush on a page with no sync client.
+        async replaceAllOnServer(meta) {
+            if (!this.sync) return false;
+            return this.sync.replaceAll(this.state, meta);
         },
     };
 

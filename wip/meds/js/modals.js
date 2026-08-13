@@ -1227,10 +1227,53 @@
     // ------------------------------------------------
     // Import / export
     // ------------------------------------------------
+    // WHAT AN IMPORT WILL DO IS SHOWN BEFORE IT DOES IT.
+    //
+    // Both actions are previewed the same way — added / removed / changed /
+    // unchanged, per section, counted from the real merge rather than described.
+    // Removals are the number that matters and are given their own line.
+    //
+    // Merge and replace are NOT peers. Merge is the button; replace is a separate,
+    // clearly destructive action that names the number of entries it will delete
+    // before it will run. A segmented control made "wipe everything" one tap away
+    // from "keep everything", which is how a backup that was not a superset
+    // destroyed a year of dose records.
+
+    /** One row per collection that actually changes. */
+    function importPreviewHtml(preview) {
+        const rows = preview.collections.filter(c => c.added || c.removed || c.changed);
+        const t = preview.totals;
+        const lines = rows.map(c => {
+            const bits = [];
+            if (c.added) bits.push(`<strong>+${c.added}</strong> added`);
+            if (c.changed) bits.push(`<strong>${c.changed}</strong> changed`);
+            if (c.removed) bits.push(`<strong class="txt-danger">−${c.removed}</strong> deleted`);
+            bits.push(`${c.identical} unchanged`);
+            return `<p><strong>${escapeHtml(c.label)}</strong> — ${bits.join(' · ')}</p>`;
+        }).join('');
+
+        const nothing = !rows.length
+            ? '<p>Nothing would change — this backup matches what is already here.</p>' : '';
+
+        const warn = t.removed
+            ? `<div class="pen-hint warn" style="margin-top:10px">${Icons.alert}
+                 <div><strong>This will delete ${t.removed} ${t.removed === 1 ? 'entry' : 'entries'}</strong>
+                 that ${t.removed === 1 ? 'is' : 'are'} here now and not in the backup.
+                 Deleted entries are removed from your other devices too.</div></div>`
+            : `<div class="pen-hint" style="margin-top:10px">${Icons.check}
+                 <div>Nothing will be deleted.</div></div>`;
+
+        return `
+            <div class="data-column" style="margin-top:10px">
+                <h3>${preview.mode === 'replace' ? 'Replacing would' : 'Merging would'}</h3>
+                ${lines || nothing}
+            </div>
+            ${warn}`;
+    }
+
     function importExport() {
         const S = Store();
         let parsed = null;
-        let mergeMode = 'merge';
 
         openModal({
             title: 'Import / export data',
@@ -1246,11 +1289,9 @@
                     <div class="field"><label>or paste JSON</label>
                         <textarea id="iePaste" rows="4" placeholder='{"shotHistory":[...],"weightHistory":[...],"userSettings":{...}}'></textarea></div>
                     <div id="iePreview"></div>
-                    <div class="field" style="margin-top:12px"><label>Existing data</label>
-                        <div class="chip-grp" id="ieMerge">
-                            <button class="chip active" data-merge="merge">Merge (keep current)</button>
-                            <button class="chip" data-merge="replace">Replace (wipe current)</button>
-                        </div>
+                    <div id="ieReplaceWrap" style="display:none;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+                        <p class="dim-sm" style="margin-bottom:8px">Or throw away what is here and keep only the backup:</p>
+                        <button class="btn danger" data-act="replace">${Icons.trash || ''} Replace everything instead…</button>
                     </div>
                 </div>
                 <div id="exportWrap" style="display:none">
@@ -1261,23 +1302,32 @@
                 </div>`,
             footHtml: `
                 <button class="btn ghost" data-act="cancel">Cancel</button>
-                <button class="btn primary" data-act="go" disabled>${Icons.check} Import</button>`,
+                <button class="btn primary" data-act="go" disabled>${Icons.check} Merge into my data</button>`,
             onMount(modal, close) {
                 const goBtn = modal.querySelector('[data-act="go"]');
                 let mode = 'import';
                 const preview = modal.querySelector('#iePreview');
+                const replaceWrap = modal.querySelector('#ieReplaceWrap');
+
+                let kindHtml = '';
+                const showPreview = (mergeOrReplace) => {
+                    // Counted before anything is applied — this is the whole point.
+                    preview.innerHTML = kindHtml + importPreviewHtml(S.previewImport(parsed, mergeOrReplace));
+                };
 
                 const handleText = text => {
                     try {
                         parsed = S.parseBackup(text);
-                        const counts = parsed.kind === 'v2'
-                            ? { s: parsed.state.shots.length, w: parsed.state.weights.length, kind: 'v2 backup' }
-                            : { s: parsed.payload.shotHistory.length, w: parsed.payload.weightHistory.length, kind: 'v1 / old-site backup' };
-                        preview.innerHTML = `<div class="pen-hint col"><div><strong>${counts.s}</strong> doses · <strong>${counts.w}</strong> weights detected (${counts.kind})</div></div>`;
+                        const kind = parsed.kind === 'v2' ? 'v2 backup' : 'v1 / old-site backup';
+                        kindHtml = `<div class="pen-hint col"><div>Read as a <strong>${kind}</strong></div></div>`;
+                        showPreview('merge');
+                        replaceWrap.style.display = '';
                         goBtn.disabled = false;
                     } catch (e) {
                         parsed = null;
+                        kindHtml = '';
                         preview.innerHTML = `<div class="pen-hint warn">${Icons.alert} ${escapeHtml(e.message)}</div>`;
+                        replaceWrap.style.display = 'none';
                         goBtn.disabled = true;
                     }
                 };
@@ -1289,7 +1339,7 @@
                     modal.querySelectorAll('#ieMode .chip').forEach(c => c.classList.toggle('active', c.dataset.mode === mode));
                     modal.querySelector('#importWrap').style.display = mode === 'import' ? '' : 'none';
                     modal.querySelector('#exportWrap').style.display = mode === 'export' ? '' : 'none';
-                    goBtn.innerHTML = mode === 'import' ? `${Icons.check} Import` : `${Icons.download} Download backup`;
+                    goBtn.innerHTML = mode === 'import' ? `${Icons.check} Merge into my data` : `${Icons.download} Download backup`;
                     goBtn.disabled = mode === 'import' ? !parsed : false;
                 });
                 modal.querySelector('#ieFile').addEventListener('change', e => {
@@ -1300,13 +1350,32 @@
                     r.readAsText(f);
                 });
                 modal.querySelector('#iePaste').addEventListener('input', e => { if (e.target.value.trim()) handleText(e.target.value); });
-                modal.querySelector('#ieMerge').addEventListener('click', e => {
-                    const b = e.target.closest('[data-merge]');
-                    if (!b) return;
-                    mergeMode = b.dataset.merge;
-                    modal.querySelectorAll('#ieMerge .chip').forEach(c => c.classList.toggle('active', c.dataset.merge === mergeMode));
-                });
                 modal.querySelector('[data-act="cancel"]').addEventListener('click', close);
+
+                // The destructive path. It shows the replace preview — which is a
+                // different set of numbers from the merge preview — and will not
+                // run until the confirmation, which NAMES the deletions, is agreed.
+                modal.querySelector('[data-act="replace"]').addEventListener('click', async () => {
+                    if (!parsed) return;
+                    const p = S.previewImport(parsed, 'replace');
+                    showPreview('replace');
+                    const n = p.totals.removed;
+                    const msg = n
+                        ? `This deletes ${n} ${n === 1 ? 'entry' : 'entries'} that ${n === 1 ? 'is' : 'are'} here now and not in the backup, on this device and on every device signed in to your account. It cannot be undone. Merging instead would keep all of it.`
+                        : 'Replace everything with the backup? Nothing here would be deleted, since the backup already contains all of it.';
+                    const ok = await confirmModal(msg, {
+                        danger: true,
+                        title: n ? `Delete ${n} ${n === 1 ? 'entry' : 'entries'}?` : 'Replace everything?',
+                        yesLabel: n ? `Delete ${n} and replace` : 'Replace everything',
+                    });
+                    // Backing out puts the panel back on what the button says it
+                    // will do, so the two can never disagree on screen.
+                    if (!ok) { showPreview('merge'); return; }
+                    await S.importBackup(parsed, 'replace');
+                    toast(n ? `Replaced — ${n} deleted` : 'Replaced from backup');
+                    close();
+                });
+
                 goBtn.addEventListener('click', async () => {
                     if (mode === 'export') {
                         const blob = S.exportBackup();
@@ -1320,12 +1389,8 @@
                         return;
                     }
                     if (!parsed) return;
-                    if (mergeMode === 'replace') {
-                        const ok = await confirmModal('Replace ALL current data with the imported backup? This cannot be undone.', { danger: true, yesLabel: 'Replace everything' });
-                        if (!ok) return;
-                    }
-                    S.importBackup(parsed, mergeMode);
-                    toast('Import complete');
+                    await S.importBackup(parsed, 'merge');
+                    toast('Import complete — nothing was deleted');
                     close();
                 });
             },
@@ -1672,6 +1737,22 @@
         const localSum = S.summary(S.state);
         const serverSum = S.summary(S._pendingServerState || {});
         const set = S.state.settings;
+
+        // A replacement is not a drift. When the account copy is there because
+        // another device imported a backup over the top, say so and say what it
+        // costs — the generic "these differ" is what let this go unnoticed.
+        const notice = S._pendingReplaceNotice;
+        const missing = notice ? (notice.missing || 0) : 0;
+        const replacedWhen = (notice && notice.marker && notice.marker.at)
+            ? `${D.fmtDate(notice.marker.at, set)} ${D.fmtTime(notice.marker.at, set)}` : '';
+        const noticeHtml = notice
+            ? `<div class="pen-hint warn" style="margin-bottom:12px">${Icons.alert}
+                 <div><strong>Your other device replaced all of its data
+                 ${notice.marker && notice.marker.source === 'reset' ? 'with a reset' : 'from a backup file'}${replacedWhen ? ' on ' + escapeHtml(replacedWhen) : ''}.</strong>
+                 ${missing
+                    ? `${missing} ${missing === 1 ? 'entry' : 'entries'} on this device ${missing === 1 ? 'is' : 'are'} not in it. Keeping the account copy deletes ${missing === 1 ? 'it' : 'them'}; merging keeps everything from both.`
+                    : 'Nothing on this device is missing from it.'}</div></div>`
+            : '';
         const fmtSum = sum => `
             <p><strong>Last update:</strong> ${sum.lastUpdate ? D.fmtDate(sum.lastUpdate, set) + ' ' + D.fmtTime(sum.lastUpdate, set) : 'none'}</p>
             <p><strong>Entries:</strong> ${sum.shotCount} doses, ${sum.weightCount} weights</p>
@@ -1679,11 +1760,12 @@
             <p><strong>Last weight:</strong> ${sum.lastWeight ? D.fmtDate(sum.lastWeight.timestamp, set) + ' · ' + D.fmtWeight(sum.lastWeight.kg, set.weightUnit, true) : '—'}</p>`;
 
         openModal({
-            title: 'Data sync conflict',
+            title: notice ? 'Your other device replaced everything' : 'Data sync conflict',
             sub: 'Your local data differs from your account. Merge keeps everything from both.',
             noBackdropClose: true,
             noClose: true,
             bodyHtml: `
+                ${noticeHtml}
                 <div class="conflict-grid">
                     <div class="data-column"><h3>This device</h3>${fmtSum(localSum)}</div>
                     <div class="data-column"><h3>Your account</h3>${fmtSum(serverSum)}</div>
@@ -1691,7 +1773,7 @@
                 <p class="dim-sm" style="margin-top:10px">Merge combines both copies section by section — doses, weights, meds and supply are joined with duplicates removed. Items deleted on only one side will come back.</p>`,
             footHtml: `
                 <button class="btn" data-act="local">${Icons.upload} Keep this device</button>
-                <button class="btn" data-act="server">${Icons.download} Keep account copy</button>
+                <button class="btn${missing ? ' danger' : ''}" data-act="server">${Icons.download} Keep account copy${missing ? ` (deletes ${missing})` : ''}</button>
                 <button class="btn primary" data-act="merge">${Icons.refresh} Merge both</button>`,
             onMount(modal, close) {
                 modal.querySelector('[data-act="local"]').addEventListener('click', () => { S.resolveConflict(false); close(); });
@@ -1705,5 +1787,150 @@
         });
     }
 
-    window.Modals = { logShot, logSheet, logWeight, addPens, editPen, addMed, backfill, importExport, settingsDrawer, authModal, changePasswordModal, syncConflict };
+    // ------------------------------------------------
+    // Deleted here, edited there
+    // ------------------------------------------------
+    // The one sync question the app asks. Everything else the two devices sort out
+    // between themselves; this one is a genuine choice — a dose record that was
+    // deleted on one device and corrected on the other.
+    //
+    // ONE ENTRY AT A TIME. Three collisions are three decisions, because the answer
+    // for one dose is not the answer for another. "Apply to the rest" is there for
+    // when it is.
+    //
+    // Closing this — the X, Escape, the backdrop, the tab — keeps everything. The
+    // destructive answer is only ever the one that was explicitly clicked.
+
+    function describeSyncEntry(coll, item) {
+        const S = Store();
+        const set = S.state.settings;
+        try {
+            if (!item) return 'an entry that is no longer here';
+            const when = item.timestamp
+                ? `${D.fmtDate(item.timestamp, set)} · ${D.fmtTime(item.timestamp, set)}`
+                : '';
+            if (coll === 'shots') {
+                const med = S.state.meds.concat(S.state.trashedMeds || []).find(m => m.id === item.medId);
+                const unit = (med && med.unit) || 'mg';
+                const name = med ? med.name : 'dose';
+                return `${item.dose}${unit} ${name}${when ? ' — ' + when : ''}`;
+            }
+            if (coll === 'weights') {
+                return `${D.fmtWeight(item.kg, set.weightUnit, true)}${when ? ' — ' + when : ''}`;
+            }
+            if (coll === 'meds' || coll === 'trashedMeds') return item.name || item.id;
+            if (coll === 'pens') return `Supply of ${item.dose ?? '?'} (${item.capacity ?? '?'} doses)`;
+            return String(item.id || 'an entry');
+        } catch (e) {
+            return String((item && item.id) || 'an entry');
+        }
+    }
+
+    const ENTRY_NOUN = {
+        shots: 'dose', weights: 'weight', meds: 'medication',
+        trashedMeds: 'medication', pens: 'supply',
+    };
+
+    function syncItemConflicts(collisions) {
+        return new Promise(resolve => {
+            const answers = {};
+            let settled = false;
+            const done = () => { if (!settled) { settled = true; resolve(answers); } };
+            let i = 0;
+
+            function step() {
+                if (i >= collisions.length) { done(); return; }
+                const c = collisions[i];
+                let advancing = false;
+                const noun = ENTRY_NOUN[c.coll] || 'entry';
+                const remaining = collisions.length - i - 1;
+                const deletedWhere = c.deletedOnThisDevice ? 'this device' : 'your other device';
+                const editedWhere = c.deletedOnThisDevice ? 'your other device' : 'this device';
+                const bulk = c.kind === 'bulk-delete';
+
+                const plural = Store().collectionLabel(c.coll);
+                const bulkBody = () => `
+                        <p><strong>Your other device deleted ${c.count} of your ${c.total} ${escapeHtml(plural)}</strong>
+                           in one go. That can be exactly what was meant — or an old backup, or a mistake.
+                           Nothing has been deleted here yet.</p>
+                        <div class="conflict-grid">
+                            <div class="data-column">
+                                <h3>Here now</h3>
+                                <p>${c.total} ${escapeHtml(plural)}</p>
+                            </div>
+                            <div class="data-column">
+                                <h3>If you delete</h3>
+                                <p>${Math.max(0, c.total - c.count)} ${escapeHtml(plural)}</p>
+                            </div>
+                        </div>
+                        ${(c.sample || []).filter(Boolean).length ? `<p class="dim-sm" style="margin-top:10px">
+                            For example: ${(c.sample || []).filter(Boolean).slice(0, 3)
+                                .map(x => escapeHtml(describeSyncEntry(c.coll, x))).join(' · ')}
+                        </p>` : ''}
+                        <p class="dim-sm" style="margin-top:10px">Keeping them is the safe answer — they go back to your other device too, and you can delete them later.</p>`;
+
+                openModal({
+                    title: bulk
+                        ? `${c.count} ${plural} were deleted on your other device`
+                        : `A ${noun} was deleted in one place and changed in another`,
+                    sub: collisions.length > 1 ? `${i + 1} of ${collisions.length}` : '',
+                    noBackdropClose: true,
+                    bodyHtml: bulk ? bulkBody() : `
+                        <p>This ${escapeHtml(noun)} was <strong>deleted on ${escapeHtml(deletedWhere)}</strong>
+                           and <strong>changed on ${escapeHtml(editedWhere)}</strong>. Only you know which was meant.</p>
+                        <div class="conflict-grid">
+                            <div class="data-column">
+                                <h3>It was</h3>
+                                <p>${escapeHtml(describeSyncEntry(c.coll, c.before))}</p>
+                            </div>
+                            <div class="data-column">
+                                <h3>${c.wasAdded ? 'Added as' : 'Changed to'}</h3>
+                                <p>${escapeHtml(describeSyncEntry(c.coll, c.after))}</p>
+                            </div>
+                        </div>
+                        <p class="dim-sm" style="margin-top:10px">Keeping it is the safe answer — nothing is lost, and you can delete it later.</p>
+                        ${remaining ? `<label class="dim-sm" style="display:flex;gap:8px;align-items:center;margin-top:10px">
+                            <input type="checkbox" data-act="all"> Do the same for the other ${remaining}
+                        </label>` : ''}`,
+                    footHtml: bulk ? `
+                        <button class="btn danger-solid" data-act="delete">${Icons.trash || ''} Delete all ${c.count}</button>
+                        <button class="btn primary" data-act="keep">${Icons.check || ''} Keep them</button>` : `
+                        <button class="btn danger-solid" data-act="delete">${Icons.trash || ''} Delete it</button>
+                        <button class="btn primary" data-act="keep">${Icons.check || ''} Keep it</button>`,
+                    onMount(modal, close) {
+                        const applyAll = () => {
+                            const box = modal.querySelector('[data-act="all"]');
+                            return !!(box && box.checked);
+                        };
+                        const answer = (choice) => {
+                            const rest = applyAll();
+                            answers[c.key] = choice;
+                            if (rest) {
+                                for (let j = i + 1; j < collisions.length; j++) answers[collisions[j].key] = choice;
+                                i = collisions.length;
+                            } else {
+                                i += 1;
+                            }
+                            // Moving to the next question also fires onClose, which
+                            // must not be read as a dismissal.
+                            advancing = true;
+                            close();
+                            advancing = false;
+                            step();
+                        };
+                        modal.querySelector('[data-act="keep"]').addEventListener('click', () => answer('keep'));
+                        modal.querySelector('[data-act="delete"]').addEventListener('click', () => answer('delete'));
+                    },
+                    // Dismissed. Whatever is left keeps its entry: sync-wip.js treats
+                    // an unanswered collision as "keep", and records it so this is
+                    // not asked again on every sync.
+                    onClose() { if (!advancing) done(); },
+                });
+            }
+
+            step();
+        });
+    }
+
+    window.Modals = { logShot, logSheet, logWeight, addPens, editPen, addMed, backfill, importExport, settingsDrawer, authModal, changePasswordModal, syncConflict, syncItemConflicts };
 })();
