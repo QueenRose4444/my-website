@@ -1,5 +1,5 @@
 // site_notifier.js - Handles login and managing site monitors via the backend API.
-// UPDATED: Now uses the global AuthManager for cross-tab login syncing.
+// UPDATED: Now uses the global AuthManagerWip for cross-tab login syncing.
 
 /*************************************
  * APPLICATION & ENVIRONMENT CONFIGURATION
@@ -35,7 +35,7 @@ let countdownIntervals = {};
 let autoRefreshInterval = null;
 let pendingCookieFile = null; // Stores the cookie file for new monitors
 
-// --- Auth State (via AuthManager) ---
+// --- Auth State (via AuthManagerWip) ---
 let authManager = null; // Will be initialized in DOMContentLoaded
 
 /***********************
@@ -114,11 +114,11 @@ function getElements() {
 }
 
 /************************************
- * Auth Wrapper (uses global AuthManager)
+ * Auth Wrapper (uses global AuthManagerWip)
  ************************************/
-// Helper to access AuthManager's fetchWithAuth for authenticated requests
+// Helper to access AuthManagerWip's fetchWithAuth for authenticated requests
 async function fetchWithAuth(url, options = {}) {
-    if (!authManager) throw new Error("AuthManager not initialized");
+    if (!authManager) throw new Error("AuthManagerWip not initialized");
     return authManager.fetchWithAuth(url, options);
 }
 
@@ -816,18 +816,18 @@ function setupAuthEventListeners() {
  * Initial Page Load
  **********************/
 document.addEventListener("DOMContentLoaded", async () => {
-    // Initialize AuthManager
-    if (typeof AuthManager !== 'undefined') {
-        authManager = new AuthManager(APP_NAME, ENVIRONMENT);
+    // Initialize AuthManagerWip
+    if (typeof AuthManagerWip !== 'undefined') {
+        authManager = new AuthManagerWip(APP_NAME, ENVIRONMENT);
     } else {
-        console.error("AuthManager not loaded! Make sure auth.js is included before this script.");
+        console.error("AuthManagerWip not loaded! Make sure auth-wip.js is included before this script.");
         return;
     }
 
     setupEventListeners();
     setupAuthEventListeners();
 
-    // Initialize auth session - AuthManager will dispatch appropriate events
+    // Initialize auth session - AuthManagerWip will dispatch appropriate events
     await authManager.initialize();
     
     // Initial display update (in case no events fire)

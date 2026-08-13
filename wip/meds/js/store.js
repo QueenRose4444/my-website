@@ -1,6 +1,6 @@
 // ================================================
 // store.js — app state, localStorage persistence,
-// backend sync (AuthManager), v1 migration, import/export
+// backend sync (AuthManagerWip), v1 migration, import/export
 // ================================================
 (function () {
     'use strict';
@@ -107,15 +107,53 @@
     // ------------------------------------------------
     const Store = {
         state: emptyState(),
-        auth: null,           // AuthManager, set in init
+        auth: null,           // AuthManagerWip, set in init
+        sync: null,           // SyncWip.SyncClient, set in init
         listeners: [],
-        _saveTimer: null,
-        _serverDirty: false,
-        syncStatus: 'local',  // 'local' | 'syncing' | 'synced' | 'error'
+        syncStatus: 'local',  // 'local' | 'syncing' | 'synced' | 'error' | 'conflict'
 
         init() {
-            this.auth = new AuthManager(APP_NAME, ENVIRONMENT);
+            this.auth = new AuthManagerWip(APP_NAME, ENVIRONMENT);
             this.loadLocal();
+            this.initSync();
+        },
+
+        // The sync engine that used to live in this file now lives in
+        // /sync-wip.js so every page gets it. Everything meds-specific — what
+        // counts as data vs view state, how two copies merge — is handed to it
+        // here, so the behaviour is exactly what it was, plus the server-side
+        // version check that closes the both-devices-write-at-once race.
+        initSync() {
+            const self = this;
+            this.sync = new SyncWip.SyncClient({
+                auth: this.auth,
+                appName: APP_NAME,
+                getState: () => self.state,
+                setState: (s) => { self.state = s; self.saveLocal(); self.emit('change'); },
+                normalize: (raw) => self.normalize(raw),
+                // empty blob from the backend looks like {shotHistory:[],weightHistory:[],settings:{}}
+                accept: (raw) => !!raw && raw.version === 2,
+                canonical: (s) => self.canonical(s),
+                hasData: (s) => !!(s && ((s.shots || []).length || (s.weights || []).length || (s.meds || []).length)),
+                // union both sides, dedupe by content key — mergeIn mutates state
+                merge: (theirs) => { self.mergeIn(theirs); return self.state; },
+                debounceMs: 1200,
+                onStatus: (status) => { self.syncStatus = status; self.emit('sync'); },
+
+                // meds has its own conflict modal. It is opened from here rather
+                // than from the performSync caller, because a conflict can now
+                // arrive two ways: from a sync after login, OR from a background
+                // save that the server refused as stale. The second one has no
+                // caller to notice it, so the modal has to be raised here or that
+                // conflict would sit parked and invisible.
+                //
+                // The modal resolves by calling Store.resolveConflict /
+                // resolveConflictMerge itself, so nothing is returned here.
+                onConflict: () => {
+                    self.showConflictModal();
+                    return undefined;
+                },
+            });
         },
 
         onChange(fn) { this.listeners.push(fn); },
@@ -218,58 +256,42 @@
         // ---------- backend sync ----------
         isLoggedIn() { return this.auth && this.auth.isLoggedIn(); },
 
-        scheduleServerSave() {
-            if (!this.isLoggedIn()) return;
-            this._serverDirty = true;
-            clearTimeout(this._saveTimer);
-            this._saveTimer = setTimeout(() => this.saveToServer(), 1200);
-        },
+        scheduleServerSave() { if (this.sync) this.sync.scheduleSave(); },
 
         // immediate write — used after destructive ops (reset / import-replace)
         // so a quick reload can't resurrect the old server copy
-        async flushToServer() {
-            if (!this.isLoggedIn()) return false;
-            clearTimeout(this._saveTimer);
-            this._serverDirty = true;
-            return this.saveToServer();
-        },
+        async flushToServer() { return this.sync ? this.sync.flush() : false; },
 
-        async saveToServer() {
-            if (!this.isLoggedIn() || !this._serverDirty) return false;
-            this._serverDirty = false;
-            this.syncStatus = 'syncing'; this.emit('sync');
-            try {
-                const res = await this.auth.fetchWithAuth(this.auth.endpoints.data, {
-                    method: 'POST',
-                    body: JSON.stringify(this.state),
-                });
-                if (!res.ok) throw new Error((await res.json()).error || 'save failed');
-                this.syncStatus = 'synced'; this.emit('sync');
-                log('Server save OK');
-                return true;
-            } catch (e) {
-                console.error('Server save failed:', e);
-                this.syncStatus = 'error'; this.emit('sync');
-                this._serverDirty = true;
-                return false;
-            }
-        },
+        async saveToServer() { return this.sync ? this.sync.saveToServer() : false; },
 
         // null = server has no v2 data; 'error' = we couldn't find out.
         // The two MUST stay distinct: treating a failed fetch as "empty"
         // makes performSync overwrite the account copy with stale local data.
         async fetchFromServer() {
-            if (!this.isLoggedIn()) return null;
+            if (!this.sync) return null;
+            const out = await this.sync.fetchFromServer();
+            if (out === 'error' || out === null) return out;
+            return out.state;
+        },
+
+        // the server copy parked while a conflict is open (Modals.syncConflict reads this)
+        get _pendingServerState() { return this.sync ? this.sync.pendingServerState : null; },
+
+        // Open the conflict modal at most once. Called from the sync client; also
+        // safe for app.js to call after performSync returns 'conflict'.
+        showConflictModal() {
+            if (this._conflictModalOpen) return;
+            if (!window.Modals || !window.Modals.syncConflict) return;
+            if (!this._pendingServerState) return;
+            // Cleared when the user picks a side (see resolveConflict below) —
+            // syncConflict() returns as soon as the modal is on screen, so
+            // clearing it here would defeat the guard.
+            this._conflictModalOpen = true;
             try {
-                const res = await this.auth.fetchWithAuth(this.auth.endpoints.data, { method: 'GET' });
-                if (!res.ok) throw new Error((await res.json()).error || 'fetch failed');
-                const data = await res.json();
-                // empty blob from backend looks like {shotHistory:[],weightHistory:[],settings:{}}
-                if (!data || data.version !== 2) return null;
-                return this.normalize(data);
+                window.Modals.syncConflict();
             } catch (e) {
-                console.error('Server fetch failed:', e);
-                return 'error';
+                this._conflictModalOpen = false;
+                console.error('Failed to open the sync conflict modal', e);
             }
         },
 
@@ -305,63 +327,22 @@
 
         // After login / session restore. Returns:
         //  'in-sync' | 'downloaded' | 'uploaded' | 'conflict' (caller shows modal) | 'none'
+        // The decision table lives in /sync-wip.js now; it is the same one.
         async performSync() {
-            if (!this.isLoggedIn()) return 'none';
-            const server = await this.fetchFromServer();
-            if (server === 'error') {
-                // couldn't read the account copy — do NOT upload over it;
-                // keep working locally, next edit/login retries
-                this.syncStatus = 'error'; this.emit('sync');
-                return 'none';
-            }
-            const localHas = this.hasData();
-            const serverHas = server && (server.shots.length || server.weights.length || server.meds.length);
-
-            if (!serverHas && localHas) {
-                this._serverDirty = true;
-                await this.saveToServer();
-                return 'uploaded';
-            }
-            if (serverHas && !localHas) {
-                this.state = server;
-                this.saveLocal();
-                this.emit('change');
-                this.syncStatus = 'synced'; this.emit('sync');
-                return 'downloaded';
-            }
-            if (serverHas && localHas) {
-                if (this.canonical(this.state) !== this.canonical(server)) {
-                    this._pendingServerState = server;
-                    return 'conflict';
-                }
-                this.syncStatus = 'synced'; this.emit('sync');
-                return 'in-sync';
-            }
-            return 'none';
+            if (!this.sync) return 'none';
+            return this.sync.performSync();
         },
 
         resolveConflict(useServer) {
-            if (useServer && this._pendingServerState) {
-                this.state = this._pendingServerState;
-                this.saveLocal();
-                this.syncStatus = 'synced';
-                this.emit('change');
-            } else {
-                this._serverDirty = true;
-                this.saveToServer();
-            }
-            this._pendingServerState = null;
+            this._conflictModalOpen = false;
+            if (this.sync) this.sync.resolveConflict(useServer);
         },
 
         // keep BOTH sides: union each section (doses/weights/meds/supply,
         // dedup by content keys via mergeIn), then push the combined copy up
         resolveConflictMerge() {
-            if (this._pendingServerState) this.mergeIn(this._pendingServerState);
-            this._pendingServerState = null;
-            this.saveLocal();
-            this.emit('change');
-            this._serverDirty = true;
-            this.saveToServer();
+            this._conflictModalOpen = false;
+            if (this.sync) this.sync.resolveConflictMerge();
         },
 
         // ---------- v1 detection + migration ----------
@@ -381,7 +362,10 @@
                 const url = `${this.auth.config.backendUrl}/api/data/${V1_APP_NAME}`;
                 const res = await this.auth.fetchWithAuth(url, { method: 'GET' });
                 if (!res.ok) return null;
-                const data = await res.json();
+                const body = await res.json();
+                // the versioned worker answers {data, version}; older ones answer the blob bare
+                const data = (body && typeof body.version === 'number' && 'data' in body) ? body.data : body;
+                if (!data) return null;
                 if ((data.shotHistory && data.shotHistory.length) || (data.weightHistory && data.weightHistory.length)) {
                     return { shotHistory: data.shotHistory || [], weightHistory: data.weightHistory || [], userSettings: data.settings || {} };
                 }

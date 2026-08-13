@@ -1,0 +1,569 @@
+// auth-wip.js — site-wide browser auth module (WIP).
+//
+// Replaces /auth.js for every page under /wip/. The old file stays where it is so
+// live pages are untouched until Rose promotes this.
+//
+// What changed, and why:
+//
+//   /auth.js sent the password to the worker, which hashed it with one unsalted
+//   SHA-256 and compared with ===. This module never sends the password at all
+//   (except on the one legacy login that upgrades the account). Instead:
+//
+//       authSecret = KDF(NFC(password), per-user salt, per-user params)
+//
+//   and the worker stores HMAC-SHA-256(pepper, authSecret). The expensive work
+//   happens here, on the user's own device, which is what keeps the Workers free
+//   plan's ~10 ms CPU budget viable. See AUTH-AND-FRIENDS-PLAN.md §2.
+//
+// ⚠ SECURE CONTEXT REQUIRED. crypto.subtle does not exist on plain http://, so
+//   this module cannot work over http://192.168.0.250:8080. Use the tunnel
+//   (https://rosiesite-old.rosestuffs.org) or localhost. It says so explicitly
+//   rather than failing with "cannot read properties of undefined".
+//
+// ⚠ ARGON2ID IS NOT BUNDLED. The plan chose Argon2id; browsers have no native
+//   Argon2, so it needs a WASM library vendored into the site. Until one is
+//   registered (AuthWip.registerKdf), new accounts derive with PBKDF2-SHA-256 at
+//   600,000 iterations, which WebCrypto does natively. The choice is recorded per
+//   user server-side, so once the library exists accounts move to Argon2id one at
+//   a time on their next login — no flag day. See registerKdf() below.
+
+(function (global) {
+  'use strict';
+
+  /* ─────────────────────────── shared with the worker ───────────────────────────
+   * usernameKey() is duplicated verbatim from
+   * backend/cloudflare-workers/main-backend-wip/auth-wip.js. The two trees cannot
+   * import from each other, so the test suite loads both files and asserts they
+   * agree across a hostile corpus. If you change one, change the other. */
+
+  var KEY_INVISIBLES = /[\u00AD\u200B\u200C\u200D\u2060\u2061\u2062\u2063\u2064\uFEFF]/g;
+  var KEY_VARIATION_SELECTORS = /[\uFE00-\uFE0F]|\uDB40[\uDD00-\uDDEF]/g;
+  var KEY_WHITESPACE = /\s+/g;
+  var USERNAME_FORBIDDEN = /[\u0000-\u001F\u007F-\u009F\u2028\u2029\u202A-\u202E\u2066-\u2069]/;
+
+  function usernameKey(input) {
+    var s = String(input).normalize('NFKC');
+    s = s.toLowerCase();
+    s = s.normalize('NFKC');
+    s = s.replace(KEY_INVISIBLES, '');
+    s = s.replace(KEY_VARIATION_SELECTORS, '');
+    s = s.replace(KEY_WHITESPACE, ' ').replace(/^ +| +$/g, '');
+    return s;
+  }
+
+  /** RFC 8265 OpaqueString-ish. KDF input only — never applied to a legacy proof. */
+  function normalizePasswordForKdf(raw) {
+    return String(raw).normalize('NFC');
+  }
+
+  var LIMITS = {
+    USERNAME_MAX: 64,
+    PASSWORD_MIN: 8,
+    PASSWORD_MAX: 1024,
+    PASSWORD_ABSOLUTE_MAX: 4096,
+  };
+
+  var DEFAULT_KDF_PARAMS = { kdf: 'pbkdf2-sha256', iterations: 600000, hash: 'SHA-256', keyLen: 32 };
+  var ARGON2ID_KDF_PARAMS = { kdf: 'argon2id', m: 65536, t: 3, p: 1, keyLen: 32 };
+
+  /* ─────────────────────────────── validation ─────────────────────────────── */
+
+  function validateUsername(raw) {
+    if (typeof raw !== 'string') return 'Username must be text';
+    if (raw.length > 256) return 'Username is too long';
+    if (USERNAME_FORBIDDEN.test(raw)) return 'Username contains control or direction-changing characters';
+    var display = raw.normalize('NFC').trim();
+    if (!display) return 'Username is required';
+    if (Array.from(display).length > LIMITS.USERNAME_MAX) {
+      return 'Username must be 1–' + LIMITS.USERNAME_MAX + ' characters';
+    }
+    if (!usernameKey(display)) return 'Username must contain visible characters';
+    return null;
+  }
+
+  function validateNewPassword(raw) {
+    if (typeof raw !== 'string') return 'Password must be text';
+    if (raw.length > LIMITS.PASSWORD_ABSOLUTE_MAX) return 'Password is too long';
+    if (raw.indexOf('\u0000') !== -1) return 'Password may not contain null bytes';
+    var points = Array.from(normalizePasswordForKdf(raw)).length;
+    if (points < LIMITS.PASSWORD_MIN) return 'Password must be at least ' + LIMITS.PASSWORD_MIN + ' characters';
+    if (points > LIMITS.PASSWORD_MAX) return 'Password must be at most ' + LIMITS.PASSWORD_MAX + ' characters';
+    return null;
+  }
+
+  /* ─────────────────────────────── crypto helpers ─────────────────────────────── */
+
+  function subtle() {
+    if (!global.crypto || !global.crypto.subtle) {
+      throw new Error(
+        'Secure browser crypto is unavailable. This page must be served over HTTPS ' +
+        '(or localhost) — plain http:// disables crypto.subtle, so passwords cannot ' +
+        'be derived. Use https://rosiesite-old.rosestuffs.org rather than the LAN IP.'
+      );
+    }
+    return global.crypto.subtle;
+  }
+
+  function bufferToHex(buffer) {
+    var view = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    var out = '';
+    for (var i = 0; i < view.length; i++) out += view[i].toString(16).padStart(2, '0');
+    return out;
+  }
+
+  function hexToBytes(hex) {
+    var out = new Uint8Array(hex.length / 2);
+    for (var i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
+    return out;
+  }
+
+  function randomHex(bytes) {
+    var buf = new Uint8Array(bytes);
+    global.crypto.getRandomValues(buf);
+    return bufferToHex(buf);
+  }
+
+  /* ─────────────────────────────── the KDF registry ───────────────────────────────
+   *
+   * One entry per algorithm the browser can run. The *account* decides which one is
+   * used — the worker stores the parameters and hands them back at prelogin — so a
+   * browser missing a library fails loudly instead of quietly deriving something
+   * else and reporting a wrong password.
+   */
+
+  var KDFS = Object.create(null);
+
+  KDFS['pbkdf2-sha256'] = async function (passwordString, saltBytes, params) {
+    var key = await subtle().importKey(
+      'raw', new TextEncoder().encode(passwordString), { name: 'PBKDF2' }, false, ['deriveBits']
+    );
+    var bits = await subtle().deriveBits(
+      { name: 'PBKDF2', salt: saltBytes, iterations: params.iterations, hash: 'SHA-256' },
+      key,
+      params.keyLen * 8
+    );
+    return bufferToHex(bits);
+  };
+
+  /**
+   * Register an Argon2id (or any other) implementation.
+   *
+   * To finish the plan as written, vendor a WASM Argon2 into the site and do:
+   *
+   *   AuthWip.registerKdf('argon2id', async function (password, saltBytes, params) {
+   *     var res = await argon2.hash({
+   *       pass: password, salt: saltBytes, type: argon2.ArgonType.Argon2id,
+   *       mem: params.m, time: params.t, parallelism: params.p, hashLen: params.keyLen
+   *     });
+   *     return res.hashHex;                 // must be lowercase hex, keyLen bytes
+   *   });
+   *
+   * Load it BEFORE any page script calls login(). Once registered, new and
+   * re-derived accounts pick Argon2id automatically; existing PBKDF2 accounts keep
+   * working and are not silently changed (their parameters live server-side).
+   *
+   * @param {string} name
+   * @param {(password: string, saltBytes: Uint8Array, params: object) => Promise<string>} fn
+   */
+  function registerKdf(name, fn) {
+    if (typeof fn !== 'function') throw new Error('registerKdf needs a function');
+    KDFS[name] = fn;
+  }
+
+  function hasKdf(name) { return typeof KDFS[name] === 'function'; }
+
+  /** What a NEW credential should be derived with on this device. */
+  function preferredKdfParams() {
+    if (hasKdf('argon2id')) return Object.assign({}, ARGON2ID_KDF_PARAMS);
+    return Object.assign({}, DEFAULT_KDF_PARAMS);
+  }
+
+  async function deriveAuthSecret(password, saltHex, params) {
+    if (!params || typeof params.kdf !== 'string') throw new Error('Missing KDF parameters');
+    var fn = KDFS[params.kdf];
+    if (!fn) {
+      throw new Error(
+        'This account uses the "' + params.kdf + '" password algorithm, which this page ' +
+        'cannot run. The required library is not loaded, so signing in here is not ' +
+        'possible — do not retype the password, it is not wrong.'
+      );
+    }
+    if (!/^[0-9a-f]+$/i.test(String(saltHex)) || String(saltHex).length % 2 !== 0) {
+      throw new Error('Server returned a malformed salt');
+    }
+    var hex = await fn(normalizePasswordForKdf(password), hexToBytes(String(saltHex).toLowerCase()), params);
+    if (typeof hex !== 'string' || !/^[0-9a-f]{64}$/.test(hex.toLowerCase())) {
+      throw new Error('KDF "' + params.kdf + '" returned something that is not a 32-byte hex string');
+    }
+    return hex.toLowerCase();
+  }
+
+  /* ─────────────────────────────── AuthManagerWip ───────────────────────────────
+   *
+   * Deliberately API-compatible with the old AuthManager: same constructor
+   * (appName, environment), same endpoints object, same events, same
+   * fetchWithAuth / isLoggedIn / initialize / logout. Switching a page is
+   * <script src> + `new AuthManagerWip(...)`, nothing else.
+   */
+
+  var BACKENDS = {
+    live: { backendUrl: 'https://main-backend-live.rosiesite.workers.dev' },
+    wip: { backendUrl: 'https://main-backend-wip.rosiesite.workers.dev' },
+  };
+
+  var AUDIENCE_SITE = 'rosestuffs-site';
+
+  function AuthManagerWip(appName, environment) {
+    if (!appName) throw new Error("AuthManagerWip requires an 'appName' to be provided.");
+    environment = environment || 'wip';
+
+    this.appName = appName;
+    this.environment = environment;
+    this.config = BACKENDS[environment];
+    if (!this.config) throw new Error('Unknown environment: ' + environment);
+
+    this.audience = AUDIENCE_SITE;
+
+    // Tokens are shared across every app on the site — one login covers all.
+    this.authStoragePrefix = 'auth_' + environment + '_';
+
+    var base = this.config.backendUrl;
+    this.endpoints = {
+      prelogin: base + '/api/auth/prelogin',
+      login: base + '/api/auth/login',
+      register: base + '/api/auth/register',
+      refresh: base + '/api/auth/refresh',
+      logout: base + '/api/auth/logout',
+      changePassword: base + '/api/auth/change-password',
+      me: base + '/api/auth/me',
+      data: base + '/api/data/' + encodeURIComponent(appName),
+      dataFor: function (name) { return base + '/api/data/' + encodeURIComponent(name); },
+    };
+
+    this.authToken = localStorage.getItem(this.authStoragePrefix + 'authToken');
+    this.refreshToken = localStorage.getItem(this.authStoragePrefix + 'refreshToken');
+    this.currentUser = this.authToken ? this._decodeJwtPayload(this.authToken) : null;
+
+    this.isRefreshingToken = false;
+    this.refreshSubscribers = [];
+
+    var self = this;
+    global.addEventListener('storage', function (event) {
+      if (event.key === self.authStoragePrefix + 'authToken') {
+        self.authToken = event.newValue;
+        self.currentUser = self.authToken ? self._decodeJwtPayload(self.authToken) : null;
+        if (self.currentUser && event.oldValue === null) {
+          global.dispatchEvent(new CustomEvent('auth:session-restored', { detail: { user: self.currentUser } }));
+        }
+      }
+      if (event.key === self.authStoragePrefix + 'refreshToken') {
+        self.refreshToken = event.newValue;
+        if (!event.newValue) {
+          self.currentUser = null;
+          self.authToken = null;
+          global.dispatchEvent(new CustomEvent('auth:logout', { detail: { message: 'Logged out from another tab.' } }));
+        }
+      }
+    });
+
+    this._log('AuthManagerWip initialized', { appName: appName, environment: environment, kdf: preferredKdfParams().kdf });
+  }
+
+  AuthManagerWip.prototype._log = function () {
+    if (this.environment === 'wip') {
+      console.log.apply(console, ['[AUTH_WIP]'].concat(Array.prototype.slice.call(arguments)));
+    }
+  };
+
+  AuthManagerWip.prototype._decodeJwtPayload = function (token) {
+    try {
+      var part = String(token).split('.')[1];
+      if (!part) return null;
+      var b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      var binary = atob(b64);
+      var bytes = new Uint8Array(binary.length);
+      for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return JSON.parse(new TextDecoder().decode(bytes));
+    } catch (e) {
+      console.error('Failed to decode JWT:', e);
+      return null;
+    }
+  };
+
+  /** Access tokens are ~15 minutes now, so refresh a little earlier than before. */
+  AuthManagerWip.prototype.isTokenExpired = function (token) {
+    if (!token) return true;
+    var payload = this._decodeJwtPayload(token);
+    if (!payload || !payload.exp) return true;
+    return Date.now() >= (payload.exp * 1000 - 60000);
+  };
+
+  AuthManagerWip.prototype._postJson = async function (url, body) {
+    var res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    var data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    return { res: res, data: data || {} };
+  };
+
+  AuthManagerWip.prototype._storeSession = function (data) {
+    this.authToken = data.accessToken;
+    this.refreshToken = data.refreshToken;
+    localStorage.setItem(this.authStoragePrefix + 'authToken', this.authToken);
+    localStorage.setItem(this.authStoragePrefix + 'refreshToken', this.refreshToken);
+    this.currentUser = this._decodeJwtPayload(this.authToken);
+    return this.currentUser;
+  };
+
+  /** Ask the server for this account's salt and KDF parameters. */
+  AuthManagerWip.prototype.prelogin = async function (username) {
+    var out = await this._postJson(this.endpoints.prelogin, { username: username });
+    if (!out.res.ok) throw new Error(out.data.error || 'Could not start sign-in');
+    return out.data;
+  };
+
+  /**
+   * Sign in.
+   *
+   * Two round trips: prelogin for the salt/parameters, then the login itself. The
+   * password only leaves the device on the legacy path, and only once — that request
+   * also carries the freshly derived secret, so the account is upgraded to the new
+   * scheme in the same breath (plan §3: the password is known at exactly that
+   * instant, so nothing has to be asked of the user).
+   */
+  AuthManagerWip.prototype.login = async function (username, password, options) {
+    options = options || {};
+    var usernameError = validateUsername(username);
+    if (usernameError) throw new Error(usernameError);
+    if (typeof password !== 'string' || password.length === 0) throw new Error('Password is required');
+    if (password.length > LIMITS.PASSWORD_ABSOLUTE_MAX) throw new Error('Password is too long');
+
+    var pre = await this.prelogin(username);
+    var authSecret = await deriveAuthSecret(password, pre.salt, pre.kdf);
+
+    var body;
+    if (pre.scheme === 'legacy') {
+      this._log('account is on the old password scheme — upgrading during this sign-in');
+      body = {
+        username: username,
+        // The old hashes verify against the raw password, byte for byte. Do NOT
+        // normalise it here or an account whose password is not already NFC would
+        // stop being able to log in.
+        password: password,
+        upgrade: { salt: pre.salt, kdf: pre.kdf, authSecret: authSecret },
+        audience: options.audience || this.audience,
+      };
+    } else {
+      body = { username: username, authSecret: authSecret, audience: options.audience || this.audience };
+    }
+
+    var out = await this._postJson(this.endpoints.login, body);
+    if (!out.res.ok) {
+      var err = new Error(out.data.error || 'Login failed');
+      err.code = out.data.code;
+      err.status = out.res.status;
+      err.retryAfter = out.data.retryAfter;
+      throw err;
+    }
+
+    var user = this._storeSession(out.data);
+    if (out.data.upgraded) this._log('password record upgraded to the new scheme');
+    if (out.data.mustUpgrade) console.warn('[AUTH_WIP] this account is still on the old password scheme');
+
+    global.dispatchEvent(new CustomEvent('auth:login', { detail: { user: user, upgraded: !!out.data.upgraded } }));
+    return user;
+  };
+
+  /**
+   * Create an account.
+   *
+   * `email` is OPTIONAL and the response says what that costs. An account with no
+   * email has NO recovery path — a forgotten password means the account is gone.
+   * The caller should show `result.recoveryWarning` at signup rather than letting
+   * that be discovered later.
+   */
+  AuthManagerWip.prototype.register = async function (username, password, options) {
+    options = options || {};
+    var usernameError = validateUsername(username);
+    if (usernameError) throw new Error(usernameError);
+    var passwordError = validateNewPassword(password);
+    if (passwordError) throw new Error(passwordError);
+
+    var salt = randomHex(16);
+    var kdf = preferredKdfParams();
+    var authSecret = await deriveAuthSecret(password, salt, kdf);
+
+    var out = await this._postJson(this.endpoints.register, {
+      username: username,
+      salt: salt,
+      kdf: kdf,
+      authSecret: authSecret,
+      email: options.email || null,
+    });
+    if (!out.res.ok) {
+      var err = new Error(out.data.error || 'Registration failed');
+      err.code = out.data.code;
+      throw err;
+    }
+
+    global.dispatchEvent(new CustomEvent('auth:register', { detail: { username: username, result: out.data } }));
+    return out.data;
+  };
+
+  AuthManagerWip.prototype.changePassword = async function (currentPassword, newPassword) {
+    if (!this.isLoggedIn()) throw new Error('User must be logged in to change password.');
+    var passwordError = validateNewPassword(newPassword);
+    if (passwordError) throw new Error(passwordError);
+
+    var username = (this.currentUser && this.currentUser.username) || '';
+    var pre = await this.prelogin(username);
+
+    var payload = { salt: randomHex(16) };
+    payload.kdf = preferredKdfParams();
+    payload.authSecret = await deriveAuthSecret(newPassword, payload.salt, payload.kdf);
+
+    if (pre.scheme === 'legacy') {
+      payload.currentPassword = currentPassword;
+    } else {
+      payload.currentAuthSecret = await deriveAuthSecret(currentPassword, pre.salt, pre.kdf);
+    }
+
+    var res = await this.fetchWithAuth(this.endpoints.changePassword, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    var data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (!res.ok) throw new Error((data && data.error) || 'Password change failed');
+
+    global.dispatchEvent(new CustomEvent('auth:password-changed', { detail: { message: data.message } }));
+    return data;
+  };
+
+  AuthManagerWip.prototype.attemptRefreshToken = async function () {
+    this.refreshToken = localStorage.getItem(this.authStoragePrefix + 'refreshToken');
+    if (!this.refreshToken) return false;
+
+    if (this.isRefreshingToken) {
+      var self = this;
+      return new Promise(function (resolve) { self.refreshSubscribers.push(resolve); });
+    }
+
+    this.isRefreshingToken = true;
+    var success = false;
+    try {
+      var out = await this._postJson(this.endpoints.refresh, {
+        refreshToken: this.refreshToken,
+        audience: this.audience,
+      });
+      if (!out.res.ok) throw new Error(out.data.error || 'Refresh failed');
+      this._storeSession(out.data);
+      success = true;
+    } catch (error) {
+      this._log('Token refresh failed:', error.message);
+      await this.logout('Your session has expired. Please log in again.');
+      success = false;
+    } finally {
+      this.isRefreshingToken = false;
+      this.refreshSubscribers.forEach(function (cb) { cb(success); });
+      this.refreshSubscribers = [];
+    }
+    return success;
+  };
+
+  AuthManagerWip.prototype.fetchWithAuth = async function (url, options) {
+    options = options || {};
+    if (!this.isLoggedIn()) throw new Error('User is not logged in. Cannot make an authenticated request.');
+
+    if (this.isTokenExpired(this.authToken)) {
+      var refreshed = await this.attemptRefreshToken();
+      if (!refreshed) throw new Error('Authentication failed; session expired.');
+    }
+
+    options.headers = Object.assign({}, options.headers, {
+      'Authorization': 'Bearer ' + this.authToken,
+      'Content-Type': 'application/json',
+    });
+
+    var response = await fetch(url, options);
+    if (response.status === 401) {
+      var ok = await this.attemptRefreshToken();
+      if (!ok) throw new Error('Authentication failed after retry.');
+      options.headers['Authorization'] = 'Bearer ' + this.authToken;
+      response = await fetch(url, options);
+    }
+    return response;
+  };
+
+  AuthManagerWip.prototype.logout = async function (message) {
+    var tokenToInvalidate = this.refreshToken;
+    if (tokenToInvalidate) {
+      var self = this;
+      fetch(this.endpoints.logout, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + this.authToken,
+        },
+        body: JSON.stringify({ refreshToken: tokenToInvalidate }),
+      }).catch(function (err) { self._log('Logout API call failed (non-critical).', err); });
+    }
+
+    var loggedOutUser = this.currentUser;
+    this.authToken = null;
+    this.refreshToken = null;
+    this.currentUser = null;
+    localStorage.removeItem(this.authStoragePrefix + 'authToken');
+    localStorage.removeItem(this.authStoragePrefix + 'refreshToken');
+
+    global.dispatchEvent(new CustomEvent('auth:logout', {
+      detail: { lastUser: loggedOutUser, message: message || null },
+    }));
+  };
+
+  AuthManagerWip.prototype.isLoggedIn = function () { return !!this.refreshToken; };
+
+  /** The account's UUID — the identity. Never use the username as a key. */
+  AuthManagerWip.prototype.userUuid = function () {
+    return (this.currentUser && this.currentUser.sub) || null;
+  };
+
+  AuthManagerWip.prototype.initialize = async function () {
+    if (this.isLoggedIn()) {
+      if (!this.isTokenExpired(this.authToken)) {
+        if (!this.currentUser) this.currentUser = this._decodeJwtPayload(this.authToken);
+        global.dispatchEvent(new CustomEvent('auth:session-restored', { detail: { user: this.currentUser } }));
+        return this.currentUser;
+      }
+      var refreshed = await this.attemptRefreshToken();
+      if (refreshed) {
+        global.dispatchEvent(new CustomEvent('auth:session-restored', { detail: { user: this.currentUser } }));
+        return this.currentUser;
+      }
+    }
+    global.dispatchEvent(new CustomEvent('auth:no-session'));
+    return null;
+  };
+
+  global.AuthManagerWip = AuthManagerWip;
+  global.AuthWip = {
+    AuthManagerWip: AuthManagerWip,
+    registerKdf: registerKdf,
+    hasKdf: hasKdf,
+    preferredKdfParams: preferredKdfParams,
+    deriveAuthSecret: deriveAuthSecret,
+    usernameKey: usernameKey,
+    normalizePasswordForKdf: normalizePasswordForKdf,
+    validateUsername: validateUsername,
+    validateNewPassword: validateNewPassword,
+    randomHex: randomHex,
+    LIMITS: LIMITS,
+    DEFAULT_KDF_PARAMS: DEFAULT_KDF_PARAMS,
+    ARGON2ID_KDF_PARAMS: ARGON2ID_KDF_PARAMS,
+    AUDIENCE_SITE: AUDIENCE_SITE,
+  };
+})(typeof globalThis !== 'undefined' ? globalThis : this);

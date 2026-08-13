@@ -373,7 +373,10 @@
     // ------------------------------------------------
     async function handleAuthed() {
         const result = await window.Store.performSync();
-        if (result === 'conflict') window.Modals.syncConflict();
+        // The store raises the conflict modal itself now (it also has to handle a
+        // conflict that arrives from a background save, which has no caller here).
+        // This call is the idempotent belt-and-braces: it no-ops if it is already open.
+        if (result === 'conflict') window.Store.showConflictModal();
         else if (result === 'uploaded') toast('Local data uploaded to your account');
         else if (result === 'downloaded') toast('Account data loaded');
         App.render();

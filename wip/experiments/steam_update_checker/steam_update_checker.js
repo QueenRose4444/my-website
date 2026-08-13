@@ -75,10 +75,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     handleResize();
     window.addEventListener('resize', handleResize);
 
-    // 3. Setup AuthManager
-    if (typeof AuthManager !== 'undefined') {
+    // 3. Setup AuthManagerWip
+    if (typeof AuthManagerWip !== 'undefined') {
         try {
-            authManager = new AuthManager(CONFIG.APP_NAME, 'wip');
+            authManager = new AuthManagerWip(CONFIG.APP_NAME, 'wip');
+            initSync();
             
             window.addEventListener('auth:login', (e) => {
                 updateWebAuthUI();
@@ -102,7 +103,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             authManager.initialize();
 
-        } catch (e) { console.warn("AuthManager failed to setup:", e); }
+        } catch (e) { console.warn("AuthManagerWip failed to setup:", e); }
     }
 
     // 4. Check for Discord OAuth Callback
@@ -291,71 +292,114 @@ async function regenerateToken() {
     }
 }
 
+// ==========================================
+// ACCOUNT SYNC  (via /sync-wip.js)
+// ==========================================
+// The shared module owns the transport, the version check and conflict handling.
+// This page only says what its data is and how two copies combine.
+//
+// Note what `canonical` covers: only the tracker credentials. Everything else
+// here is interface preference — sidebar state, sort order, default page — and
+// those still sync, they just never raise a conflict prompt. Changing a sort on
+// your phone must not interrupt you on your PC.
+
+let syncClient = null;
+
+function initSync() {
+    if (!authManager || typeof SyncWip === 'undefined') return;
+    syncClient = new SyncWip.SyncClient({
+        auth: authManager,
+        appName: CONFIG.APP_NAME,
+
+        getState: () => ({
+            steam_creds: discordCreds,
+            ui_preferences: userPreferences,
+            last_updated: Date.now(),
+        }),
+        setState: (s) => applySyncedState(s),
+
+        accept: (raw) => !!raw && typeof raw === 'object' && ('steam_creds' in raw || 'ui_preferences' in raw),
+
+        hasData: (s) => !!(s && (s.steam_creds || s.ui_preferences)),
+
+        // credentials only — preferences are view state
+        canonical: (s) => JSON.stringify((s && s.steam_creds) || null),
+
+        // preferences deep-merge; credentials prefer whatever this device holds
+        merge: (theirs, mine) => ({
+            steam_creds: mine.steam_creds || theirs.steam_creds,
+            ui_preferences: {
+                ...(theirs.ui_preferences || {}),
+                ...(mine.ui_preferences || {}),
+                sorts: { ...((theirs.ui_preferences || {}).sorts || {}), ...((mine.ui_preferences || {}).sorts || {}) },
+                searchTemplate: {
+                    ...((theirs.ui_preferences || {}).searchTemplate || {}),
+                    ...((mine.ui_preferences || {}).searchTemplate || {}),
+                },
+            },
+            last_updated: Date.now(),
+        }),
+
+        onStatus: (status) => console.log('[Sync]', status),
+    });
+}
+
+/** Apply a copy of the account state to this device. */
+function applySyncedState(cloudData) {
+    if (!cloudData) return;
+
+    if (cloudData.steam_creds) {
+        const localStr = JSON.stringify(discordCreds);
+        const cloudStr = JSON.stringify(cloudData.steam_creds);
+        if (!discordCreds || localStr !== cloudStr) {
+            discordCreds = cloudData.steam_creds;
+            localStorage.setItem('steam_tracker_creds', JSON.stringify(discordCreds));
+            updateDiscordUI();
+            loadTrackedGames();
+            showToast("Restored tracker account", "info");
+        }
+    }
+
+    if (cloudData.ui_preferences) {
+        // Deep merge sorts to ensure we don't lose keys
+        const remoteSorts = cloudData.ui_preferences.sorts || {};
+        userPreferences = {
+            ...userPreferences,
+            ...cloudData.ui_preferences,
+            sorts: { ...userPreferences.sorts, ...remoteSorts },
+            searchTemplate: { ...userPreferences.searchTemplate, ...(cloudData.ui_preferences.searchTemplate || {}) }
+        };
+
+        localStorage.setItem('steam_tracker_user_prefs', JSON.stringify(userPreferences));
+        updateSettingsModalUI();
+        handleResize();
+        applySidebarState();
+
+        // Re-apply sort for current view immediately after sync
+        const sortSelect = document.getElementById('sortSelect');
+        if (sortSelect && userPreferences.sorts && userPreferences.sorts[currentView]) {
+            sortSelect.value = userPreferences.sorts[currentView];
+            if (currentView === 'tracked' || currentView === 'all') {
+                applySortAndRender();
+            }
+        }
+
+        if (currentView === 'tracked' && userPreferences.defaultPage !== 'tracked') {
+            switchView(userPreferences.defaultPage);
+        }
+    }
+}
+
 async function performSync(action = 'download') {
     if (!authManager || !authManager.isLoggedIn()) return;
-    const endpoint = authManager.endpoints.data;
+    if (!syncClient) initSync();
+    if (!syncClient) return;
 
     try {
         if (action === 'upload') {
-            const payload = {
-                steam_creds: discordCreds,
-                ui_preferences: userPreferences,
-                last_updated: Date.now()
-            };
-            
-            await authManager.fetchWithAuth(endpoint, {
-                method: 'POST',
-                body: JSON.stringify(payload)
-            });
-            console.log("Synced data (upload):", payload);
-
-        } else if (action === 'download') {
-            const res = await authManager.fetchWithAuth(endpoint);
-            if (res.ok) {
-                const cloudData = await res.json();
-                
-                if (cloudData && cloudData.steam_creds) {
-                    const localStr = JSON.stringify(discordCreds);
-                    const cloudStr = JSON.stringify(cloudData.steam_creds);
-                    if (!discordCreds || localStr !== cloudStr) {
-                        discordCreds = cloudData.steam_creds;
-                        localStorage.setItem('steam_tracker_creds', JSON.stringify(discordCreds));
-                        updateDiscordUI();
-                        loadTrackedGames();
-                        showToast("Restored tracker account", "info");
-                    }
-                }
-
-                if (cloudData && cloudData.ui_preferences) {
-                    // Deep merge sorts to ensure we don't lose keys
-                    const remoteSorts = cloudData.ui_preferences.sorts || {};
-                    userPreferences = {
-                        ...userPreferences,
-                        ...cloudData.ui_preferences,
-                        sorts: { ...userPreferences.sorts, ...remoteSorts },
-                        searchTemplate: { ...userPreferences.searchTemplate, ...(cloudData.ui_preferences.searchTemplate || {}) }
-                    };
-                    
-                    localStorage.setItem('steam_tracker_user_prefs', JSON.stringify(userPreferences));
-
-                    updateSettingsModalUI();
-                    handleResize(); 
-                    applySidebarState(); 
-                    
-                    // Re-apply sort for current view immediately after sync
-                    const sortSelect = document.getElementById('sortSelect');
-                    if (sortSelect && userPreferences.sorts && userPreferences.sorts[currentView]) {
-                        sortSelect.value = userPreferences.sorts[currentView];
-                        if (currentView === 'tracked' || currentView === 'all') {
-                            applySortAndRender();
-                        }
-                    }
-
-                    if(currentView === 'tracked' && userPreferences.defaultPage !== 'tracked') {
-                        switchView(userPreferences.defaultPage);
-                    }
-                }
-            }
+            await syncClient.flush();
+        } else {
+            await syncClient.performSync();
         }
     } catch (e) { console.error("[Sync] Error:", e); }
 }

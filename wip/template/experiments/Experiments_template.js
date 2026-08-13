@@ -1,4 +1,4 @@
-// Experiments_template.js - Updated to use AuthManager
+// Experiments_template.js - Updated to use AuthManagerWip
 
 /*************************************
  * APPLICATION CONFIGURATION
@@ -39,8 +39,8 @@ const STORAGE_PREFIX = `${APP_NAME}_${ENVIRONMENT}_`;
 /*************************************
  * AUTHENTICATION SETUP
  *************************************/
-// Initialize the global AuthManager
-const authManager = new AuthManager(APP_NAME, ENVIRONMENT);
+// Initialize the global AuthManagerWip
+const authManager = new AuthManagerWip(APP_NAME, ENVIRONMENT);
 
 
 /*************************************
@@ -132,63 +132,88 @@ function saveLocalData() {
 
 
 /************************************
- * SERVER DATA SYNC
+ * SERVER DATA SYNC  (via /sync-wip.js)
+ ************************************
+ * The shared module owns the transport, the debounce, the server-side version
+ * check and the three-way conflict resolution. This page only describes its own
+ * data: how to read/write it, what counts as a real difference, and how two
+ * copies merge.
  ************************************/
+
+let syncClient = null;
+
+function initSync() {
+    syncClient = new SyncWip.SyncClient({
+        auth: authManager,
+        appName: APP_NAME,
+
+        // This page keeps its state in two variables, so the adapter joins them
+        // into one blob for the server and splits it again on the way back.
+        getState: () => ({ userNotes, appPreferences }),
+        setState: (s) => {
+            userNotes = s.userNotes;
+            appPreferences = s.appPreferences;
+            saveLocalData();
+            updateDisplay();
+        },
+
+        accept: (raw) => !!raw && typeof raw === 'object' && ('userNotes' in raw || 'appPreferences' in raw),
+
+        // Dates arrive as strings over JSON; rebuild them and fill in any
+        // preference the stored copy predates.
+        normalize: (raw) => ({
+            userNotes: (raw.userNotes || []).map(note => ({ ...note, createdAt: new Date(note.createdAt) })),
+            appPreferences: { ...defaultPreferences, ...(raw.appPreferences || {}) },
+        }),
+
+        hasData: (s) => !!s && (s.userNotes || []).length > 0,
+
+        // CUSTOMISE: the conflict fingerprint. Anything left OUT still syncs, it
+        // just never asks the user about it — that is where view/appearance
+        // preferences belong.
+        canonical: (s) => getCanonicalString(s),
+
+        // CUSTOMISE: union both copies, dedupe by content. "Merge both" is the
+        // resolution to recommend wherever a page can do this — it is the only
+        // one that cannot lose an entry.
+        merge: (theirs, mine) => {
+            const key = n => [new Date(n.createdAt).getTime(), n.text || n.title || ''].join('|');
+            const seen = new Set((mine.userNotes || []).map(key));
+            const userNotesMerged = (mine.userNotes || []).concat(
+                (theirs.userNotes || []).filter(n => !seen.has(key(n))));
+            return {
+                userNotes: userNotesMerged,
+                appPreferences: { ...theirs.appPreferences, ...mine.appPreferences },
+            };
+        },
+
+        onStatus: (status) => syncLog('sync status:', status),
+
+        // This page has its own comparison modal; use it rather than the
+        // built-in prompt. Resolve with 'mine' | 'theirs' | 'merge'.
+        onConflict: (info) => new Promise((resolve) => {
+            showSyncChoiceModal(
+                generateDataSummary(info.mine),
+                generateDataSummary(info.theirs),
+                resolve
+            );
+        }),
+    });
+}
+
 async function fetchBackendData() {
-    if (!authManager.isLoggedIn()) {
-        syncLog("Not logged in, skipping fetch.");
-        return null;
-    }
-
-    try {
-        const response = await authManager.fetchWithAuth(authManager.endpoints.data, {
-            method: 'GET'
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to fetch data');
-        }
-
-        const data = await response.json();
-        
-        // Process dates coming from server
-        data.userNotes = (data.userNotes || []).map(note => ({ ...note, createdAt: new Date(note.createdAt) }));
-        data.appPreferences = { ...defaultPreferences, ...(data.appPreferences || {}) };
-        
-        return data;
-    } catch (error) {
-        console.error("Failed to fetch backend data:", error);
-        return null;
-    }
+    const out = await syncClient.fetchFromServer();
+    if (out === 'error' || out === null) return null;
+    return out.state;
 }
 
 async function saveBackendData() {
-    if (!authManager.isLoggedIn()) return false;
-    
-    const dataToSave = {
-        userNotes,
-        appPreferences
-    };
+    return syncClient.flush();
+}
 
-    try {
-        const response = await authManager.fetchWithAuth(authManager.endpoints.data, {
-            method: 'POST',
-            body: JSON.stringify(dataToSave)
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to save');
-        }
-
-        syncLog("Backend save successful.");
-        return true;
-    } catch (error) {
-        console.error("Failed to save backend data:", error);
-        alert(`Failed to save data to server: ${error.message}`);
-        return false;
-    }
+/** Queue a save; repeated calls collapse into one request. */
+function scheduleBackendSave() {
+    syncClient.scheduleSave();
 }
 
 /************************************
@@ -196,30 +221,29 @@ async function saveBackendData() {
  ************************************/
 function getCanonicalString(dataSet) {
     if (!dataSet) return null;
-    const dataCopy = JSON.parse(JSON.stringify(dataSet));
 
-    // CUSTOMIZE: Ensure arrays are sorted and data is consistent for string comparison
-    const processedNotes = (dataCopy.userNotes || [])
+    // CUSTOMIZE: sort arrays and normalise values so the same data always
+    // produces the same string.
+    const processedNotes = (dataSet.userNotes || [])
         .map(n => ({ ...n, createdAt: new Date(n.createdAt).getTime() }))
         .sort((a, b) => a.createdAt - b.createdAt);
-        
-    const preferencesToCompare = { ...defaultPreferences, ...(dataCopy.appPreferences || {}) };
-    
-    const finalObject = {
+
+    const preferencesToCompare = { ...defaultPreferences, ...(dataSet.appPreferences || {}) };
+
+    return JSON.stringify({
         appPreferences: preferencesToCompare,
         userNotes: processedNotes,
-    };
-    return JSON.stringify(finalObject);
+    });
 }
 
 function generateDataSummary(dataSet) {
     if (!dataSet) return { lastUpdate: 'N/A', entryCount: '0 entries' };
-    
+
     const noteCount = dataSet.userNotes?.length || 0;
     const allEntries = [...(dataSet.userNotes || [])]
         .map(e => new Date(e.createdAt))
-        .sort((a,b) => b - a);
-    
+        .sort((a, b) => b - a);
+
     const lastUpdate = allEntries.length > 0 ? allEntries[0] : null;
 
     return {
@@ -228,10 +252,10 @@ function generateDataSummary(dataSet) {
     };
 }
 
-function showSyncChoiceModal(localSummary, serverSummary, serverData) {
+/** Calls back with 'mine', 'theirs' or 'merge'. */
+function showSyncChoiceModal(localSummary, serverSummary, resolve) {
     const elements = getElements();
-    
-    // Format dates for display
+
     const formatDate = (d) => d ? d.toLocaleString() : 'N/A';
 
     elements.localLastUpdate.textContent = localSummary.lastUpdate ? formatDate(localSummary.lastUpdate) : 'No entries';
@@ -240,71 +264,42 @@ function showSyncChoiceModal(localSummary, serverSummary, serverData) {
     elements.serverLastUpdate.textContent = serverSummary.lastUpdate ? formatDate(serverSummary.lastUpdate) : 'No entries';
     elements.serverEntryCount.textContent = serverSummary.entryCount;
 
-    // Define handlers
-    const uploadHandler = async () => {
-        syncLog("User chose LOCAL data.");
-        await saveBackendData();
-        elements.syncChoiceModal.style.display = 'none';
-    };
-
-    const downloadHandler = () => {
-        syncLog("User chose SERVER data.");
-        userNotes = serverData.userNotes;
-        appPreferences = serverData.appPreferences;
-        saveLocalData();
-        updateDisplay();
-        elements.syncChoiceModal.style.display = 'none';
-    };
-    
     // Clear old listeners by cloning
     const newUploadBtn = elements.useLocalDataBtn.cloneNode(true);
     const newDownloadBtn = elements.useServerDataBtn.cloneNode(true);
     elements.useLocalDataBtn.replaceWith(newUploadBtn);
     elements.useServerDataBtn.replaceWith(newDownloadBtn);
-    
-    newUploadBtn.addEventListener('click', uploadHandler);
-    newDownloadBtn.addEventListener('click', downloadHandler);
+
+    const finish = (choice) => {
+        elements.syncChoiceModal.style.display = 'none';
+        resolve(choice);
+    };
+
+    newUploadBtn.addEventListener('click', () => finish('mine'));
+    newDownloadBtn.addEventListener('click', () => finish('theirs'));
+
+    const existing = document.getElementById('mergeDataBtn');
+    if (existing) existing.remove();
+    const mergeBtn = document.createElement('button');
+    mergeBtn.type = 'button';
+    mergeBtn.id = 'mergeDataBtn';
+    mergeBtn.textContent = 'Merge both (recommended)';
+    mergeBtn.addEventListener('click', () => finish('merge'));
+    newDownloadBtn.insertAdjacentElement('afterend', mergeBtn);
 
     elements.syncChoiceModal.style.display = 'block';
 }
 
+/**
+ * Runs after login / session restore.
+ * Returns 'in-sync' | 'downloaded' | 'uploaded' | 'conflict' | 'none'.
+ */
 async function performDataSync() {
-    if (!authManager.isLoggedIn()) return;
-
-    syncLog("Checking for data sync...");
-    const serverData = await fetchBackendData();
-    const localData = { userNotes, appPreferences };
-
-    const hasLocalData = (localData.userNotes?.length || 0) > 0;
-    const hasServerData = serverData && ((serverData.userNotes?.length || 0) > 0);
-
-    if (hasLocalData && !hasServerData) {
-        if (confirm("No data found on server. Upload your local data?")) {
-            await saveBackendData();
-        }
-    } else if (hasServerData) {
-        const localString = getCanonicalString(localData);
-        const serverString = getCanonicalString(serverData);
-
-        if (localString !== serverString) {
-            syncLog("Data mismatch. Prompting user.");
-            const localSummary = generateDataSummary(localData);
-            const serverSummary = generateDataSummary(serverData);
-            showSyncChoiceModal(localSummary, serverSummary, serverData);
-        } else {
-            syncLog("Data is synced.");
-            userNotes = serverData.userNotes;
-            appPreferences = serverData.appPreferences;
-            saveLocalData();
-            updateDisplay();
-        }
-    } else if (hasServerData && !hasLocalData) {
-        syncLog("Downloading server data...");
-        userNotes = serverData.userNotes;
-        appPreferences = serverData.appPreferences;
-        saveLocalData();
-        updateDisplay();
-    }
+    if (!authManager.isLoggedIn()) return 'none';
+    const result = await syncClient.performSync();
+    syncLog("Sync result:", result);
+    updateDisplay();
+    return result;
 }
 
 
@@ -402,7 +397,7 @@ function setupEventListeners() {
     elements.registerButton.addEventListener('click', () => elements.registerModal.style.display = 'block');
     elements.logoutButton.addEventListener('click', () => authManager.logout());
     
-    // Auth Forms using AuthManager
+    // Auth Forms using AuthManagerWip
     elements.loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         elements.loginError.textContent = '';
@@ -517,9 +512,10 @@ window.addEventListener('auth:password-changed', (e) => {
  **********************/
 document.addEventListener("DOMContentLoaded", async () => {
     loadLocalData();
+    initSync();          // shared sync client (needs auth + the data model)
     setupEventListeners();
-    
-    // AuthManager handles the initialization of tokens and user state
+
+    // AuthManagerWip handles the initialization of tokens and user state
     await authManager.initialize();
     
     updateUIForLoginState();

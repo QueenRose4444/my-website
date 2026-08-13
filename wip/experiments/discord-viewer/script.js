@@ -57,7 +57,7 @@ const settingsButton = document.getElementById("settingsButton");
 // --- Initialization ---
 
 document.addEventListener("DOMContentLoaded", () => {
-    // Initialize AuthManager (uses the global auth.js script)
+    // Initialize AuthManagerWip (uses the global auth-wip.js script)
     initializeAuth();
     
     if (!API_KEY) {
@@ -163,9 +163,9 @@ document.addEventListener('error', (e) => {
 // --- Auth Manager Integration ---
 
 function initializeAuth() {
-    // Check if AuthManager is loaded (from /auth.js)
-    if (typeof AuthManager !== 'undefined') {
-        authManager = new AuthManager(APP_NAME, 'wip');
+    // Check if AuthManagerWip is loaded (from /auth-wip.js)
+    if (typeof AuthManagerWip !== 'undefined') {
+        authManager = new AuthManagerWip(APP_NAME, 'wip');
         
         // Listen for auth events
         window.addEventListener('auth:login', handleAuthLogin);
@@ -176,7 +176,7 @@ function initializeAuth() {
         // Initialize session
         authManager.initialize();
     } else {
-        console.warn('AuthManager not loaded. Auth features disabled.');
+        console.warn('AuthManagerWip not loaded. Auth features disabled.');
         updateUIForGuest();
     }
     
