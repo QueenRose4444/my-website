@@ -19,7 +19,7 @@ function appLog(...args) {
  *************************************/
 // Define your app's data structure here
 // This is what gets saved locally and synced to the server
-let appData = {
+const DEFAULT_DATA = {
     // Example: Simple counter and list
     counter: 0,
     items: [],
@@ -28,13 +28,16 @@ let appData = {
     }
 };
 
+let appData = JSON.parse(JSON.stringify(DEFAULT_DATA));
+
 // Storage key for local data (includes environment)
 const LOCAL_STORAGE_KEY = `${APP_NAME}_${ENVIRONMENT}_data`;
 
 /*************************************
  * AUTHENTICATION SETUP
  *************************************/
-const authManager = new AuthManager(APP_NAME, ENVIRONMENT);
+const authManager = new AuthManagerWip(APP_NAME, ENVIRONMENT);
+// the shared sync client is created once the data model exists (see initSync)
 
 /*************************************
  * DOM ELEMENT REFERENCES
@@ -124,59 +127,80 @@ function saveLocalData() {
 }
 
 /************************************
- * SERVER DATA SYNC
+ * SERVER DATA SYNC  (via /sync-wip.js)
+ ************************************
+ * The shared module owns the transport, the debounce, the version check and the
+ * three-way conflict resolution. This page only says what its data looks like:
+ * how to read/write it, what counts as a real difference, and how two copies
+ * merge. Copy this block into a new page and change those four functions.
  ************************************/
+
+let syncClient = null;
+
+function initSync() {
+    syncClient = new SyncWip.SyncClient({
+        auth: authManager,
+        appName: APP_NAME,
+
+        getState: () => appData,
+        setState: (s) => { appData = s; saveLocalData(); updateDisplay(); },
+
+        // "Is this blob one of ours?" — guards against another app's data.
+        accept: (raw) => !!raw && typeof raw === 'object' && 'items' in raw,
+
+        // Fill in defaults the server copy predates.
+        normalize: (raw) => Object.assign({}, DEFAULT_DATA, raw, {
+            settings: Object.assign({}, DEFAULT_DATA.settings, raw.settings || {}),
+        }),
+
+        hasData: (s) => !!s && ((s.items && s.items.length > 0) || s.counter > 0),
+
+        // CUSTOMISE: the conflict fingerprint. Anything left OUT of this string
+        // still syncs, it just never asks the user about it — that is where
+        // view/appearance preferences belong, so flipping a setting on your phone
+        // does not pop a conflict prompt on your PC.
+        canonical: (s) => getCanonicalString(s),
+
+        // CUSTOMISE: union both copies, dropping duplicates. Where a page can do
+        // this, "merge both" is the resolution to recommend — it is the only one
+        // that cannot lose a record.
+        merge: (theirs, mine) => {
+            const seen = new Set((mine.items || []).map(x => JSON.stringify(x)));
+            const items = (mine.items || []).concat(
+                (theirs.items || []).filter(x => !seen.has(JSON.stringify(x))));
+            return Object.assign({}, theirs, mine, {
+                items: items,
+                counter: Math.max(mine.counter || 0, theirs.counter || 0),
+            });
+        },
+
+        onStatus: (status) => appLog('sync status:', status),
+
+        // This page has its own comparison modal, so use it instead of the
+        // built-in prompt. Resolve with 'mine' | 'theirs' | 'merge'.
+        onConflict: (info) => new Promise((resolve) => {
+            showSyncChoiceModal(
+                generateDataSummary(info.mine),
+                generateDataSummary(info.theirs),
+                resolve
+            );
+        }),
+    });
+}
+
 async function fetchBackendData() {
-    if (!authManager.isLoggedIn()) {
-        appLog("Not logged in, cannot fetch backend data.");
-        return null;
-    }
-
-    try {
-        appLog("Fetching data from server...");
-        const response = await authManager.fetchWithAuth(authManager.endpoints.data, {
-            method: 'GET'
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to fetch data');
-        }
-
-        const data = await response.json();
-        appLog("Backend data fetched:", data);
-        return data;
-    } catch (error) {
-        console.error("Failed to fetch backend data:", error);
-        return null;
-    }
+    const out = await syncClient.fetchFromServer();
+    if (out === 'error' || out === null) return null;
+    return out.state;
 }
 
 async function saveBackendData() {
-    if (!authManager.isLoggedIn()) {
-        appLog("Not logged in, cannot save backend data.");
-        return false;
-    }
+    return syncClient.flush();
+}
 
-    try {
-        appLog("Saving data to server...");
-        const response = await authManager.fetchWithAuth(authManager.endpoints.data, {
-            method: 'POST',
-            body: JSON.stringify(appData)
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to save data');
-        }
-
-        appLog("Backend data saved successfully.");
-        return true;
-    } catch (error) {
-        console.error("Failed to save backend data:", error);
-        alert(`Failed to save data to server: ${error.message}`);
-        return false;
-    }
+/** Queue a save; repeated calls collapse into one request. */
+function scheduleBackendSave() {
+    syncClient.scheduleSave();
 }
 
 /************************************
@@ -185,20 +209,13 @@ async function saveBackendData() {
 /**
  * Creates a canonical string representation of data for comparison.
  * Customize this based on your app's data structure.
+ *
+ * Leave view/appearance state OUT — see the note on `canonical` above.
  */
 function getCanonicalString(data) {
     if (!data) return null;
-    
-    // Deep copy to avoid modifying original
-    const dataCopy = JSON.parse(JSON.stringify(data));
-    
-    // Sort arrays if order doesn't matter
-    if (dataCopy.items) {
-        dataCopy.items.sort();
-    }
-    
-    // Return a consistent JSON string
-    return JSON.stringify(dataCopy);
+    const items = (data.items || []).map(x => JSON.stringify(x)).sort();
+    return JSON.stringify({ items: items, counter: data.counter || 0, settings: data.settings || {} });
 }
 
 /**
@@ -207,106 +224,69 @@ function getCanonicalString(data) {
  */
 function generateDataSummary(data) {
     if (!data) {
-        return {
-            lastUpdate: 'N/A',
-            summary: 'No data'
-        };
+        return { lastUpdate: 'N/A', summary: 'No data' };
     }
-
-    // Example: Count items and show counter value
     const itemCount = data.items ? data.items.length : 0;
     const counter = data.counter || 0;
-
     return {
         lastUpdate: 'N/A', // Add timestamp to your data model if needed
-        summary: `Counter: ${counter}, Items: ${itemCount}`
+        summary: `Counter: ${counter}, Items: ${itemCount}`,
     };
 }
 
 /**
  * Shows the sync choice modal when local and server data differ.
+ * Calls back with 'mine', 'theirs' or 'merge'.
  */
-function showSyncChoiceModal(localSummary, serverSummary, serverData) {
+function showSyncChoiceModal(localSummary, serverSummary, resolve) {
     const elements = getElements();
-    
-    // Populate the comparison UI
+
     elements.localLastUpdate.textContent = localSummary.lastUpdate;
     elements.localSummary.textContent = localSummary.summary;
     elements.serverLastUpdate.textContent = serverSummary.lastUpdate;
     elements.serverSummary.textContent = serverSummary.summary;
 
-    // Set up button handlers (remove old listeners first)
-    const uploadHandler = async () => {
-        appLog("User chose LOCAL data. Uploading to server...");
-        await saveBackendData();
-        elements.syncChoiceModal.style.display = 'none';
-    };
-
-    const downloadHandler = () => {
-        appLog("User chose SERVER data. Overwriting local...");
-        appData = serverData;
-        saveLocalData();
-        updateDisplay();
-        elements.syncChoiceModal.style.display = 'none';
-    };
-
-    // Replace buttons to remove old event listeners
+    // Replace buttons to drop any listeners from a previous conflict.
     const newUploadBtn = elements.useLocalDataBtn.cloneNode(true);
     const newDownloadBtn = elements.useServerDataBtn.cloneNode(true);
     elements.useLocalDataBtn.replaceWith(newUploadBtn);
     elements.useServerDataBtn.replaceWith(newDownloadBtn);
 
-    // Add new listeners
-    document.getElementById('useLocalDataBtn').addEventListener('click', uploadHandler);
-    document.getElementById('useServerDataBtn').addEventListener('click', downloadHandler);
+    const finish = (choice) => {
+        elements.syncChoiceModal.style.display = 'none';
+        resolve(choice);
+    };
 
-    // Show the modal
+    document.getElementById('useLocalDataBtn').addEventListener('click', () => finish('mine'));
+    document.getElementById('useServerDataBtn').addEventListener('click', () => finish('theirs'));
+
+    // "Merge both" is added dynamically so the template's HTML does not have to
+    // change; move it into the markup if you want it styled with the others.
+    const mergeBtn = document.createElement('button');
+    mergeBtn.type = 'button';
+    mergeBtn.id = 'mergeDataBtn';
+    mergeBtn.textContent = 'Merge both (recommended)';
+    mergeBtn.addEventListener('click', () => finish('merge'));
+    const existing = document.getElementById('mergeDataBtn');
+    if (existing) existing.remove();
+    document.getElementById('useServerDataBtn').insertAdjacentElement('afterend', mergeBtn);
+
     elements.syncChoiceModal.style.display = 'block';
 }
 
 /**
- * Main sync logic - compares local and server data.
+ * Main sync logic — runs after login / session restore.
+ * Returns 'in-sync' | 'downloaded' | 'uploaded' | 'conflict' | 'none'.
  */
 async function performDataSync() {
     if (!authManager.isLoggedIn()) {
         appLog("Not logged in, skipping sync.");
-        return;
+        return 'none';
     }
-
-    appLog("Performing data sync check...");
-    const serverData = await fetchBackendData();
-
-    const hasLocalData = appData.items.length > 0 || appData.counter > 0;
-    const hasServerData = serverData && (serverData.items?.length > 0 || serverData.counter > 0);
-
-    if (hasLocalData && !hasServerData) {
-        appLog("Local data exists but server is empty. Prompting upload...");
-        if (confirm("No data found on server. Upload your local data to your account?")) {
-            await saveBackendData();
-        }
-    } else if (hasServerData) {
-        const localString = getCanonicalString(appData);
-        const serverString = getCanonicalString(serverData);
-
-        if (localString !== serverString) {
-            appLog("Data mismatch detected. Showing sync choice modal...");
-            const localSummary = generateDataSummary(appData);
-            const serverSummary = generateDataSummary(serverData);
-            showSyncChoiceModal(localSummary, serverSummary, serverData);
-        } else {
-            appLog("Data is in sync.");
-            appData = serverData;
-            saveLocalData();
-        }
-    } else if (hasServerData && !hasLocalData) {
-        appLog("Server has data but local is empty. Downloading...");
-        appData = serverData;
-        saveLocalData();
-    } else {
-        appLog("No data locally or on server.");
-    }
-
+    const result = await syncClient.performSync();
+    appLog("Sync result:", result);
     updateDisplay();
+    return result;
 }
 
 /************************************
@@ -343,7 +323,7 @@ function updateDisplay() {
 /************************************
  * AUTH EVENT HANDLERS
  ************************************/
-// Listen for auth events from AuthManager
+// Listen for auth events from AuthManagerWip
 window.addEventListener('auth:login', async (e) => {
     appLog("Login event received:", e.detail.user);
     updateUIForLoginState();
@@ -583,6 +563,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // 1. Load local data first
     loadLocalData();
+
+    // 1b. Create the shared sync client (needs auth + the data model)
+    initSync();
 
     // 2. Set up event listeners
     setupEventListeners();

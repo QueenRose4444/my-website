@@ -1,5 +1,5 @@
 // bbcode_editor.js - Combined application logic with sync, auth, and collapsible modules.
-// UPDATED: Now uses the global AuthManager for cross-tab login syncing.
+// UPDATED: Now uses the global AuthManagerWip for cross-tab login syncing.
 
 /*************************************
  * APPLICATION & ENVIRONMENT CONFIGURATION
@@ -35,7 +35,7 @@ let state = {
 
 let templates = {};
 
-// --- Auth State (via AuthManager) ---
+// --- Auth State (via AuthManagerWip) ---
 let authManager = null; // Will be initialized in DOMContentLoaded
 
 /***********************
@@ -322,35 +322,78 @@ function saveData() {
 }
 
 /************************************
- * Auth Wrapper (uses global AuthManager)
+ * Auth Wrapper (uses global AuthManagerWip)
  ************************************/
 async function fetchWithAuth(url, options = {}) {
-  if (!authManager) throw new Error("AuthManager not initialized");
+  if (!authManager) throw new Error("AuthManagerWip not initialized");
   return authManager.fetchWithAuth(url, options);
 }
-async function fetchBackendData() {
-  if (!authManager || !authManager.isLoggedIn()) return null;
-  try {
-    return await (
-      await authManager.fetchWithAuth(authManager.endpoints.data, {
-        method: "GET",
-      })
-    ).json();
-  } catch {
-    return null;
-  }
+/************************************
+ * Account sync (via /sync-wip.js)
+ ************************************
+ * The shared module owns the transport, the debounce, the server-side version
+ * check and the conflict prompt (keep mine / keep theirs / merge both). This
+ * page only describes its own data.
+ *
+ * `canonical` covers games and presets — the actual work. Colours and the other
+ * editor settings still sync, they just never raise a conflict prompt.
+ */
+let syncClient = null;
+
+function initSync() {
+  if (!authManager || typeof SyncWip === "undefined") return;
+  syncClient = new SyncWip.SyncClient({
+    auth: authManager,
+    appName: APP_NAME,
+
+    getState: () => state,
+    setState: (s) => {
+      state = s;
+      saveLocalData();
+      updateDisplay();
+    },
+
+    accept: (raw) => !!raw && typeof raw === "object" && Array.isArray(raw.games),
+    normalize: (raw) => ({ ...raw, games: (raw.games || []).map(migrateGameData) }),
+    hasData: (s) => !!s && ((s.games || []).length > 0 || (s.presets || []).length > 0),
+
+    canonical: (s) =>
+      JSON.stringify({
+        games: (s.games || []).map((g) => JSON.stringify(g)).sort(),
+        presets: (s.presets || []).map((p) => JSON.stringify(p)).sort(),
+        template: s.template || "",
+      }),
+
+    // union both sides, dedupe by content — nothing is lost
+    merge: (theirs, mine) => {
+      const key = (x) => JSON.stringify(x);
+      const dedupe = (a, b) => {
+        const seen = new Set((a || []).map(key));
+        return (a || []).concat((b || []).filter((x) => !seen.has(key(x))));
+      };
+      return {
+        ...theirs,
+        ...mine,
+        games: dedupe(mine.games, theirs.games),
+        presets: dedupe(mine.presets, theirs.presets),
+        settings: { ...(theirs.settings || {}), ...(mine.settings || {}) },
+      };
+    },
+  });
 }
+
+async function fetchBackendData() {
+  if (!syncClient) initSync();
+  if (!syncClient) return null;
+  const out = await syncClient.fetchFromServer();
+  if (out === "error" || out === null) return null;
+  return out.state;
+}
+
 async function saveBackendData() {
-  if (!authManager || !authManager.isLoggedIn()) return false;
-  try {
-    await authManager.fetchWithAuth(authManager.endpoints.data, {
-      method: "POST",
-      body: JSON.stringify(state),
-    });
-    return true;
-  } catch {
-    return false;
-  }
+  if (!syncClient) initSync();
+  if (!syncClient) return false;
+  return syncClient.flush();
 }
 
 /*******************************
@@ -2226,13 +2269,11 @@ function importOldLocalData() {
 }
 
 async function syncOnLoad() {
-  const d = await fetchBackendData();
-  if (d) {
-    state = d;
-    state.games = state.games.map(migrateGameData);
-    saveLocalData();
-    updateDisplay();
-  }
+  if (!syncClient) initSync();
+  if (!syncClient) return;
+  // performSync compares both copies and, on a real difference, raises the
+  // conflict prompt instead of silently picking a side.
+  await syncClient.performSync();
 }
 
 /**********************
@@ -2365,12 +2406,13 @@ window.syncFileSizesNow = () => {
  * Initial Page Load
  **********************/
 document.addEventListener("DOMContentLoaded", async () => {
-  // Initialize AuthManager
-  if (typeof AuthManager !== "undefined") {
-    authManager = new AuthManager(APP_NAME, ENVIRONMENT);
+  // Initialize AuthManagerWip
+  if (typeof AuthManagerWip !== "undefined") {
+    authManager = new AuthManagerWip(APP_NAME, ENVIRONMENT);
+    initSync();
   } else {
     console.error(
-      "AuthManager not loaded! Make sure auth.js is included before this script.",
+      "AuthManagerWip not loaded! Make sure auth-wip.js is included before this script.",
     );
     return;
   }
@@ -2385,7 +2427,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (savedIndex !== null && state.games.length > savedIndex)
     state.activeGameIndex = parseInt(savedIndex);
 
-  // Initialize auth session - AuthManager will dispatch appropriate events
+  // Initialize auth session - AuthManagerWip will dispatch appropriate events
   await authManager.initialize();
 
   updateDisplay();
