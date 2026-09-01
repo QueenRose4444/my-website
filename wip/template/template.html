@@ -45,14 +45,22 @@
     </header>
 
     <main class="container">
+        <!-- Silent-merge notice (sync's onMerged). A NOTICE, not a question: it
+             reports something that has already happened, so dismissing it confirms
+             it. Hidden until sync has something to say. -->
+        <div id="syncNotice" style="display:none; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:16px; padding:10px 14px; border:1px solid rgba(127,127,127,.4); border-radius:8px;">
+            <span id="syncNoticeText" style="flex:1 1 240px;"></span>
+            <span id="syncNoticeActions"></span>
+        </div>
+
         <h1>Template Application</h1>
         <p>This template demonstrates the complete auth and sync system.</p>
         <p>Your app content goes here. This template includes:</p>
         <ul>
             <li>Global authentication (shared across all your apps)</li>
             <li>Per-app data storage (isolated from other apps)</li>
-            <li>Automatic sync between local storage and server</li>
-            <li>Conflict resolution when local and server data differ</li>
+            <li>Change-level sync between devices, with no conflict prompt for the ordinary cases</li>
+            <li>A prompt for the one case sync will not decide alone: deleted here, edited there</li>
         </ul>
     </main>
 
@@ -146,7 +154,22 @@
       </div>
     </div>
 
-    <!-- Sync Choice Modal (for resolving conflicts) -->
+    <!-- Delete-vs-edit Modal (sync's onItemConflict) — the one question sync asks.
+         Opt-IN to deleting: nothing goes unless it is ticked, and "Keep everything"
+         (or closing the tab) keeps the lot. A dismissal must never destroy. -->
+    <div id="itemConflictModal" class="auth-modal">
+        <div class="auth-modal-content">
+            <h2>Deleted on one device, edited on another</h2>
+            <p style="color: #ccc;">These entries were deleted on one device and changed on the other. Nothing is deleted unless you tick it.</p>
+            <div id="itemConflictList"></div>
+            <div class="sync-choice-actions">
+                <button id="itemConflictApply" class="btn-download">Delete the ticked entries</button>
+                <button type="button" id="itemConflictKeepAll" class="btn-upload">Keep everything</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sync Choice Modal (no-base fallback: a first sync, or cleared storage) -->
     <div id="syncChoiceModal" class="auth-modal sync-choice-modal">
         <div class="auth-modal-content">
             <h2>Data Sync Conflict</h2>
@@ -183,11 +206,16 @@
       </div>
     </div>
 
-    <!-- The global AuthManagerWip module -->
-    <script src="/auth-wip.js"></script>
-    <script src="/sync-wip.js"></script>
+    <!-- The shared auth + sync modules.
+         The ?v= cache-buster is not decoration: Cloudflare caches each FULL URL
+         including the query string. If you change a shared module, bump the buster on
+         EVERY page that loads it, in the same push — half-bumping is worse than not
+         bumping at all, because a page then loads a new module beside a months-old
+         cached one and dies on a name that no longer exists. -->
+    <script src="/auth-wip.js?v=20260814a"></script>
+    <script src="/sync-wip.js?v=20260814a"></script>
     <!-- Your app-specific script -->
-    <script src="template.js"></script>
+    <script src="template.js?v=20260814a"></script>
 
 </body>
 </html>

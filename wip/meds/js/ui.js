@@ -134,18 +134,68 @@
     // Toasts
     // ------------------------------------------------
     let toastWrap = null;
-    function toast(msg, type) {
+
+    /**
+     * A toast, optionally with actions.
+     *
+     * @param {string} msg
+     * @param {string} [type]                    '' | 'error'
+     * @param {object} [opts]
+     * @param {number} [opts.duration]           ms on screen (default 3200)
+     * @param {Array<{label:string, act:Function, primary?:boolean}>} [opts.actions]
+     * @param {Function} [opts.onDismiss]        run when it goes without an action
+     *        being chosen — timing out, or being clicked away. This is what makes a
+     *        toast safe for "Confirm / Revert": IGNORING IT MUST BE THE HARMLESS
+     *        ANSWER, so onDismiss is only ever the confirm side.
+     */
+    function toast(msg, type, opts) {
+        opts = opts || {};
         if (!toastWrap) {
             toastWrap = document.createElement('div');
             toastWrap.className = 'toast-wrap';
             document.body.appendChild(toastWrap);
         }
+        const actions = Array.isArray(opts.actions) ? opts.actions : [];
         const t = document.createElement('div');
-        t.className = `toast ${type || ''}`;
+        t.className = `toast ${type || ''}${actions.length ? ' has-actions' : ''}`;
         t.innerHTML = `${type === 'error' ? Icons.alert : Icons.check}<span>${escapeHtml(msg)}</span>`;
+
+        let settled = false;
+        const dismiss = (chosen) => {
+            if (settled) return;
+            settled = true;
+            t.classList.remove('show');
+            setTimeout(() => t.remove(), 300);
+            if (!chosen && opts.onDismiss) { try { opts.onDismiss(); } catch (e) { console.error(e); } }
+        };
+
+        if (actions.length) {
+            // Buttons need pointer events; the wrapper deliberately has none so a
+            // plain toast never blocks the page underneath.
+            t.style.pointerEvents = 'auto';
+            const row = document.createElement('span');
+            row.className = 'toast-acts';
+            actions.forEach(a => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = `toast-act${a.primary ? ' primary' : ''}`;
+                b.textContent = a.label;
+                b.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    dismiss(true);
+                    try { a.act(); } catch (err) { console.error(err); }
+                });
+                row.appendChild(b);
+            });
+            t.appendChild(row);
+            // Clicking the toast itself (not a button) is a dismissal, which is the
+            // same as confirming.
+            t.addEventListener('click', () => dismiss(false));
+        }
+
         toastWrap.appendChild(t);
         setTimeout(() => t.classList.add('show'), 10);
-        setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 3200);
+        setTimeout(() => dismiss(false), opts.duration || 3200);
     }
 
     window.UI = { Icons, $, $$, escapeHtml, on, openModal, confirmModal, toast };

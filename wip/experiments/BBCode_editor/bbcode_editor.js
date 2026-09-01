@@ -316,9 +316,17 @@ function saveLocalData() {
     console.error("Error saving local data:", e);
   }
 }
+/**
+ * An ordinary edit: persist locally and let sync ship the difference. Debounced,
+ * so a run of keystrokes collapses into one push instead of one per character.
+ *
+ * NOT for a wholesale replacement (an import over the top, a reset). Those are
+ * not edits, and shipping them as edits turns them into one deletion per missing
+ * entry — see importDataFromFile below.
+ */
 function saveData() {
   saveLocalData();
-  if (authManager && authManager.isLoggedIn()) saveBackendData();
+  if (syncClient) syncClient.scheduleSave();
 }
 
 /************************************
@@ -331,14 +339,45 @@ async function fetchWithAuth(url, options = {}) {
 /************************************
  * Account sync (via /sync-wip.js)
  ************************************
- * The shared module owns the transport, the debounce, the server-side version
- * check and the conflict prompt (keep mine / keep theirs / merge both). This
- * page only describes its own data.
+ * The shared module owns the transport, the debounce, the server-assigned
+ * version numbers and the merge. This page only describes its own data.
  *
- * `canonical` covers games and presets — the actual work. Colours and the other
- * editor settings still sync, they just never raise a conflict prompt.
+ * Because SYNC_COLLECTIONS is declared, a save ships what CHANGED — added,
+ * edited, deleted — instead of the whole blob. Being behind stops being a
+ * conflict, a deletion is no longer undone by the next merge, and "both devices
+ * changed" is answered from the operation log rather than by asking the user.
+ *
+ * `canonical` covers games, presets and the output template — the actual work.
+ * Colours and the other editor settings still sync, they just never raise a
+ * conflict prompt.
  */
 let syncClient = null;
+
+// What the sync engine treats as items. /sync-wip.js knows nothing about games —
+// it is told which fields are collections and how to identify an item.
+//
+// `gameTitle` is this app's identity for a game: every lookup in this file finds
+// a game by title (see the raw-import path, which keys a Map by it), so two games
+// can never share one. Presets are identified the same way, by their name.
+//
+// Neither carries a clock, so `timestamp` is omitted — it only orders operations
+// within a push, and there is nothing here to order them by.
+//
+// Not listed: `template` (a single string; a change to it is not describable as
+// an item operation, so it honestly forces a whole-state save) and
+// `activeGameIndex` (per device — see ignoreKeys below).
+const SYNC_COLLECTIONS = [
+  { name: "games", identity: (g) => g.gameTitle },
+  { name: "presets", identity: (p) => p.title },
+  { name: "settings", kind: "map", ignore: [] },
+];
+
+// Wire name -> what a person is shown, for the sentences sync writes for itself.
+const COLLECTION_LABELS = {
+  games: "games",
+  presets: "presets",
+  settings: "editor settings",
+};
 
 function initSync() {
   if (!authManager || typeof SyncWip === "undefined") return;
@@ -356,6 +395,13 @@ function initSync() {
     accept: (raw) => !!raw && typeof raw === "object" && Array.isArray(raw.games),
     normalize: (raw) => ({ ...raw, games: (raw.games || []).map(migrateGameData) }),
     hasData: (s) => !!s && ((s.games || []).length > 0 || (s.presets || []).length > 0),
+
+    collections: SYNC_COLLECTIONS,
+    collectionLabels: COLLECTION_LABELS,
+
+    // Which game is on screen belongs to this browser — it is already kept in its
+    // own localStorage key — so it must neither travel nor force a whole-state save.
+    ignoreKeys: ["activeGameIndex"],
 
     canonical: (s) =>
       JSON.stringify({
@@ -379,7 +425,121 @@ function initSync() {
         settings: { ...(theirs.settings || {}), ...(mine.settings || {}) },
       };
     },
+
+    onStatus: (status) => syncLog("sync status:", status),
+
+    // Both devices changed something? That is no longer a question for the user:
+    // their changes are applied, mine go on top, and the page just says what
+    // happened. A CATCH-UP (info.kind === 'catch-up') arrives the same way — sync
+    // worked out that one side was simply behind and moved the data.
+    //
+    // It is a NOTICE, not a question. Nothing waits on it, and ignoring it is
+    // confirming it: the action already happened, so a dismissal must never undo
+    // it. Revert stays reachable afterwards via syncClient.recentActions().
+    onMerged: (info) => {
+      updateDisplay();
+      const n = info.changesFromOtherDevice;
+      let msg =
+        info.message ||
+        `Merged ${n} change${n === 1 ? "" : "s"} from your other device`;
+      if (info.stats && info.stats.myEditWon)
+        msg += ` — ${info.stats.myEditWon} kept from this device`;
+      if (info.awaitingDecision) msg += ` — ${info.awaitingDecision} need a decision`;
+
+      if (!info.revertable) {
+        // Say plainly when it cannot be undone rather than offering a button that
+        // does nothing. An upload changed nothing here, so there is nothing to say.
+        if (info.direction !== "upload") msg += " — can't be undone on this device";
+        showSyncNotice(msg, []);
+        return;
+      }
+      showSyncNotice(
+        msg,
+        [
+          { label: "Revert", act: () => info.revert() },
+          { label: "OK", act: () => info.confirm(), primary: true },
+        ],
+        () => info.confirm(), // dismissing IS confirming
+      );
+    },
+
+    // The ONE thing sync will not decide by itself: a game deleted on one device
+    // and edited on the other. Raised per entry, AFTER the rest of the merge has
+    // already been saved, so nothing waits on the answer. Anything not explicitly
+    // agreed to — a cancel, a closed tab — KEEPS the entry.
+    onItemConflict: (info) => confirmItemDeletions(info.collisions),
   });
+}
+
+/** How one of this page's items is named in the delete-vs-edit prompt. */
+function describeSyncItem(collection, item, id) {
+  if (item == null) return `${id} (no longer on this device)`;
+  if (collection === "games") return item.gameTitle || String(id);
+  if (collection === "presets") return item.title || String(id);
+  return String(id);
+}
+
+/**
+ * Delete-vs-edit, asked per entry. Opt-IN to deleting: cancelling KEEPS the
+ * entry, because a dismissal must never destroy.
+ * Returns {[key]: 'delete'} for the ones agreed to, or null to keep them all.
+ */
+function confirmItemDeletions(collisions) {
+  const answers = {};
+  (collisions || []).forEach((c) => {
+    const where = c.deletedOnThisDevice
+      ? "You deleted this here; your other device edited it"
+      : "Deleted on your other device; you edited it here";
+    const what = describeSyncItem(c.coll, c.after || c.before, c.id);
+    if (confirm(`Delete "${what}"? (${where}.) Cancel keeps it.`))
+      answers[c.key] = "delete";
+  });
+  return Object.keys(answers).length ? answers : null;
+}
+
+/**
+ * The silent-merge notice. Not a dialog — it reports something that has ALREADY
+ * happened, so nothing waits on it and the timeout confirms rather than cancels.
+ *
+ * It floats over the page rather than using the sync panel's #syncStatus line,
+ * because that line lives inside a modal that is closed almost all of the time —
+ * a notice nobody can see is not a notice.
+ */
+function showSyncNotice(message, actions, onDismiss) {
+  const box = document.createElement("div");
+  box.style.cssText =
+    "position:fixed;bottom:20px;right:20px;max-width:420px;z-index:3000;" +
+    "display:flex;gap:10px;align-items:center;flex-wrap:wrap;" +
+    "background:#333;color:#fff;padding:12px 20px;border-radius:4px;" +
+    "border-left:4px solid #17a2b8;box-shadow:0 4px 12px rgba(0,0,0,0.3);";
+
+  let settled = false;
+  const settle = (fn) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    box.remove();
+    if (fn) fn();
+  };
+
+  const text = document.createElement("span");
+  text.textContent = message;
+  box.appendChild(text);
+
+  (actions || []).forEach((a) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = a.label;
+    btn.style.cssText =
+      "background:transparent;color:inherit;border:1px solid currentColor;" +
+      "border-radius:4px;padding:4px 10px;cursor:pointer;font:inherit;";
+    if (a.primary) btn.style.fontWeight = "600";
+    btn.addEventListener("click", () => settle(a.act));
+    box.appendChild(btn);
+  });
+
+  document.body.appendChild(box);
+  const timer = setTimeout(() => settle(onDismiss), 9000);
 }
 
 async function fetchBackendData() {
@@ -2107,21 +2267,29 @@ function setupEventListeners() {
   els.registerForm.addEventListener("submit", handleRegister);
   els.exportDataButton.addEventListener("click", exportDataToFile);
   els.importDataInput.addEventListener("change", importDataFromFile);
-  els.importOldDataButton.addEventListener("click", () => {
+  els.importOldDataButton.addEventListener("click", async () => {
     const old = localStorage.getItem("gameInfoFormatterCache");
-    if (old && confirm("Import old data?")) {
-      try {
-        const p = JSON.parse(old);
-        if (p.games) {
-          state.games = p.games.map(migrateGameData);
-          saveData();
-          updateDisplay();
-          alert("Legacy data imported successfully.");
-        }
-      } catch (e) {
+    if (!old) {
+      alert("No old data found.");
+      return;
+    }
+    try {
+      const p = JSON.parse(old);
+      if (!p.games) {
         alert("Error importing legacy data.");
+        return;
       }
-    } else if (!old) alert("No old data found.");
+      // Replacing the whole games list IS a wholesale replacement, even though
+      // only one field is assigned — every game not in the legacy cache would
+      // otherwise travel as a deletion. Same preview, same marked publish.
+      const incoming = { ...state, games: p.games.map(migrateGameData) };
+      const summary = confirmReplacement(incoming, "the old data");
+      if (!summary) return;
+      await publishReplacement(incoming, summary, "import");
+      alert("Legacy data imported successfully.");
+    } catch (e) {
+      alert("Error importing legacy data.");
+    }
   });
   if (els.changePasswordButton)
     els.changePasswordButton.addEventListener(
@@ -2136,6 +2304,47 @@ function setupEventListeners() {
   });
 }
 
+/**
+ * Count what a wholesale replacement would cost, and say it before doing it.
+ * `diffSummary` applies nothing — it just reports added / removed / changed /
+ * identical per collection. "This will DELETE 12 games" is the sentence that
+ * prevents the accident.
+ */
+function confirmReplacement(incoming, what) {
+  const specs = SyncWip.normaliseCollections(SYNC_COLLECTIONS);
+  const summary = SyncWip.diffSummary(state, incoming, specs);
+  const removed = summary.totals.removed;
+  const warning = removed
+    ? `This will DELETE ${removed} entr${removed === 1 ? "y" : "ies"} not in ${what}. `
+    : "";
+  const kept = summary.totals.identical + summary.totals.changed;
+  const ok = confirm(
+    `${warning}Add ${summary.totals.added} new and keep ${kept}. Proceed?`,
+  );
+  return ok ? summary : null;
+}
+
+/**
+ * Publish a wholesale replacement as a wholesale replacement.
+ *
+ * Diffing one against the last synced state turns it into one `del` per entry the
+ * incoming copy does not contain, and every other device applies a `del` without
+ * asking — so two devices importing two different backups delete each other's
+ * work. replaceAll() publishes a MARKED snapshot instead: the other device is
+ * asked rather than emptied. Use scheduleSave()/flush() for an ordinary edit.
+ */
+async function publishReplacement(next, summary, source) {
+  state = next;
+  saveLocalData();
+  updateDisplay();
+  if (!syncClient || !authManager?.isLoggedIn()) return;
+  await syncClient.replaceAll(state, {
+    source,
+    removed: summary.totals.removed,
+    kept: summary.totals.identical + summary.totals.changed,
+  });
+}
+
 function importDataFromFile(e) {
   const f = e.target.files[0];
   if (!f) return;
@@ -2143,21 +2352,33 @@ function importDataFromFile(e) {
   r.onload = async (ev) => {
     try {
       const data = JSON.parse(ev.target.result);
-      if (data.games) {
-        data.games = data.games.map(migrateGameData);
-        if (confirm("Overwrite current data?")) {
-          state = data;
-          saveLocalData();
-          updateDisplay();
-          if (authManager?.isLoggedIn() && confirm("Save to server?"))
-            await saveBackendData();
-        }
-      } else alert("Invalid file.");
+      if (!data.games) {
+        alert("Invalid file.");
+        return;
+      }
+      data.games = data.games.map(migrateGameData);
+      // Keep this device's own view state; the file has no business setting it.
+      const incoming = { ...data, activeGameIndex: state.activeGameIndex };
+      const summary = confirmReplacement(incoming, "the file");
+      if (!summary) return;
+      await publishReplacement(incoming, summary, "import");
+      showSyncStatus("Import successful!", "success");
     } catch (err) {
-      alert("Import failed.");
+      showSyncStatus(`Import failed: ${err.message}`, "error");
     }
   };
   r.readAsText(f);
+}
+
+function showSyncStatus(message, type = "info") {
+  const el = getElements().syncStatus;
+  if (!el) return;
+  el.textContent = message;
+  el.className = `sync-status-${type}`;
+  setTimeout(() => {
+    el.textContent = "";
+    el.className = "";
+  }, 5000);
 }
 
 /**********************
@@ -2259,13 +2480,18 @@ function exportDataToFile() {
   a.click();
 }
 
-function importOldLocalData() {
+async function importOldLocalData() {
   const o = localStorage.getItem("gameInfoFormatterCache");
-  if (o && confirm("Import old?")) {
-    state.games = JSON.parse(o).games.map(migrateGameData);
-    saveData();
-    updateDisplay();
-  }
+  if (!o) return;
+  // Wholesale replacement of the games list — previewed and published as one,
+  // never diffed into a delete per game. See publishReplacement().
+  const incoming = {
+    ...state,
+    games: JSON.parse(o).games.map(migrateGameData),
+  };
+  const summary = confirmReplacement(incoming, "the old data");
+  if (!summary) return;
+  await publishReplacement(incoming, summary, "import");
 }
 
 async function syncOnLoad() {

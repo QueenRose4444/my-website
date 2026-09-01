@@ -47,8 +47,16 @@
     </header>
 
     <main class="container">
+        <!-- Silent-merge notice (sync's onMerged). A NOTICE, not a question: it
+             reports something that has already happened, so dismissing it confirms
+             it. Hidden until sync has something to say. -->
+        <div id="syncNotice" style="display:none; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:16px; padding:10px 14px; border:1px solid rgba(127,127,127,.4); border-radius:8px;">
+            <span id="syncNoticeText" style="flex:1 1 240px;"></span>
+            <span id="syncNoticeActions"></span>
+        </div>
+
         <h1>Experiments Template</h1>
-        <p>This template uses the shared AuthManagerWip.</p>
+        <p>This template uses the shared AuthManagerWip and the shared sync client.</p>
         <p>Your experiment content goes here.</p>
     </main>
 
@@ -139,6 +147,22 @@
       </div>
     </div>
 
+    <!-- Delete-vs-edit Modal (sync's onItemConflict) — the one question sync asks.
+         Opt-IN to deleting: nothing goes unless it is ticked, and "Keep everything"
+         (or closing the tab) keeps the lot. A dismissal must never destroy. -->
+    <div id="itemConflictModal" class="auth-modal">
+        <div class="auth-modal-content">
+            <h2>Deleted on one device, edited on another</h2>
+            <p style="color: #ccc;">These notes were deleted on one device and changed on the other. Nothing is deleted unless you tick it.</p>
+            <div id="itemConflictList"></div>
+            <div class="sync-choice-actions">
+                <button id="itemConflictApply" class="btn-download">Delete the ticked notes</button>
+                <button type="button" id="itemConflictKeepAll" class="btn-upload">Keep everything</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sync Choice Modal (no-base fallback: a first sync, or cleared storage) -->
     <div id="syncChoiceModal" class="auth-modal sync-choice-modal">
         <div class="auth-modal-content">
             <h2>Data Sync Conflict</h2>
@@ -174,11 +198,16 @@
       </div>
     </div>
 
-    <!-- The global AuthManagerWip module (Root Path) -->
-    <script src="/auth-wip.js"></script>
-    <script src="/sync-wip.js"></script>
+    <!-- The shared auth + sync modules (root path).
+         The ?v= cache-buster is not decoration: Cloudflare caches each FULL URL
+         including the query string. If you change a shared module, bump the buster on
+         EVERY page that loads it, in the same push — half-bumping is worse than not
+         bumping at all, because a page then loads a new module beside a months-old
+         cached one and dies on a name that no longer exists. -->
+    <script src="/auth-wip.js?v=20260814a"></script>
+    <script src="/sync-wip.js?v=20260814a"></script>
     <!-- Your experiment-specific script -->
-    <script src="Experiments_template.js"></script>
+    <script src="Experiments_template.js?v=20260814a"></script>
 
 </body>
 </html>

@@ -1,0 +1,292 @@
+/* tokens.css — the house design tokens for rosestuffs.org
+ * ---------------------------------------------------------------------------
+ * THE ONLY PLACE A COLOUR IS DEFINED. If you are about to write a hex value in
+ * a page stylesheet, use a token from here instead — or add one here first.
+ *
+ * Palette is film-manager's `rose_pink`, ported from
+ *   3-apps/projects/film-manager/development/film-manager/crates/fm-app/src/theme.rs:79-92
+ * whose own comment notes it was taken from the pinks already in this site's CSS.
+ *
+ * USAGE
+ *   <link rel="stylesheet" href="/tokens.css?v=20260830a">
+ *   <script src="/theme.js?v=20260830a"></script>   <!-- in <head>, blocking -->
+ *
+ * ⚠ CACHE-BUSTING. Cloudflare caches per full URL. If you change this file you
+ * MUST bump ?v= on EVERY page that loads it, in the SAME push. A half-bumped
+ * version took the meds page down on 2026-08-13 with `AuthManager is not
+ * defined`; a stylesheet fails more quietly and therefore worse — the page
+ * still works, it is just wrong, and nobody notices for a week.
+ * Adding a token is safe. Renaming or removing one breaks every consumer.
+ *
+ * ⚠ THREE THEME STATES, not two. Dark is defined on bare :root so it wins when
+ * nothing is stated. Light appears twice — once for an explicit choice, once
+ * for the system preference — and an explicit dark beats the media query.
+ *
+ * Contrast is enforced by tools/check-contrast.mjs, not by eye. Run it before
+ * pushing any change to this file.
+ */
+
+/* ── DARK · the default and the designed-for case ───────────────────────── */
+:root {
+  /* surfaces */
+  --ground:         #15121B;
+  --surface:        #1E1926;
+  --surface-hi:     #292233;
+  --surface-sunken: #100D16;
+  /* --line is DECORATIVE (dividers, hairlines) and is exempt from contrast.
+     --line-strong bounds a control — an input, a select, a card you can focus —
+     so it carries meaning and must hold 3:1. Using --line on an input is the
+     mistake this pair exists to prevent. */
+  --line:           #3A3145;
+  --line-strong:    #7A6C8A;
+
+  /* text */
+  /* Softened from film-manager's #F0E9F2 (15.9:1 — a desktop app's brightness).
+     Long reading at that contrast on near-black glares; rosie-notes sits at
+     #E7E9F0 for the same reason. Still comfortably past AA. */
+  --ink:            #E8E1EC;
+  --ink-dim:        #A99DB4;
+  --ink-faint:      #85788F;
+
+  /* signal — accent is "the thing being acted on", danger is DESTRUCTION ONLY
+   *
+   * ⚠ TWO ACCENT TOKENS, AND THE DIFFERENCE MATTERS.
+   *
+   *   --accent       the brand colour. THE SAME HEX IN BOTH THEMES. Only ever a
+   *                  FILL or a stroke: a button background, the goal ring, a chart
+   *                  segment, a key dot. Text drawn on it uses --accent-ink.
+   *   --accent-text  the same hue, lightness adjusted to clear 4.5:1, for when the
+   *                  accent is drawn AS TEXT or a hairline on the page.
+   *
+   * The first build had one token doing both jobs, so the light theme darkened the
+   * whole accent to make the text case legible — rose went #E79BB4 -> #9C4468,
+   * OKLCH lightness 0.77 -> 0.51. Correct for the text, and it made every fill look
+   * muddy. Rose noticed: the meds page and the transcribe app "look nice and not
+   * weird" in light mode, and both keep one vivid accent.
+   *
+   * Splitting the token takes the good half of both: ONE vivid hex for the fills in
+   * both themes, and a separate --accent-text derived at 4.5:1 against the PALEST
+   * place accent text lands — an --accent-soft pill over --surface — so passing
+   * there passes on the ground and the panel for free.
+   *
+   * ⚠⚠ THE FILL EXEMPTION — A DELIBERATE, RECORDED TRADE-OFF (D-42).
+   *
+   * A fully vivid accent measures 1.7-2.6:1 against the light page, and 1.5-2.3:1
+   * against the ring track it sits on. WCAG 1.4.11 wants 3:1 for a graphic that
+   * carries meaning, so THE LIGHT-THEME FILLS DO NOT MEET IT. That is Rose's call,
+   * made twice and with the numbers in front of her: an accent darkened enough to
+   * pass sits at OKLCH lightness 0.51-0.66 and reads as dull, and payday is a tool
+   * for two people who both prefer the vivid one.
+   *
+   * What is NOT exempt, and must keep passing:
+   *   --accent-text  4.5:1 wherever the accent is TEXT
+   *   --accent-ink   4.5:1 for anything drawn ON a filled accent
+   * Between them, nothing anyone has to READ is affected. The exemption covers
+   * decoration and shape only — the ring, the donut, a button's fill.
+   *
+   * ⚠ Never widen it to text. Never remove --accent-text and go back to one token:
+   * that is what made light mode dull in the first place. */
+  --accent:         #E79BB4;
+  --accent-text:    #E79BB4;
+  --accent-ink:     #16131A;
+  --accent-soft:    rgba(231, 155, 180, 0.14);
+  --accent-line:    rgba(231, 155, 180, 0.42);
+  /* Same split as the accent, same reason: --safe is a donut slice AND the colour
+     of every incoming amount. The fill stays vivid; the text variant is legible. */
+  --safe:           #7FCFC0;
+  --safe-text:      #7FCFC0;
+  --warn:           #F0B955;
+  --danger:         #F0666B;
+
+  /* focus — deliberately violet, NOT --accent, so the ring stays visible on
+     something that is already accent-coloured */
+  --focus-ring:     #C9A6FF;
+
+  /* money semantics. --money-out is pink, not red: spending is normal, not an
+     error. --money-projected is a token because "projected vs actual" is a
+     correctness distinction, not decoration — see the rule at the bottom. */
+  --money-in:        var(--safe-text);
+  /* ⚠ --accent-text, not --accent: an amount is TEXT. */
+  --money-out:       var(--accent-text);
+  --money-projected: var(--ink-dim);
+
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.28), 0 1px 1px rgb(0 0 0 / 0.16);
+  --shadow-2: 0 12px 32px rgb(0 0 0 / 0.44), 0 2px 8px rgb(0 0 0 / 0.24);
+
+  /* geometry
+     ⚠ NOT film-manager's 4px. That is a desktop-app radius and it reads as boxy on
+     the web — Rose's word. rosie-notes runs a scale to 24px, and this matches it.
+     Controls 10, cards 14, panels 20, pills full. */
+  --radius-sm: 8px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+  --gap: 10px;  --gap-wide: 20px;  --pad: 16px;  --pad-lg: 24px;
+
+  /* type — theme.rs:513-541 */
+  /* Inter, as rosie-notes uses. Local-first — nothing is fetched over the network. */
+  --font-sans: Inter, "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", ui-monospace, Consolas, monospace;
+  --fs-heading: 1.45rem;
+  --fs-title:   1.05rem;
+  --fs-body:    0.95rem;
+  --fs-small:   0.84rem;
+  --fs-mono:    0.90rem;
+
+  color-scheme: dark;
+}
+
+/* ── LIGHT · explicit choice ────────────────────────────────────────────── */
+:root[data-theme="light"] {
+  --ground:         #FAF7FB;
+  --surface:        #FFFFFF;
+  --surface-hi:     #F2ECF5;
+  --surface-sunken: #EFE9F2;
+  --line:           #D2C6DA;
+  --line-strong:    #8A7B94;
+
+  --ink:            #221C29;
+  --ink-dim:        #574B61;
+  --ink-faint:      #6F6379;
+
+  /* ⚠ The accent stays VIVID here — the same hex as dark. Only the text variant
+     moves, and only as far as it must: derived at 4.5:1 against an --accent-soft
+     pill over white, which is the palest thing the accent is ever drawn on and so
+     a harder target than the ground. See the note in the dark block above. */
+  --accent:         #E79BB4;
+  --accent-text:    #A05A73;
+  --accent-ink:     #16131A;
+  /* color-mix so the tints follow whatever --accent is, including a custom one */
+  --accent-soft:    color-mix(in srgb, #E79BB4 14%, transparent);
+  --accent-line:    color-mix(in srgb, #E79BB4 42%, transparent);
+  --safe:           #7FCFC0;
+  --safe-text:      #1F6F60;
+  --warn:           #7A5200;
+  --danger:         #C0272C;
+
+  --focus-ring:     #6D3FB8;
+
+  --shadow-1: 0 1px 2px rgb(30 24 35 / 0.07), 0 1px 1px rgb(30 24 35 / 0.04);
+  --shadow-2: 0 12px 32px rgb(30 24 35 / 0.13), 0 2px 8px rgb(30 24 35 / 0.06);
+
+  color-scheme: light;
+}
+
+/* ── LIGHT · system preference, when no explicit choice was made ─────────── */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --ground:         #FAF7FB;
+    --surface:        #FFFFFF;
+    --surface-hi:     #F2ECF5;
+    --surface-sunken: #EFE9F2;
+    --line:           #D2C6DA;
+    --line-strong:    #8A7B94;
+
+    --ink:            #221C29;
+    --ink-dim:        #574B61;
+    --ink-faint:      #6F6379;
+
+    /* the accent stays vivid — same hex as dark. Only the TEXT variant moves, and
+       only as far as it must: derived at 4.5:1 against an --accent-soft pill over
+       white, the palest thing it is ever drawn on. */
+    --accent:         #E79BB4;
+    --accent-text:    #A05A73;
+    --accent-ink:     #16131A;
+    --accent-soft:    color-mix(in srgb, #E79BB4 14%, transparent);
+    --accent-line:    color-mix(in srgb, #E79BB4 42%, transparent);
+    --safe:           #7FCFC0;
+    --safe-text:      #1F6F60;
+    --warn:           #7A5200;
+    --danger:         #C0272C;
+
+    --focus-ring:     #6D3FB8;
+
+    --shadow-1: 0 1px 2px rgb(30 24 35 / 0.07), 0 1px 1px rgb(30 24 35 / 0.04);
+    --shadow-2: 0 12px 32px rgb(30 24 35 / 0.13), 0 2px 8px rgb(30 24 35 / 0.06);
+
+    color-scheme: light;
+  }
+}
+
+/* ── Accessibility baseline ─────────────────────────────────────────────────
+ * Shipped here so a page that adopts the tokens inherits the behaviour. Before
+ * this file, the site had ZERO occurrences of prefers-reduced-motion, ZERO of
+ * prefers-color-scheme, and :focus-visible appeared nowhere in the tree.
+ */
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+  /* ⚠ LOAD-BEARING, not decoration. This fills the outline-offset gap with the
+     page colour so the ring ALWAYS sits on --ground, never on the element's own
+     fill. Without it, a ring on an accent-filled button sits on the accent,
+     where no single ring colour reaches 3:1 against all five accent presets AND
+     the background — measured at 1.02-1.36 before this was added. Removing this
+     silently breaks focus visibility on every coloured control. */
+  box-shadow: 0 0 0 2px var(--ground);
+}
+
+/* Only suppress the default ring where a visible :focus-visible ring replaces
+   it — never blanket `outline: none`. */
+:focus:not(:focus-visible) { outline: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --line:      #57496A;
+    --ink-dim:   #C6BBD0;
+    --ink-faint: #A093AB;
+  }
+  :root[data-theme="light"] {
+    --line:      #A899B2;
+    --ink-dim:   #3D3247;
+    --ink-faint: #554A5F;
+  }
+}
+
+/* Windows high-contrast / forced-colors: let the OS win, but keep the focus
+   ring visible — forced-colors removes outlines that rely on custom colours. */
+@media (forced-colors: active) {
+  :focus-visible { outline: 2px solid Highlight; }
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────── */
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+}
+
+/* ⚠ MONEY IS ALWAYS TABULAR. Columns of figures must align on the decimal, and
+ * a number that changes width as it updates reads as unstable. This is a
+ * correctness rule, not a stylistic one — film-manager uses the same
+ * mono-vs-proportional split to signal "raw" vs "resolved" (theme.rs:30-36). */
+.money, .num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ⚠ PROJECTED IS NEVER DISTINGUISHED BY HUE ALONE. A colourblind reader and a
+ * greyscale printout must both see the difference between a recorded figure and
+ * a forecast one. Colour + dashed border + reduced opacity, together. */
+.is-projected {
+  color: var(--money-projected);
+  border-style: dashed;
+}
+
+/* Minimum interaction target. */
+button, [role="button"], a.btn, input[type="checkbox"], input[type="radio"] {
+  min-block-size: 44px;
+  min-inline-size: 44px;
+}
