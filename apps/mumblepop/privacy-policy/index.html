@@ -115,7 +115,7 @@
 <body>
     <main class="wrap">
         <h1>MumblePop Privacy Policy</h1>
-        <p class="updated">Last updated: 1 September 2026</p>
+        <p class="updated">Last updated: 2 September 2026</p>
 
         <p class="lede">
             MumblePop is a dictation app. You speak, and it types what you said into
@@ -172,6 +172,17 @@
             </li>
         </ul>
         <p>You can delete any of it from inside the app, and all of it by uninstalling.</p>
+        <div class="callout">
+            <p style="margin:0">
+                <strong>Except what you export.</strong> When you tap Export, the app
+                writes your transcripts as plain readable text and JSON into its own
+                media folder <em>and</em> into your Downloads folder. That copy is
+                deliberate &mdash; it is what lets you move to a new phone, and unlike
+                everything else it survives uninstalling the app &mdash; but it is a
+                normal file any app with storage access can read. Delete it when you
+                are done with it.
+            </p>
+        </div>
 
         <h2>The accessibility service</h2>
         <p>
@@ -196,8 +207,13 @@
             your transcript, and never transmitted anywhere.
         </p>
         <p>
-            It does not read your screen generally, does not log what you type, and does
-            not run in apps you have told it to ignore.
+            It does not read your screen generally and does not log what you type.
+        </p>
+        <p>
+            In apps you have told it to ignore, the bubble never appears and nothing is
+            ever typed into them. To know which app you are in, the service still sees
+            the focused field's package name in those apps &mdash; it has to, in order
+            to know to stay away.
         </p>
 
         <h2>The other permissions, and why</h2>
