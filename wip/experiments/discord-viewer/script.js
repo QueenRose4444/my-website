@@ -166,7 +166,10 @@ function initializeAuth() {
     // Check if AuthManagerWip is loaded (from /auth-wip.js)
     if (typeof AuthManagerWip !== 'undefined') {
         authManager = new AuthManagerWip(APP_NAME, 'wip');
-        
+
+        // The sync client needs auth and the data model, so it is built here.
+        initSync();
+
         // Listen for auth events
         window.addEventListener('auth:login', handleAuthLogin);
         window.addEventListener('auth:logout', handleAuthLogout);
@@ -236,6 +239,9 @@ function handleAuthLogout() {
 function handleSessionRestored(event) {
     const user = event.detail.user;
     updateUIForLoggedIn(user);
+    // A restored session is a session: it has to sync too, or the account copy is
+    // only ever read on the one page load where the user actually typed a password.
+    syncDataAfterLogin();
 }
 
 function handleNoSession() {
@@ -333,90 +339,212 @@ async function handleLogout() {
     }
 }
 
-// --- Data Sync ---
+// --- Data Sync (via /sync-wip.js) ---
+//
+// This page keeps one thing on the account: the Discord API key. Everything else
+// it shows is read live from the messages backend and stored nowhere, and the
+// per-browser bits (theme, last server/channel, members panel) stay in this
+// browser's own localStorage keys and never leave it.
+//
+// It used to POST that key to the unversioned data endpoint — last write wins,
+// silently — and hand-roll a conflict modal around it. The shared module owns the
+// transport, the server-assigned version numbers and the merge now. One key/value
+// collection is all this page has to declare.
+
+let syncClient = null;
+
+const SYNC_COLLECTIONS = [
+    // A key/value section rather than a list: `settings` holds the API key, and a
+    // change to it travels as one operation on that key.
+    { name: 'settings', kind: 'map', ignore: [] },
+];
+
+const COLLECTION_LABELS = {
+    settings: 'saved settings',
+};
+
+/** This browser's copy of what syncs. Everything else here is per-device. */
+function getLocalData() {
+    return {
+        settings: {
+            apiKey: localStorage.getItem(STORAGE_KEY_API_KEY) || null,
+        },
+    };
+}
+
+function applyLocalData(next) {
+    const key = (next && next.settings && next.settings.apiKey) || null;
+    localStorage.setItem("discord_viewer_last_updated", new Date().toISOString());
+    if (!key) {
+        localStorage.removeItem(STORAGE_KEY_API_KEY);
+        API_KEY = null;
+        return;
+    }
+    if (key === API_KEY) return;
+    localStorage.setItem(STORAGE_KEY_API_KEY, key);
+    API_KEY = key;
+    initApp();
+}
+
+function initSync() {
+    if (!authManager || typeof SyncWip === 'undefined') return;
+    syncClient = new SyncWip.SyncClient({
+        auth: authManager,
+        appName: APP_NAME,
+
+        getState: () => getLocalData(),
+        setState: (s) => applyLocalData(s),
+
+        // "Is this blob one of ours?" — and it also accepts the older shape, which
+        // stored the key bare at the top level, so an existing account copy is not
+        // thrown away on the first sync after this change.
+        accept: (raw) => !!raw && typeof raw === 'object'
+            && ('settings' in raw || 'apiKey' in raw),
+
+        normalize: (raw) => ({
+            settings: {
+                apiKey: (raw && raw.settings && raw.settings.apiKey)
+                    || (raw && raw.apiKey)      // pre-collections copies
+                    || null,
+            },
+        }),
+
+        hasData: (s) => !!(s && s.settings && s.settings.apiKey),
+
+        collections: SYNC_COLLECTIONS,
+        collectionLabels: COLLECTION_LABELS,
+
+        // A stamp older copies wrote on every read. It is no longer written — the
+        // server assigns versions — but a stored copy may still carry one, and it
+        // must not read as a change.
+        ignoreKeys: ['lastUpdated'],
+
+        // There is no view state on this page's synced data, so the fingerprint is
+        // simply the key itself.
+        canonical: (s) => JSON.stringify((s && s.settings && s.settings.apiKey) || null),
+
+        // Only reached on the no-base fallback path. Whatever this device holds
+        // wins, because the key it is using right now is the one that works here.
+        merge: (theirs, mine) => ({
+            settings: Object.assign({}, theirs.settings, mine.settings),
+        }),
+
+        onStatus: (status) => console.log('[SYNC]', status),
+
+        // A NOTICE, not a question — it reports something that already happened.
+        // Ignoring it is confirming it, so a dismissal must never undo it.
+        onMerged: (info) => {
+            const n = info.changesFromOtherDevice;
+            let msg = info.message || `Merged ${n} change${n === 1 ? '' : 's'} from your other device`;
+            if (info.stats && info.stats.myEditWon) msg += ` — ${info.stats.myEditWon} kept from this device`;
+            if (info.awaitingDecision) msg += ` — ${info.awaitingDecision} need a decision`;
+
+            if (!info.revertable) {
+                if (info.direction !== 'upload') msg += " — can't be undone on this device";
+                showSyncNotice(msg, []);
+                return;
+            }
+            showSyncNotice(msg, [
+                { label: 'Revert', act: () => info.revert() },
+                { label: 'OK', act: () => info.confirm(), primary: true },
+            ], () => info.confirm());   // dismissing IS confirming
+        },
+
+        // The ONE thing sync will not decide by itself: the key cleared on one
+        // device and changed on the other. Asked AFTER the rest of the merge is
+        // already saved, and cancelling KEEPS it — a dismissal must never destroy.
+        onItemConflict: (info) => {
+            const answers = {};
+            (info.collisions || []).forEach((c) => {
+                const where = c.deletedOnThisDevice
+                    ? 'You cleared this here; your other device changed it'
+                    : 'Cleared on your other device; you changed it here';
+                if (confirm(`Remove the saved ${c.id}? (${where}.) Cancel keeps it.`)) {
+                    answers[c.key] = 'delete';
+                }
+            });
+            return Object.keys(answers).length ? answers : null;
+        },
+
+        // The old two-way prompt, now only reached when there is no base to reason
+        // from: a first sync, or cleared storage. The page's own modal answers it.
+        onConflict: (info) => new Promise((resolve) => {
+            showSyncChoiceModal(info.mine, info.theirs, resolve);
+        }),
+    });
+}
 
 async function syncDataAfterLogin() {
-    if (!authManager || !authManager.isLoggedIn()) return;
-    
+    if (!syncClient || !authManager || !authManager.isLoggedIn()) return;
     try {
-        const serverData = await authManager.fetchWithAuth(authManager.endpoints.data);
-        const serverJson = await serverData.json();
-        
-        // Get local data
-        const localData = getLocalData();
-        
-        // Check if we need to sync
-        if (serverJson.apiKey && serverJson.apiKey !== API_KEY) {
-            // Server has different data
-            if (localData.apiKey && localData.apiKey !== serverJson.apiKey) {
-                // Conflict - show choice modal
-                showSyncChoiceModal(localData, serverJson);
-            } else {
-                // Server has data, we don't (or it's the same)
-                applyServerData(serverJson);
-            }
-        }
+        await syncClient.performSync();
     } catch (err) {
         console.log("Sync check completed (no server data or error):", err.message);
     }
 }
 
-function getLocalData() {
-    return {
-        apiKey: localStorage.getItem(STORAGE_KEY_API_KEY),
-        lastUpdated: localStorage.getItem("discord_viewer_last_updated") || new Date().toISOString()
-    };
-}
+/** Resolves with 'mine' | 'theirs'. */
+function showSyncChoiceModal(mine, theirs, resolve) {
+    const describe = (d) => (d && d.settings && d.settings.apiKey) ? '1 API Key' : '0';
+    document.getElementById("localLastUpdate").textContent =
+        localStorage.getItem("discord_viewer_last_updated") || 'N/A';
+    document.getElementById("localEntryCount").textContent = describe(mine);
+    document.getElementById("serverLastUpdate").textContent = 'N/A';
+    document.getElementById("serverEntryCount").textContent = describe(theirs);
 
-function showSyncChoiceModal(localData, serverData) {
-    document.getElementById("localLastUpdate").textContent = localData.lastUpdated || 'N/A';
-    document.getElementById("localEntryCount").textContent = localData.apiKey ? '1 API Key' : '0';
-    document.getElementById("serverLastUpdate").textContent = serverData.lastUpdated || 'N/A';
-    document.getElementById("serverEntryCount").textContent = serverData.apiKey ? '1 API Key' : '0';
-    
-    window._syncLocalData = localData;
-    window._syncServerData = serverData;
-    
+    window._syncResolve = resolve;
     openModal("syncChoiceModal");
 }
 
-async function resolveSync(choice) {
+/** Wired to the modal's two buttons. 'local' keeps this device, anything else takes the account copy. */
+function resolveSync(choice) {
     closeModal("syncChoiceModal");
-    
-    if (choice === "local") {
-        // Upload local data to server
-        await uploadDataToServer(window._syncLocalData);
-    } else {
-        // Use server data
-        applyServerData(window._syncServerData);
-    }
-    
-    delete window._syncLocalData;
-    delete window._syncServerData;
+    const resolve = window._syncResolve;
+    delete window._syncResolve;
+    if (resolve) resolve(choice === "local" ? 'mine' : 'theirs');
 }
 
-function applyServerData(serverData) {
-    if (serverData.apiKey) {
-        localStorage.setItem(STORAGE_KEY_API_KEY, serverData.apiKey);
-        API_KEY = serverData.apiKey;
-        initApp();
-    }
-}
+/**
+ * The silent-merge notice. Not a dialog — it reports something that has ALREADY
+ * happened, so nothing waits on it and the timeout confirms rather than cancels.
+ *
+ * It floats over the page rather than using the sync panel's #syncStatus line,
+ * because that line lives inside a modal that is closed almost all of the time —
+ * a notice nobody can see is not a notice.
+ */
+function showSyncNotice(message, actions, onDismiss) {
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;bottom:20px;right:20px;max-width:420px;z-index:3000;'
+        + 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;'
+        + 'background:#333;color:#fff;padding:12px 20px;border-radius:4px;'
+        + 'border-left:4px solid #17a2b8;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
 
-async function uploadDataToServer(localData) {
-    if (!authManager || !authManager.isLoggedIn()) return;
-    
-    try {
-        await authManager.fetchWithAuth(authManager.endpoints.data, {
-            method: 'POST',
-            body: JSON.stringify({
-                apiKey: localData.apiKey,
-                lastUpdated: new Date().toISOString()
-            })
-        });
-    } catch (err) {
-        console.error("Failed to upload data:", err);
-    }
+    let settled = false;
+    const settle = (fn) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        box.remove();
+        if (fn) fn();
+    };
+
+    const text = document.createElement('span');
+    text.textContent = message;
+    box.appendChild(text);
+
+    (actions || []).forEach((a) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = a.label;
+        btn.style.cssText = 'background:transparent;color:inherit;border:1px solid currentColor;'
+            + 'border-radius:4px;padding:4px 10px;cursor:pointer;font:inherit;';
+        if (a.primary) btn.style.fontWeight = '600';
+        btn.addEventListener('click', () => settle(a.act));
+        box.appendChild(btn);
+    });
+
+    document.body.appendChild(box);
+    const timer = setTimeout(() => settle(onDismiss), 9000);
 }
 
 // --- Export/Import ---
@@ -439,20 +567,49 @@ function exportAllData() {
     if (statusEl) statusEl.textContent = "Data exported successfully!";
 }
 
+/**
+ * Importing over the top is a WHOLESALE REPLACEMENT, not an edit. Diffing a
+ * replacement against the last synced state turns everything the file does not
+ * contain into a deletion, and every other device applies a deletion without
+ * asking. So it is previewed with diffSummary — which counts what the change
+ * would add, remove and alter WITHOUT applying anything — and published through
+ * replaceAll(), which marks it as a replacement so the other device is ASKED
+ * rather than emptied.
+ */
 function importData(event) {
     const file = event.target.files[0];
     if (!file) return;
-    
+
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
         try {
             const data = JSON.parse(e.target.result);
             if (data.apiKey) {
-                localStorage.setItem(STORAGE_KEY_API_KEY, data.apiKey);
-                API_KEY = data.apiKey;
-                initApp();
-                
+                const incoming = { settings: { apiKey: data.apiKey } };
                 const statusEl = document.getElementById("syncStatus");
+
+                if (syncClient) {
+                    const specs = SyncWip.normaliseCollections(SYNC_COLLECTIONS);
+                    const summary = SyncWip.diffSummary(getLocalData(), incoming, specs);
+                    const removed = summary.totals.removed;
+                    const warning = removed
+                        ? `This will DELETE ${removed} saved value${removed === 1 ? '' : 's'} not in the file. `
+                        : '';
+                    const kept = summary.totals.identical + summary.totals.changed;
+                    if (!confirm(`${warning}Import ${summary.totals.added} new and keep ${kept}. Proceed?`)) return;
+
+                    applyLocalData(incoming);
+                    if (authManager && authManager.isLoggedIn()) {
+                        await syncClient.replaceAll(incoming, {
+                            source: 'import',
+                            removed: removed,
+                            kept: kept,
+                        });
+                    }
+                } else {
+                    applyLocalData(incoming);
+                }
+
                 if (statusEl) statusEl.textContent = "Data imported successfully!";
             }
         } catch (err) {
@@ -516,11 +673,9 @@ function handleApiKeySubmit(e) {
     closeModal("apiKeyModal");
     apiKeyError.textContent = "";
     initApp();
-    
-    // Sync to server if logged in
-    if (authManager && authManager.isLoggedIn()) {
-        uploadDataToServer({ apiKey: API_KEY });
-    }
+
+    // An ordinary edit: it travels as one operation on that one key.
+    if (syncClient) syncClient.flush();
 }
 
 async function initApp() {

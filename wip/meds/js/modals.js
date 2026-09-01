@@ -11,7 +11,21 @@
 
     const todayYmd = () => D.ymd(new Date());
     const nowHm = () => D.hm(new Date());
+
     const uid = p => p + '-' + Date.now() + '-' + Math.floor(Math.random() * 9999);
+
+    /** "just now" / "12 minutes ago" / "3 hours ago" / "2 days ago" */
+    function whenAgo(at) {
+        const ms = Date.now() - (Number(at) || 0);
+        if (!isFinite(ms) || ms < 0) return 'just now';
+        const mins = Math.floor(ms / 60000);
+        if (mins < 1) return 'just now';
+        if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+        const days = Math.floor(hours / 24);
+        return `${days} day${days === 1 ? '' : 's'} ago`;
+    }
 
     // keep default date/time inputs ticking with the real clock until the user
     // touches them — people open the modal, get distracted, and log later
@@ -1414,6 +1428,10 @@
         const render = () => {
             const set = S.state.settings;
             const loggedIn = S.isLoggedIn();
+            // Changes the sync made on its own — a catch-up from the account copy,
+            // a silent merge. Listed here because the toast that announced one is
+            // long gone by the time somebody notices what it did.
+            const syncActions = S.recentSyncActions ? S.recentSyncActions() : [];
             const chip = (group, val, label, cur) => `<button class="chip ${cur === val ? 'active' : ''}" data-set="${group}" data-val="${escapeHtml(String(val))}">${label}</button>`;
             const locs = set.shotLocations || [];
 
@@ -1439,6 +1457,22 @@
                             <button class="chip" data-act="register">Register</button>
                         </div>`}
                 </div>
+
+                ${syncActions.length ? `
+                <div class="setting-block">
+                    <div class="sr-label">Recent sync actions</div>
+                    <div class="sr-sub" style="margin-bottom:8px">Changes sync made on its own. Putting one back asks your other device before anything there changes.</div>
+                    <div class="sync-action-list">
+                        ${syncActions.map(a => `
+                            <div class="sync-action">
+                                <span class="sa-text">
+                                    <span class="sa-msg">${escapeHtml(a.message)}</span>
+                                    <span class="sa-when">${escapeHtml(whenAgo(a.at))}</span>
+                                </span>
+                                <button class="btn small ghost" data-revert="${escapeHtml(a.id)}">Revert</button>
+                            </div>`).join('')}
+                    </div>
+                </div>` : ''}
 
                 <div class="setting-block">
                     <div class="sr-label">Appearance</div>
@@ -1646,6 +1680,21 @@
                     toast(e.message || 'Test failed');
                 }
             });
+            // Putting an automatic change back is itself destructive to the account
+            // copy (it publishes older data), so it is confirmed here — unlike the
+            // Revert on the toast, where the click IS the confirmation because the
+            // change just happened and is still on screen.
+            drawer.querySelectorAll('[data-revert]').forEach(b => b.addEventListener('click', async () => {
+                const id = b.dataset.revert;
+                const entry = (S.recentSyncActions ? S.recentSyncActions() : []).find(a => a.id === id);
+                const ok = await confirmModal(
+                    `Put this device back to how it was before "${entry ? entry.message : 'this change'}"? `
+                    + 'Your other device keeps its own data and will be asked what to do.',
+                    { yesLabel: 'Revert it' });
+                if (!ok) return;
+                await S.revertSyncAction(id);
+                render();
+            }));
             act('[data-act="import-export"]', () => { close(); importExport(); });
             act('[data-act="replay-onboarding"]', () => { close(); window.Onboarding.start(true); });
             act('[data-act="reset"]', async () => {

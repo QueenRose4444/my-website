@@ -190,6 +190,8 @@
                 // deletion travels as a deletion instead of being un-done by the
                 // next union merge.
                 collections: SYNC_COLLECTIONS,
+                // So the sync engine's own sentences say "1 dose", not "1 shot".
+                collectionLabels: COLLECTION_LABELS,
                 // Which med is on screen belongs to this device (normalize() takes
                 // it from the device blob), so it is not a change worth shipping.
                 // Anything else outside SYNC_COLLECTIONS that changes — `version`,
@@ -211,16 +213,41 @@
                 // app just says what happened. The modal below is now only reached
                 // when there is no base to reason from (a first sync, cleared
                 // storage, or a device away past a compaction).
+                //
+                // A CATCH-UP (info.kind === 'catch-up') arrives the same way: the
+                // sync worked out that this device was simply behind — or that the
+                // account copy was — and moved the data without asking. It is
+                // announced rather than asked, with the two actions the client
+                // wanted: Confirm, and Revert. Ignoring the toast is Confirm; the
+                // action already happened and a dismissal must never undo it.
+                // Revert stays available afterwards, in Settings → Recent sync
+                // actions, because a notice you have already dismissed is not a
+                // recovery path.
                 onMerged: (info) => {
                     self.emit('change');
                     if (!window.UI || !window.UI.toast) return;
                     const n = info.changesFromOtherDevice;
-                    let msg = `Merged ${n} change${n === 1 ? '' : 's'} from your other device`;
+                    let msg = info.message || `Merged ${n} change${n === 1 ? '' : 's'} from your other device`;
                     if (info.stats.myEditWon) msg += ` · ${info.stats.myEditWon} kept from this device`;
                     if (info.awaitingDecision) {
                         msg += ` · ${info.awaitingDecision} need${info.awaitingDecision === 1 ? 's' : ''} a decision`;
                     }
-                    window.UI.toast(msg);
+                    if (!info.revertable) {
+                        // Say plainly when it cannot be undone, rather than offering
+                        // a button that does nothing. An upload changed nothing on
+                        // this device, so there is nothing to say about undoing it.
+                        if (info.direction !== 'upload') msg += ' · can\'t be undone on this device';
+                        window.UI.toast(msg);
+                        return;
+                    }
+                    window.UI.toast(msg, '', {
+                        duration: 9000,
+                        actions: [
+                            { label: 'Revert', act: () => self.revertSyncAction(info.actionId) },
+                            { label: 'OK', act: () => info.confirm(), primary: true },
+                        ],
+                        onDismiss: () => info.confirm(),
+                    });
                 },
 
                 // meds has its own conflict modal. It is opened from here rather
@@ -369,6 +396,38 @@
         // Human labels for the sync collections, so the modals do not each invent
         // their own names for the same things.
         collectionLabel(name) { return COLLECTION_LABELS[name] || name; },
+
+        // ---------- automatic sync changes, and putting them back ----------
+        //
+        // Changes NOBODY ASKED FOR — a catch-up from the account copy, a silent
+        // merge — stash the state they replaced first. Settings lists them so a
+        // revert is still reachable after the toast has gone.
+        //
+        // Reverting publishes older data over the account copy, so the sync engine
+        // sends it as a marked wholesale replacement: the other device is asked
+        // rather than emptied. Nothing here can delete another device's data.
+        recentSyncActions() {
+            if (!this.sync || typeof this.sync.recentActions !== 'function') return [];
+            try { return this.sync.recentActions(); } catch (e) { console.error(e); return []; }
+        },
+
+        async revertSyncAction(id) {
+            if (!id || !this.sync || typeof this.sync.revertAction !== 'function') return false;
+            let ok = false;
+            try {
+                ok = await this.sync.revertAction(id);
+            } catch (e) {
+                console.error('Failed to revert a sync action', e);
+                ok = false;
+            }
+            this.emit('change');
+            if (window.UI && window.UI.toast) {
+                window.UI.toast(ok
+                    ? 'Put back — your other device will be asked before it changes'
+                    : 'That change can no longer be undone', ok ? '' : 'error');
+            }
+            return ok;
+        },
 
         // Open the conflict modal at most once. Called from the sync client; also
         // safe for app.js to call after performSync returns 'conflict'.

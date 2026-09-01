@@ -29,14 +29,37 @@ const MONITORS_ENDPOINT = `${NOTIFIER_BACKEND_URL}/api/monitors`;
 /*************************************
  * Global State
  *************************************/
+// monitoredSites belong to the notifier's OWN backend (its own database, its own
+// endpoints above) and are never touched by account sync. discordUsers are this
+// account's saved Discord recipients — a small list, so they live in the shared
+// save-file tier: localStorage here, /api/data/<APP_NAME> on the account.
 let monitoredSites = [];
 let discordUsers = [];
 let countdownIntervals = {};
 let autoRefreshInterval = null;
 let pendingCookieFile = null; // Stores the cookie file for new monitors
 
+// The environment is in the prefix so wip and live can never collide.
+const STORAGE_PREFIX = `${APP_NAME}_${ENVIRONMENT}_`;
+const DISCORD_USERS_KEY = `${STORAGE_PREFIX}discordUsers`;
+
 // --- Auth State (via AuthManagerWip) ---
 let authManager = null; // Will be initialized in DOMContentLoaded
+
+// --- Account sync (via /sync-wip.js) --- created in DOMContentLoaded, see initSync()
+let syncClient = null;
+
+// What the sync engine treats as items. /sync-wip.js knows nothing about Discord
+// users — it is told which field is a collection and how to identify an entry.
+// The Discord snowflake IS the identity, and the page already refuses duplicates.
+// There is no clock on a recipient, so `timestamp` is omitted.
+const SYNC_COLLECTIONS = [
+    { name: 'discordUsers', identity: (u) => u.id },
+];
+
+const COLLECTION_LABELS = {
+    discordUsers: 'Discord recipients',
+};
 
 /***********************
  * DOM Element References
@@ -261,7 +284,11 @@ function updateDisplay() {
     elements.monitorsList.innerHTML = '';
     clearAllCountdowns();
 
-    if (!currentUser) {
+    // Pre-existing bug, fixed 2026-08-14: this read a bare `currentUser` that is
+    // declared nowhere at module scope, so updateDisplay() threw a ReferenceError
+    // on every page load and the monitor list never rendered. The rest of the file
+    // already reads it off the auth manager.
+    if (!authManager || !authManager.currentUser) {
         elements.monitorsList.innerHTML = `<p class="empty-state">Please log in to see your monitors.</p>`;
         return;
     }
@@ -320,40 +347,194 @@ function updateDisplay() {
 }
 
 /********************************
- * Discord User Management (User Data Sync)
- ********************************/
-async function fetchUserData() {
-    if (!authManager || !authManager.isLoggedIn()) return;
+ * Discord User Management (account sync via /sync-wip.js)
+ ********************************
+ * This used to POST the whole list to the unversioned data endpoint — last write
+ * wins, silently, so a recipient added on one device disappeared the next time
+ * the other device saved. The shared module owns the transport, the debounce, the
+ * server-assigned version numbers and the merge now; this page only describes its
+ * own data, and a save ships what CHANGED rather than the whole list.
+ */
+
+/** This browser's copy. The page works fully logged out, exactly like the others. */
+function loadLocalUserData() {
     try {
-        const response = await authManager.fetchWithAuth(authManager.endpoints.data);
-        if (!response.ok) {
-            if (response.status === 404) {
-                console.log("No user data on server yet.");
-                discordUsers = [];
-                return; 
-            }
-            throw new Error('Failed to fetch user data');
-        }
-        const data = await response.json();
-        discordUsers = data.discordUsers || [];
+        const stored = JSON.parse(localStorage.getItem(DISCORD_USERS_KEY) || '[]');
+        discordUsers = Array.isArray(stored) ? stored.filter((u) => u && u.id) : [];
     } catch (error) {
-        console.error("Error fetching user data:", error);
+        console.error("Error loading local Discord users:", error);
+        discordUsers = [];
+    }
+}
+
+function saveLocalUserData() {
+    try {
+        localStorage.setItem(DISCORD_USERS_KEY, JSON.stringify(discordUsers));
+    } catch (error) {
+        console.error("Error saving local Discord users:", error);
+    }
+}
+
+function initSync() {
+    if (!authManager || typeof SyncWip === 'undefined') return;
+    syncClient = new SyncWip.SyncClient({
+        auth: authManager,
+        appName: APP_NAME,
+
+        getState: () => ({ discordUsers }),
+        setState: (s) => {
+            discordUsers = (s && s.discordUsers) || [];
+            saveLocalUserData();
+            renderDiscordUsers();
+        },
+
+        // "Is this blob one of ours?" — guards against another app's data.
+        accept: (raw) => !!raw && typeof raw === 'object' && Array.isArray(raw.discordUsers),
+
+        normalize: (raw) => ({
+            discordUsers: (raw && Array.isArray(raw.discordUsers) ? raw.discordUsers : [])
+                .filter((u) => u && u.id)
+                .map((u) => ({ id: String(u.id), label: u.label || String(u.id) })),
+        }),
+
+        hasData: (s) => !!s && (s.discordUsers || []).length > 0,
+
+        // The operation log. This is the line that turns "both devices changed"
+        // from the user's problem into the engine's problem.
+        collections: SYNC_COLLECTIONS,
+        collectionLabels: COLLECTION_LABELS,
+
+        // Every recipient is real data — there is no view state on this page to
+        // exclude, so the fingerprint is simply the list.
+        canonical: (s) => {
+            if (!s) return null;
+            return JSON.stringify((s.discordUsers || [])
+                .map((u) => [u.id, u.label || ''].join('|'))
+                .sort());
+        },
+
+        // Union both copies, dropping duplicates by id. Only reached on the no-base
+        // fallback path (a first sync, cleared storage), and it cannot lose an entry.
+        merge: (theirs, mine) => {
+            const byId = new Map((theirs.discordUsers || []).map((u) => [u.id, u]));
+            (mine.discordUsers || []).forEach((u) => byId.set(u.id, u));   // mine wins ties
+            return { discordUsers: Array.from(byId.values()) };
+        },
+
+        onStatus: (status) => console.log('[SYNC]', status),
+
+        // Both devices changed something? Not a question for the user: their
+        // changes are applied, mine go on top, and the page says what happened.
+        // Ignoring the notice is confirming it — the action already happened, so a
+        // dismissal must never undo it.
+        onMerged: (info) => {
+            renderDiscordUsers();
+            const n = info.changesFromOtherDevice;
+            let msg = info.message || `Merged ${n} change${n === 1 ? '' : 's'} from your other device`;
+            if (info.stats && info.stats.myEditWon) msg += ` — ${info.stats.myEditWon} kept from this device`;
+            if (info.awaitingDecision) msg += ` — ${info.awaitingDecision} need a decision`;
+
+            if (!info.revertable) {
+                if (info.direction !== 'upload') msg += " — can't be undone on this device";
+                showSyncNotice(msg, []);
+                return;
+            }
+            showSyncNotice(msg, [
+                { label: 'Revert', act: () => info.revert() },
+                { label: 'OK', act: () => info.confirm(), primary: true },
+            ], () => info.confirm());   // dismissing IS confirming
+        },
+
+        // The ONE thing sync will not decide by itself: a recipient removed on one
+        // device and renamed on the other. Asked per entry, AFTER the rest of the
+        // merge is already saved. Cancelling KEEPS the entry — a dismissal must
+        // never destroy.
+        onItemConflict: (info) => {
+            const answers = {};
+            (info.collisions || []).forEach((c) => {
+                const item = c.after || c.before;
+                const name = item ? (item.label || item.id) : c.id;
+                const where = c.deletedOnThisDevice
+                    ? 'You removed this here; your other device edited it'
+                    : 'Removed on your other device; you edited it here';
+                if (confirm(`Remove "${name}"? (${where}.) Cancel keeps it.`)) answers[c.key] = 'delete';
+            });
+            return Object.keys(answers).length ? answers : null;
+        },
+    });
+}
+
+/** After login / session restore. The decision table lives in /sync-wip.js. */
+async function fetchUserData() {
+    if (!syncClient || !authManager || !authManager.isLoggedIn()) {
+        renderDiscordUsers();
+        return;
+    }
+    try {
+        await syncClient.performSync();
+    } catch (error) {
+        console.error("Error syncing Discord users:", error);
     } finally {
         renderDiscordUsers();
     }
 }
 
+/**
+ * An ordinary edit — one recipient added or removed. It travels as that one
+ * operation, so it can never empty the other device's list.
+ */
 async function saveUserData() {
-    if (!authManager || !authManager.isLoggedIn()) return;
+    saveLocalUserData();
+    if (!syncClient || !authManager || !authManager.isLoggedIn()) return;
     try {
-        await authManager.fetchWithAuth(authManager.endpoints.data, {
-            method: 'POST',
-            body: JSON.stringify({ discordUsers: discordUsers })
-        });
+        await syncClient.flush();
     } catch (error) {
-        console.error("Failed to save user data to server:", error);
+        console.error("Failed to save Discord recipients to your account:", error);
         alert("Could not save Discord user list to your account. Please try again.");
     }
+}
+
+/**
+ * The silent-merge notice. Not a dialog — it reports something that has ALREADY
+ * happened, so nothing waits on it and the timeout confirms rather than cancels.
+ *
+ * It floats over the page rather than using the sync panel's #syncStatus line,
+ * because that line lives inside a modal that is closed almost all of the time —
+ * a notice nobody can see is not a notice.
+ */
+function showSyncNotice(message, actions, onDismiss) {
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;bottom:20px;right:20px;max-width:420px;z-index:3000;'
+        + 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;'
+        + 'background:#333;color:#fff;padding:12px 20px;border-radius:4px;'
+        + 'border-left:4px solid #17a2b8;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+
+    let settled = false;
+    const settle = (fn) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        box.remove();
+        if (fn) fn();
+    };
+
+    const text = document.createElement('span');
+    text.textContent = message;
+    box.appendChild(text);
+
+    (actions || []).forEach((a) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = a.label;
+        btn.style.cssText = 'background:transparent;color:inherit;border:1px solid currentColor;'
+            + 'border-radius:4px;padding:4px 10px;cursor:pointer;font:inherit;';
+        if (a.primary) btn.style.fontWeight = '600';
+        btn.addEventListener('click', () => settle(a.act));
+        box.appendChild(btn);
+    });
+
+    document.body.appendChild(box);
+    const timer = setTimeout(() => settle(onDismiss), 9000);
 }
 
 function renderDiscordUsers() {
@@ -666,8 +847,12 @@ async function handleRegister(event) {
 }
 
 async function handleLogout(logoutMessage = null) {
-    monitoredSites = []; 
-    discordUsers = [];
+    // Monitors belong to the notifier backend and are gone without a session.
+    // The recipient list is this browser's own copy, so it is RELOADED rather
+    // than blanked: blanking it would look to the next sync like "every
+    // recipient was deleted here" and take the account's list with it.
+    monitoredSites = [];
+    loadLocalUserData();
     if (logoutMessage) alert(logoutMessage);
     await authManager.logout();
     // Auth events will trigger UI update via listeners
@@ -798,7 +983,8 @@ function setupAuthEventListeners() {
     window.addEventListener('auth:logout', (e) => {
         console.log('[AUTH_EVENT] Logout detected:', e.detail?.message);
         monitoredSites = [];
-        discordUsers = [];
+        // Reload this browser's copy rather than blanking it — see handleLogout().
+        loadLocalUserData();
         updateUIForLoginState();
         updateDisplay();
         renderDiscordUsers();
@@ -823,6 +1009,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.error("AuthManagerWip not loaded! Make sure auth-wip.js is included before this script.");
         return;
     }
+
+    // Local copy first — the page works fully logged out — then the sync client,
+    // which needs both auth and the data model.
+    loadLocalUserData();
+    initSync();
 
     setupEventListeners();
     setupAuthEventListeners();

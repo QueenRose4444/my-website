@@ -1,0 +1,10 @@
+/* MOVED to /shared/tokens.css on 2026-09-01.
+ *
+ * Kept here only because web-sync cannot delete a remote file, so the old URL
+ * would otherwise keep serving a frozen copy of the palette forever. The @import
+ * below means anything still pointing at /tokens.css gets the CURRENT tokens
+ * rather than a snapshot.
+ *
+ * Update your <link> to /shared/tokens.css and this file can go.
+ */
+@import url('/shared/tokens.css');

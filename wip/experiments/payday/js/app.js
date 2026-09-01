@@ -11,7 +11,7 @@
  *************************************/
 // MUST be unique per app. It is the key this app's data is stored under, both on the
 // server (/api/data/<APP_NAME>) and in localStorage.
-const APP_NAME = 'experiments-template';
+const APP_NAME = 'payday';
 
 // 'live' or 'wip'. Picks which backend AuthManagerWip talks to AND namespaces every
 // local key, so a wip page can never scribble over live data.
@@ -20,37 +20,62 @@ const ENVIRONMENT = 'wip';
 const LOGGING_ENABLED = ENVIRONMENT === 'wip';
 function syncLog(...args) {
     if (LOGGING_ENABLED) {
-        console.log('[EXP_LOG]', ...args);
+        console.log('[PAYDAY]', ...args);
     }
 }
 
 /*************************************
  * APPLICATION DATA MODEL
  *************************************
- * Notes carry a stable `id` and an `updatedAt`. Both are required for sync to ship
- * CHANGES rather than the whole blob — no id, no operations.
+ * Every item carries a stable `id` and an `updatedAt`. Both are required for sync
+ * to ship CHANGES rather than the whole blob — no id, no operations.
  *
- * Times are epoch milliseconds, NOT Date objects. State travels through JSON
- * (localStorage, the wire, sync's own fingerprints) and a Date silently becomes a
- * string on the way, so two copies of the same note can stop comparing equal. Store
- * a number; format it at render time.
+ * MONEY IS INTEGER CENTS. Never a float. `0.1 + 0.2 !== 0.3`, and this page sums
+ * dozens of prices; a float error stays invisible until a total is off by a cent
+ * and nobody can explain it. Every money field ends `Cents` so the unit cannot be
+ * forgotten. Convert only at display.
+ *
+ * Times are epoch milliseconds, NOT Date objects — state travels through JSON and a
+ * Date silently becomes a string on the way, so two copies stop comparing equal.
+ * DATES (a purchase date, a pay date) are plain 'YYYY-MM-DD' strings instead,
+ * because cadence arithmetic must happen in local civil time.
  *************************************/
-let userNotes = [];        // [{id, title, body, createdAt, updatedAt}]
-let appPreferences = {};
+let wishlist = [];      // [{id, name, url, priceCents, ..., posNum, posDen, updatedAt}]
+let categories = [];    // [{id, name}]
+let income = [];        // [{id, label, netPerPayCents, cadence, anchorDate, active}]
+let recurring = [];     // [{id, name, amountCents, cadence, anchorDate, essential, endsOn, history}]
+// Imported statement rows, ALREADY SANITISED (D-21/D-22, plans/07-import.md §7).
+// The raw description never reaches this array: only a canonical merchant name and a
+// one-way hash of the original line, which exists solely to spot re-imports.
+let transactions = [];  // [{id, date, amountCents, merchant, categoryId, batchId, dedupe, updatedAt}]
+let batches = [];       // [{id, at, source, format, count, from, to}] — so an import is undoable
+let settings = {};
 
-const defaultPreferences = {
-    autoTag: '',        // data
-    sortBy: 'newest',   // view state: synced, but never a conflict
-    theme: 'dark',      // per device
-    fontSize: 'medium', // per device
+const defaultSettings = {
+    // data
+    currency: 'AUD',
+    // What is in the account right now. The projection starts from this; without
+    // it every date is measured from zero and reads as pessimistic.
+    startBalanceCents: 0,
+    spendLog: [],           // [{at, amountCents, why}] — unplanned spends, for the record
+    // Per-user random salt for the transaction dedupe hash (D-22). Synced, because
+    // the same transaction must hash identically on every device. Without a salt a
+    // rainbow table over common merchant strings would reverse every hash, which
+    // would defeat the point of not storing the raw description.
+    dedupeSalt: '',
+    // view state: synced, but must never count as a data change
+    sortBy: 'manual',
+    // per device
+    view: 'cards',      // 'cards' | 'table'
+    lastView: 'overview',   // which of the three tabs was open
 };
 
-// Preferences that belong to THIS DEVICE. They generate no sync operation and none
-// is ever applied to them, so changing the theme on your phone is not news for your
-// PC. Each device keeps its own copy in the device blob below.
-const DEVICE_PREFS = ['theme', 'fontSize'];
+// Settings that belong to THIS DEVICE. They generate no sync operation and none is
+// ever applied to them, so switching to table view on your phone is not news for
+// your PC.
+const DEVICE_PREFS = ['view', 'lastView'];
 
-// The above PLUS preferences that do sync but must never register as a data change.
+// The above PLUS settings that do sync but must never register as a data change.
 // Only this second list is used by getCanonicalString().
 const VIEW_ONLY_PREFS = DEVICE_PREFS.concat(['sortBy']);
 
@@ -58,28 +83,45 @@ const VIEW_ONLY_PREFS = DEVICE_PREFS.concat(['sortBy']);
 const STORAGE_PREFIX = `${APP_NAME}_${ENVIRONMENT}_`;
 const DEVICE_STORAGE_KEY = `${STORAGE_PREFIX}device`;
 
-// What the sync engine treats as items. /sync-wip.js knows nothing about notes — it
-// is told which fields are collections, how to identify an item, and (where one
-// exists) which clock the item carries.
-//
-//   identity(item)  REQUIRED for an array collection. A missing identity, or two
-//                   items claiming the same one, makes the collection unkeyable and
-//                   the engine falls back to whole-state saves — correct, just coarse.
-//   timestamp(item) optional; orders operations within a push so the stored log reads
-//                   as history. Omit it where the data has no clock.
-//   kind: 'map'     a key/value section (preferences, a profile) rather than a list.
-//   ignore          map keys this device keeps to itself.
+// What the sync engine treats as items. Declaring these is what turns saves into
+// add/edit/delete OPERATIONS instead of whole-blob overwrites — without them you
+// lose per-item merge, the containment catch-up and the bulk-delete guards.
 const SYNC_COLLECTIONS = [
-    { name: 'userNotes', identity: (n) => n.id, timestamp: (n) => n.updatedAt },
-    { name: 'appPreferences', kind: 'map', ignore: DEVICE_PREFS },
+    { name: 'wishlist', identity: (i) => i.id, timestamp: (i) => i.updatedAt },
+    { name: 'categories', identity: (c) => c.id },
+    { name: 'income', identity: (i) => i.id, timestamp: (i) => i.updatedAt },
+    { name: 'recurring', identity: (r) => r.id, timestamp: (r) => r.updatedAt },
+    // Transactions are append-mostly and can run to thousands of rows. Declaring them
+    // as a collection is what keeps a save shipping the new batch rather than the
+    // whole ledger every time.
+    { name: 'transactions', identity: (t) => t.id, timestamp: (t) => t.updatedAt },
+    { name: 'batches', identity: (b) => b.id },
+    { name: 'settings', kind: 'map', ignore: DEVICE_PREFS },
 ];
 
-// Wire name -> what a person is shown, used in the sentences sync writes for itself
-// ("2 notes added"). Only needed where the two differ.
 const COLLECTION_LABELS = {
-    userNotes: 'notes',
-    appPreferences: 'preferences',
+    wishlist: 'items',
+    categories: 'categories',
+    income: 'income sources',
+    recurring: 'subscriptions',
+    transactions: 'transactions',
+    batches: 'imports',
+    settings: 'settings',
 };
+
+/*************************************
+ * STATUSES
+ *************************************/
+const STATUSES = [
+    { id: 'wanted',  label: 'Wanted' },
+    { id: 'saving',  label: 'Saving for' },
+    { id: 'ordered', label: 'Ordered' },
+    { id: 'bought',  label: 'Bought' },
+    // `parked` exists so an item can be kept and costed WITHOUT blocking the queue.
+    // Without it the only way to stop something blocking is to delete it.
+    { id: 'parked',  label: 'Parked' },
+    { id: 'dropped', label: 'Dropped' },
+];
 
 /*************************************
  * AUTHENTICATION SETUP
@@ -173,24 +215,126 @@ function getElements() {
  * server download, imported file — so one place decides what a valid state looks like.
  */
 function normalizeState(raw) {
-    const notes = (raw && Array.isArray(raw.userNotes) ? raw.userNotes : [])
-        .filter((n) => n && n.id)
-        .map((n) => Object.assign({}, n, {
-            // Tolerate older copies that stored ISO strings.
-            createdAt: Number(new Date(n.createdAt || 0)) || 0,
-            updatedAt: Number(new Date(n.updatedAt || n.createdAt || 0)) || 0,
+    const cats = (raw && Array.isArray(raw.categories) ? raw.categories : [])
+        .filter((c) => c && c.id)
+        .map((c) => ({ id: c.id, name: String(c.name || 'Untitled') }));
+
+    let items = (raw && Array.isArray(raw.wishlist) ? raw.wishlist : [])
+        .filter((i) => i && i.id)
+        .map((i) => ({
+            id: i.id,
+            name: String(i.name || ''),
+            url: i.url || '',
+            imageUrl: i.imageUrl || '',
+            // Money is integer cents. Coerce defensively: a copy written by an older
+            // build, or hand-edited, must not put a float into the ledger.
+            priceCents: Math.round(Number(i.priceCents) || 0),
+            targetPriceCents: i.targetPriceCents == null ? null : Math.round(Number(i.targetPriceCents) || 0),
+            usedPriceCents: i.usedPriceCents == null ? null : Math.round(Number(i.usedPriceCents) || 0),
+            cur: i.cur || 'AUD',
+            priceSource: i.priceSource || 'manual',
+            priceCheckedAt: Number(i.priceCheckedAt) || null,
+            categoryId: i.categoryId || null,
+            status: STATUSES.some((st) => st.id === i.status) ? i.status : 'wanted',
+            workUsePct: Math.max(0, Math.min(100, Math.round(Number(i.workUsePct) || 0))),
+            notes: i.notes || '',
+            why: i.why || '',
+            dependsOn: Array.isArray(i.dependsOn) ? i.dependsOn.filter((d) => d !== i.id) : [],
+            allocatedCents: Math.round(Number(i.allocatedCents) || 0),
+            // Manual order as a RATIONAL, not a float — see Money.js. Anything without
+            // a position goes to the end rather than silently to the front.
+            posNum: Number.isFinite(Number(i.posNum)) ? Number(i.posNum) : null,
+            posDen: Number(i.posDen) > 0 ? Number(i.posDen) : 1,
+            createdAt: Number(new Date(i.createdAt || 0)) || 0,
+            updatedAt: Number(new Date(i.updatedAt || i.createdAt || 0)) || 0,
         }));
 
-    const prefs = Object.assign({}, defaultPreferences, (raw && raw.appPreferences) || {});
-    // Device-only preferences never come from synced data: reset them, then overlay
-    // whatever THIS device last used.
-    DEVICE_PREFS.forEach((k) => { prefs[k] = defaultPreferences[k]; });
+    // Backfill any missing positions at the end, preserving existing order.
+    let nextPos = items.reduce((m, i) => Math.max(m, i.posNum == null ? 0 : i.posNum / i.posDen), 0);
+    items.forEach((i) => { if (i.posNum == null) { i.posNum = ++nextPos; i.posDen = 1; } });
+
+    const CADENCES = ['weekly', 'fortnightly', 'four_weekly', 'monthly', 'quarterly', 'annual'];
+    const isDate = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
+
+    const inc = (raw && Array.isArray(raw.income) ? raw.income : [])
+        .filter((i) => i && i.id)
+        .map((i) => ({
+            id: i.id,
+            label: String(i.label || 'Pay'),
+            // NET, not gross. Rose's build order (D-25) puts tax LAST, so the
+            // timeline must work from the take-home figure the user types. When the
+            // tax module lands it OFFERS to derive this from gross; it never requires it.
+            netPerPayCents: Math.round(Number(i.netPerPayCents) || 0),
+            cadence: CADENCES.indexOf(i.cadence) >= 0 ? i.cadence : 'fortnightly',
+            anchorDate: isDate(i.anchorDate) ? i.anchorDate : null,
+            active: i.active !== false,
+            updatedAt: Number(i.updatedAt) || 0,
+        }))
+        .filter((i) => i.anchorDate);
+
+    const rec = (raw && Array.isArray(raw.recurring) ? raw.recurring : [])
+        .filter((r) => r && r.id)
+        .map((r) => ({
+            id: r.id,
+            name: String(r.name || 'Cost'),
+            amountCents: Math.round(Number(r.amountCents) || 0),
+            cadence: CADENCES.indexOf(r.cadence) >= 0 ? r.cadence : 'monthly',
+            anchorDate: isDate(r.anchorDate) ? r.anchorDate : null,
+            categoryId: r.categoryId || null,
+            essential: !!r.essential,
+            // A what-if cost is NOT taken out of the money. It exists only so payday
+            // can show what adding it WOULD do — see the What-if panel.
+            whatIf: !!r.whatIf,
+            workUsePct: Math.max(0, Math.min(100, Math.round(Number(r.workUsePct) || 0))),
+            endsOn: isDate(r.endsOn) ? r.endsOn : null,
+            history: Array.isArray(r.history) ? r.history.filter((h) => h && isDate(h.fromDate)) : [],
+            active: r.active !== false,
+            updatedAt: Number(r.updatedAt) || 0,
+        }))
+        .filter((r) => r.anchorDate);
+
+    // Statement rows. Anything without a valid date or a finite amount is dropped
+    // rather than repaired — a transaction with a guessed date is worse than none at
+    // all, because it silently moves money into the wrong month.
+    const txns = (raw && Array.isArray(raw.transactions) ? raw.transactions : [])
+        .filter((t) => t && t.id && isDate(t.date) && Number.isFinite(Number(t.amountCents)))
+        .map((t) => ({
+            id: t.id,
+            date: t.date,
+            // Negative is money out, positive is money in. The sign convention is
+            // normalised at import so nothing downstream needs to know which bank
+            // the file came from.
+            amountCents: Math.round(Number(t.amountCents)),
+            merchant: String(t.merchant || 'Unknown'),
+            categoryId: t.categoryId || null,
+            batchId: t.batchId || null,
+            // A hash of the ORIGINAL line (D-22). Not reversible, never displayed.
+            dedupe: String(t.dedupe || ''),
+            note: t.note || '',
+            updatedAt: Number(t.updatedAt) || 0,
+        }));
+
+    const bats = (raw && Array.isArray(raw.batches) ? raw.batches : [])
+        .filter((b) => b && b.id)
+        .map((b) => ({
+            id: b.id,
+            at: Number(b.at) || 0,
+            source: String(b.source || 'file'),
+            format: String(b.format || 'csv'),
+            count: Math.max(0, Math.round(Number(b.count) || 0)),
+            from: isDate(b.from) ? b.from : null,
+            to: isDate(b.to) ? b.to : null,
+        }));
+
+    const st = Object.assign({}, defaultSettings, (raw && raw.settings) || {});
+    DEVICE_PREFS.forEach((k) => { st[k] = defaultSettings[k]; });
     try {
         const dev = JSON.parse(localStorage.getItem(DEVICE_STORAGE_KEY) || 'null');
-        if (dev) DEVICE_PREFS.forEach((k) => { if (dev[k] != null) prefs[k] = dev[k]; });
+        if (dev) DEVICE_PREFS.forEach((k) => { if (dev[k] != null) st[k] = dev[k]; });
     } catch (e) { /* a corrupt device blob is not worth failing over */ }
 
-    return { userNotes: notes, appPreferences: prefs };
+    return { wishlist: items, categories: cats, income: inc, recurring: rec,
+             transactions: txns, batches: bats, settings: st };
 }
 
 function loadLocalData() {
@@ -198,25 +342,38 @@ function loadLocalData() {
     let raw = null;
     try {
         raw = {
-            userNotes: JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}userNotes`) || "[]"),
-            appPreferences: JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}appPreferences`) || "{}"),
+            wishlist: JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}wishlist`) || "[]"),
+            categories: JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}categories`) || "[]"),
+            income: JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}income`) || "[]"),
+            recurring: JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}recurring`) || "[]"),
+            transactions: JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}transactions`) || "[]"),
+            batches: JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}batches`) || "[]"),
+            settings: JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}settings`) || "{}"),
         };
     } catch (e) {
         console.error("Error loading local data:", e);
     }
     const state = normalizeState(raw);
-    userNotes = state.userNotes;
-    appPreferences = state.appPreferences;
+    wishlist = state.wishlist;
+    categories = state.categories;
+    income = state.income;
+    recurring = state.recurring;
+    transactions = state.transactions;
+    batches = state.batches;
+    settings = state.settings;
 }
 
 function saveLocalData() {
     try {
-        localStorage.setItem(`${STORAGE_PREFIX}userNotes`, JSON.stringify(userNotes));
-        localStorage.setItem(`${STORAGE_PREFIX}appPreferences`, JSON.stringify(appPreferences));
-        // Device preferences live in their own blob so a phone and a PC do not fight
-        // over view state through account sync.
+        localStorage.setItem(`${STORAGE_PREFIX}wishlist`, JSON.stringify(wishlist));
+        localStorage.setItem(`${STORAGE_PREFIX}categories`, JSON.stringify(categories));
+        localStorage.setItem(`${STORAGE_PREFIX}income`, JSON.stringify(income));
+        localStorage.setItem(`${STORAGE_PREFIX}recurring`, JSON.stringify(recurring));
+        localStorage.setItem(`${STORAGE_PREFIX}transactions`, JSON.stringify(transactions));
+        localStorage.setItem(`${STORAGE_PREFIX}batches`, JSON.stringify(batches));
+        localStorage.setItem(`${STORAGE_PREFIX}settings`, JSON.stringify(settings));
         const dev = {};
-        DEVICE_PREFS.forEach((k) => { dev[k] = appPreferences[k]; });
+        DEVICE_PREFS.forEach((k) => { dev[k] = settings[k]; });
         localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify(dev));
     } catch (e) {
         console.error("Error saving local data:", e);
@@ -250,21 +407,26 @@ function initSync() {
 
         // This page keeps its state in two variables, so the adapter joins them into
         // one object for the server and splits it again on the way back.
-        getState: () => ({ userNotes, appPreferences }),
+        getState: () => ({ wishlist, categories, income, recurring, transactions, batches, settings }),
         setState: (s) => {
-            userNotes = s.userNotes;
-            appPreferences = s.appPreferences;
+            wishlist = s.wishlist;
+            categories = s.categories;
+            income = s.income;
+            recurring = s.recurring;
+            transactions = s.transactions;
+            batches = s.batches;
+            settings = s.settings;
             saveLocalData();
             updateDisplay();
         },
 
         // "Is this blob one of ours?" — guards against another app's data.
         accept: (raw) => !!raw && typeof raw === 'object'
-            && ('userNotes' in raw || 'appPreferences' in raw),
+            && ('wishlist' in raw || 'categories' in raw),
 
         normalize: (raw) => normalizeState(raw),
 
-        hasData: (s) => !!s && (s.userNotes || []).length > 0,
+        hasData: (s) => !!s && ((s.wishlist || []).length > 0 || (s.categories || []).length > 0),
 
         // The operation log. This is the line that turns conflicts from the user's
         // problem into the engine's problem — see SYNC_COLLECTIONS above.
@@ -272,7 +434,7 @@ function initSync() {
         collectionLabels: COLLECTION_LABELS,
 
         // This page has no top-level field belonging to a single device. If it gains
-        // one (which note is open, a scroll position), list it in `ignoreKeys` so it
+        // one (which item is open, a scroll position), list it in `ignoreKeys` so it
         // neither travels nor forces an unnecessary whole-state save.
 
         // CUSTOMISE: the conflict fingerprint. Anything left OUT still syncs, it just
@@ -282,13 +444,16 @@ function initSync() {
 
         // CUSTOMISE: union both copies, dropping duplicates. Only reached on the
         // no-base fallback path (a first sync, cleared storage), but where a page can
-        // do this "merge both" is the resolution to recommend — it cannot lose a note.
+        // do this "merge both" is the resolution to recommend — it cannot lose an item.
         merge: (theirs, mine) => {
-            const byId = new Map((theirs.userNotes || []).map((n) => [n.id, n]));
-            (mine.userNotes || []).forEach((n) => byId.set(n.id, n));   // mine wins ties
+            const byId = new Map((theirs.wishlist || []).map((i) => [i.id, i]));
+            (mine.wishlist || []).forEach((i) => byId.set(i.id, i));   // mine wins ties
+            const catById = new Map((theirs.categories || []).map((c) => [c.id, c]));
+            (mine.categories || []).forEach((c) => catById.set(c.id, c));
             return {
-                userNotes: Array.from(byId.values()),
-                appPreferences: Object.assign({}, theirs.appPreferences, mine.appPreferences),
+                wishlist: Array.from(byId.values()),
+                categories: Array.from(catById.values()),
+                settings: Object.assign({}, theirs.settings, mine.settings),
             };
         },
 
@@ -325,13 +490,13 @@ function initSync() {
             ], () => info.confirm());   // dismissing IS confirming
         },
 
-        // The ONE thing sync will not decide by itself: a note deleted on one device
-        // and edited on the other. Raised per note, AFTER the rest of the merge has
+        // The ONE thing sync will not decide by itself: an item deleted on one device
+        // and edited on the other. Raised per item, AFTER the rest of the merge has
         // already been saved, so nothing is waiting on the answer.
         //
-        // Answer with {[collision.key]: 'delete'} for the notes to remove. Anything
+        // Answer with {[collision.key]: 'delete'} for the items to remove. Anything
         // not named — a dismissal, a closed tab, a page with no UI for this — KEEPS
-        // the note. A dismissal must never destroy.
+        // the item. A dismissal must never destroy.
         onItemConflict: (info) => showItemConflictModal(info.collisions),
 
         // The old two-way prompt. Now only reached when there is no base to reason
@@ -371,29 +536,35 @@ async function saveBackendData() {
 function getCanonicalString(dataSet) {
     if (!dataSet) return null;
 
-    const notes = (dataSet.userNotes || [])
-        .map((n) => [n.id, n.title || '', n.body || ''].join('|'))
+    // Position is deliberately EXCLUDED. Reordering is a real change that syncs, but
+    // it must not make two copies read as a data conflict — otherwise every drag
+    // raises a prompt.
+    const items = (dataSet.wishlist || [])
+        .map((i) => [i.id, i.name || '', i.priceCents || 0, i.status || '', i.categoryId || ''].join('|'))
         .sort();
 
-    const prefs = Object.keys(defaultPreferences)
+    const cats = (dataSet.categories || []).map((c) => `${c.id}|${c.name}`).sort();
+
+    const st = Object.keys(defaultSettings)
         .filter((k) => VIEW_ONLY_PREFS.indexOf(k) === -1)
         .sort()
         .map((k) => {
-            const v = (dataSet.appPreferences || {})[k];
+            const v = (dataSet.settings || {})[k];
             return k + '=' + JSON.stringify(v != null ? v : null);
         });
 
-    return JSON.stringify({ notes, prefs });
+    return JSON.stringify({ items, cats, st });
 }
 
 /** CUSTOMISE: a one-line human description of a copy, for the conflict modal. */
 function generateDataSummary(dataSet) {
-    if (!dataSet) return { lastUpdate: null, entryCount: '0 notes' };
-    const notes = dataSet.userNotes || [];
-    const newest = notes.reduce((max, n) => Math.max(max, n.updatedAt || 0), 0);
+    if (!dataSet) return { lastUpdate: null, entryCount: '0 items' };
+    const items = dataSet.wishlist || [];
+    const newest = items.reduce((max, i) => Math.max(max, i.updatedAt || 0), 0);
+    const total = items.reduce((sum, i) => sum + (i.priceCents || 0), 0);
     return {
         lastUpdate: newest ? new Date(newest) : null,
-        entryCount: `${notes.length} note${notes.length === 1 ? '' : 's'}`,
+        entryCount: `${items.length} item${items.length === 1 ? '' : 's'}, ${Money.format(total)}`,
     };
 }
 
@@ -432,7 +603,8 @@ function showSyncNotice(message, actions, onDismiss) {
 /** CUSTOMISE: how one of your items is named in the delete-vs-edit prompt. */
 function describeItem(collection, item) {
     if (item == null) return '(no longer on this device)';
-    if (collection === 'userNotes') return item.title || item.body || `note ${item.id}`;
+    if (collection === 'wishlist') return item.name || `item ${item.id}`;
+    if (collection === 'categories') return item.name || `category ${item.id}`;
     return JSON.stringify(item);
 }
 
@@ -550,8 +722,12 @@ async function performDataSync() {
  * UI Update
  *******************************/
 function updateDisplay() {
-    // Render your experiment here.
-    syncLog("UI updated. Notes:", userNotes.length);
+    // Wishlist owns its own rendering; app.js owns auth, sync and the modals.
+    if (window.Wishlist) window.Wishlist.render();
+    if (window.Budget) window.Budget.render();
+    if (window.Views) window.Views.render();
+    if (window.Spending) window.Spending.render();
+    syncLog("UI updated. Items:", wishlist.length);
 }
 
 function updateUIForLoginState() {
@@ -568,7 +744,9 @@ function updateUIForLoginState() {
     // The username is a DISPLAY LABEL only — changeable, and it may collide. The
     // identity is the UUID: authManager.userUuid() (the token's `sub`).
     elements.userStatus.textContent = isLoggedIn ? `Logged in: ${user?.username}` : 'Not logged in (Local)';
-    elements.userStatus.style.color = isLoggedIn ? '#4bc0c0' : '#ccc';
+    // A token, not a hex. The template's hard-coded #4bc0c0/#ccc survive a theme
+    // change and go muddy against the light background.
+    elements.userStatus.classList.toggle('is-live', isLoggedIn);
 
     if (elements.changePasswordButton) {
         elements.changePasswordButton.style.display = isLoggedIn ? 'inline-block' : 'none';
@@ -589,7 +767,7 @@ function showSyncStatus(message, type = "info") {
 }
 
 function exportDataToFile() {
-    const dataToExport = { userNotes, appPreferences };
+    const dataToExport = { wishlist, categories, income, recurring, settings };
     const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -619,7 +797,7 @@ function importDataFromFile(event) {
     reader.onload = async (e) => {
         try {
             const parsed = JSON.parse(e.target.result);
-            if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.userNotes)) {
+            if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.wishlist)) {
                 throw new Error("Invalid file format");
             }
 
@@ -629,20 +807,28 @@ function importDataFromFile(event) {
             // would add, remove and alter without applying anything — "this will
             // delete 84 notes" is the sentence that prevents the accident.
             const specs = SyncWip.normaliseCollections(SYNC_COLLECTIONS);
-            const summary = SyncWip.diffSummary({ userNotes, appPreferences }, incoming, specs);
+            const summary = SyncWip.diffSummary({ wishlist, categories, income, recurring, settings }, incoming, specs);
             const warning = summary.totals.removed
                 ? `This will DELETE ${summary.totals.removed} entr${summary.totals.removed === 1 ? 'y' : 'ies'} not in the file. `
                 : '';
-            if (!confirm(`${warning}Import ${summary.totals.added} new and keep ${summary.totals.identical + summary.totals.changed}. Proceed?`)) return;
+            const proceed = await UI.confirm({
+                title: 'Import this file?',
+                body: `${warning}It adds ${summary.totals.added} new and keeps ${summary.totals.identical + summary.totals.changed}.`,
+                okLabel: 'Import', danger: !!warning,
+            });
+            if (!proceed) return;
 
-            userNotes = incoming.userNotes;
-            appPreferences = incoming.appPreferences;
+            wishlist = incoming.wishlist;
+            categories = incoming.categories;
+            income = incoming.income;
+            recurring = incoming.recurring;
+            settings = incoming.settings;
             saveLocalData();
             updateDisplay();
             showSyncStatus("Import successful!", "success");
 
             if (authManager.isLoggedIn()) {
-                await syncClient.replaceAll({ userNotes, appPreferences }, {
+                await syncClient.replaceAll({ wishlist, categories, income, recurring, settings }, {
                     source: 'import',
                     removed: summary.totals.removed,
                     kept: summary.totals.identical + summary.totals.changed,
@@ -698,7 +884,11 @@ function setupEventListeners() {
             // account WITHOUT one has no recovery path. Show result.recoveryWarning at
             // signup rather than letting that be discovered after a forgotten password.
             const result = await authManager.register(user, pass);
-            alert(result.recoveryWarning || "Registration successful! Please log in.");
+                await UI.confirm({
+                    title: 'Account created',
+                    body: result.recoveryWarning || 'You can log in now.',
+                    okLabel: 'Got it', cancelLabel: '',
+                });
             elements.registerModal.style.display = 'none';
             elements.loginModal.style.display = 'block';
             elements.loginUsername.value = user;

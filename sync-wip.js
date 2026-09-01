@@ -28,6 +28,28 @@
 //                              with a count reported afterwards ("merged 3 changes
 //                              from your other device")
 //
+// ── the sync with no base at all ─────────────────────────────────────────────
+// All of the above needs a base. The FIRST sync on a device has none, and that is
+// exactly where a prompt is least welcome. A second real case: both devices had
+// imported a backup, so neither had a base, and the fallback asked
+//
+//     This device : 1165 doses, 92 weights
+//     Your account: 1166 doses, 95 weights
+//
+// The device's entries were a strict subset of the account's — it was behind, and
+// nothing had diverged. So before falling back, CONTAINMENT is checked: if every
+// entry on one side is present and identical on the other, the side that is behind
+// catches up silently and is simply told what moved. Anything else — a shared id
+// holding different content, a collection that will not key, a genuine divergence
+// — falls through to the prompt untouched. See `containment` below.
+//
+// ── putting an automatic change back ─────────────────────────────────────────
+// A change nobody asked for is revertable. Before a catch-up or a silent merge,
+// the state it replaces is stashed (UNDO_LIMIT of them), the notice offers Revert
+// as well as Confirm, and the list survives the notice so settings can offer it
+// later. Reverting publishes OLDER data, so it travels as a marked wholesale
+// replacement — never as per-item deletions.
+//
 // ── the model ────────────────────────────────────────────────────────────────
 // Each server version records WHAT CHANGED and, periodically, the FULL STATE after:
 //
@@ -110,6 +132,26 @@
    */
   var BULK_DELETE_FRACTION = 0.25;
   var BULK_DELETE_MIN_ITEMS = 20;
+
+  /* ───────────────────── how far back an automatic change can be undone ─────────────────────
+   *
+   * Anything this module does to a device's data WITHOUT being asked — a silent
+   * catch-up, a silent merge — stashes the state it replaced first, so the person
+   * can put it back. Three is deliberate:
+   *
+   *   it is a stack, not a history. The question a person actually asks is "what
+   *   did that last sync just do to my data?", and that is answered by the newest
+   *   entry or two. Ten would be a filing cabinet nobody opens.
+   *   it is a whole copy of the state EACH. For meds that is a few hundred KB, so
+   *   three is comfortable inside localStorage and thirty would not be.
+   *
+   * A stash that will not store (quota) is not an error: the action still happens,
+   * it is simply reported as not revertable. Never fail a sync over an undo copy.
+   */
+  var UNDO_LIMIT = 3;
+
+  /** Format tag on the stashed states. A bump invalidates old stashes safely. */
+  var UNDO_FORMAT = 1;
 
   /** The most entries one sync may remove from a collection without asking. */
   function bulkDeleteThreshold(collectionSize) {
@@ -459,6 +501,156 @@
     return out;
   }
 
+  /* ─────────────────── containment: the question that needs no base ───────────────────
+   *
+   * Everything above needs a BASE — this device's state as of its last sync. On the
+   * FIRST sync of a device there is none, and the fallback below asks the user to
+   * compare two columns of numbers:
+   *
+   *     This device : 1165 doses, 92 weights
+   *     Your account: 1166 doses, 95 weights
+   *
+   * That question did not need asking. Every entry on the device was also on the
+   * account copy, byte for byte. The device was merely behind; nothing diverged, so
+   * there was nothing to decide.
+   *
+   * So before falling back to the prompt, ask something that needs no base: is one
+   * side's data WHOLLY CONTAINED in the other's?
+   *
+   *   local ⊆ server   this device is behind        → download, silently
+   *   server ⊆ local   the account copy is behind   → upload, silently
+   *   neither          they genuinely diverged      → the prompt, unchanged
+   *
+   * CONTAINMENT IS BY CONTENT, NOT BY ID. Two entries can share an id and hold
+   * different things. That is a divergence, and it falls through to the prompt:
+   * "contained" means every entry is present AND identical, never merely that the
+   * ids all appear.
+   *
+   * Both directions are purely ADDITIVE — the side that is behind only ever gains
+   * entries, and nothing is removed anywhere. That is why this path needs no
+   * bulk-delete guard and cannot lose data. What it cannot know, having no base, is
+   * WHY an entry is missing on one side: because it is new over there, or because
+   * somebody deleted it here and never pushed. Nothing without a base can know
+   * that, and re-adding is the non-destructive reading of it — the same one the
+   * union merge below has always taken, just without stopping to ask.
+   */
+
+  /**
+   * Is one side contained in the other?
+   *
+   * Returns {direction:'behind'|'ahead'|'equal', collections, toLocal, toServer},
+   * or NULL for "cannot say" — no collections, a collection that will not key, a
+   * shared id whose content differs, an undeclared field that differs, or a real
+   * divergence. Every null lands on the existing prompt, which is always correct.
+   */
+  function containment(mine, theirs, specs, ignoreKeys) {
+    if (!specs || !specs.length) return null;                       // never guess
+    if (!mine || typeof mine !== 'object' || Array.isArray(mine)) return null;
+    if (!theirs || typeof theirs !== 'object' || Array.isArray(theirs)) return null;
+
+    var onlyMine = 0, onlyTheirs = 0;
+    var rows = [];
+
+    for (var i = 0; i < specs.length; i++) {
+      var spec = specs[i];
+      var r = spec.kind === 'map'
+        ? containedMap(spec, mine[spec.name], theirs[spec.name])
+        : containedArray(spec, mine[spec.name], theirs[spec.name]);
+      if (!r) return null;
+      onlyMine += r.onlyMine;
+      onlyTheirs += r.onlyTheirs;
+      rows.push({ name: spec.name, kind: spec.kind, toLocal: r.onlyTheirs, toServer: r.onlyMine });
+    }
+
+    // A field the page never declared cannot be reasoned about entry by entry, so
+    // a difference in one is not a containment — it is two states that disagree.
+    if (!restUnchanged(mine, theirs, specs, ignoreKeys || [])) return null;
+
+    if (onlyMine && onlyTheirs) return null;                        // genuinely diverged
+    return {
+      direction: onlyTheirs ? 'behind' : (onlyMine ? 'ahead' : 'equal'),
+      collections: rows,
+      toLocal: onlyTheirs,
+      toServer: onlyMine,
+    };
+  }
+
+  function containedArray(spec, mineRaw, theirsRaw) {
+    if (mineRaw != null && !Array.isArray(mineRaw)) return null;
+    if (theirsRaw != null && !Array.isArray(theirsRaw)) return null;
+    var a = indexByIdentity(spec, mineRaw || []);
+    var b = indexByIdentity(spec, theirsRaw || []);
+    if (!a || !b) return null;              // will not key: no containment check at all
+    var onlyMine = 0, onlyTheirs = 0;
+    for (var i = 0; i < a.order.length; i++) {
+      var id = a.order[i];
+      var theirItem = b.map[id];
+      if (theirItem === undefined) onlyMine += 1;
+      else if (!sameItem(spec, a.map[id], theirItem)) return null;  // same id, different content
+    }
+    for (var j = 0; j < b.order.length; j++) {
+      if (a.map[b.order[j]] === undefined) onlyTheirs += 1;
+    }
+    return { onlyMine: onlyMine, onlyTheirs: onlyTheirs };
+  }
+
+  /**
+   * A MAP collection (settings, user profile) is contained on exactly the same
+   * terms as an array: a subset BY KEY whose shared keys are identical. A shared
+   * key holding two different values is a divergence like any other, and goes to
+   * the prompt. Keys the page marked device-local are skipped entirely — they
+   * never travel, so they can neither contain nor diverge.
+   */
+  function containedMap(spec, mineRaw, theirsRaw) {
+    if (mineRaw != null && (typeof mineRaw !== 'object' || Array.isArray(mineRaw))) return null;
+    if (theirsRaw != null && (typeof theirsRaw !== 'object' || Array.isArray(theirsRaw))) return null;
+    var m = mineRaw || {};
+    var t = theirsRaw || {};
+    var onlyMine = 0, onlyTheirs = 0;
+    var keys = Object.keys(m);
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      if (spec.ignore.indexOf(k) !== -1) continue;
+      if (!(k in t)) { onlyMine += 1; continue; }
+      if (stableStringify(m[k]) !== stableStringify(t[k])) return null;
+    }
+    var theirKeys = Object.keys(t);
+    for (var j = 0; j < theirKeys.length; j++) {
+      var tk = theirKeys[j];
+      if (spec.ignore.indexOf(tk) !== -1) continue;
+      if (!(tk in m)) onlyTheirs += 1;
+    }
+    return { onlyMine: onlyMine, onlyTheirs: onlyTheirs };
+  }
+
+  /* ─────────────────── naming a collection out loud ─────────────────── */
+
+  /**
+   * "doses", not "shots". A page hands over its own labels (meds has had a
+   * COLLECTION_LABELS map for the import preview since before this existed); the
+   * wire name is the fallback, never a guess at a nicer one.
+   *
+   * "1 dose" from "doses" is the only cleverness here, and it is deliberately
+   * shallow: strip a plural -s, and -es only where the stem could not have ended
+   * in one (boxes, dishes, churches). "doses" and "sizes" are therefore dose + s,
+   * which is right far more often in this kind of data than bus + es. A page with
+   * an irregular plural passes {one, other} and none of this runs.
+   */
+  function singularise(word) {
+    if (/(xes|ches|shes)$/.test(word)) return word.slice(0, -2);
+    if (/[^aeiou]ies$/.test(word)) return word.slice(0, -3) + 'y';
+    if (/ss$/.test(word)) return word;
+    if (/s$/.test(word)) return word.slice(0, -1);
+    return word;
+  }
+
+  /** "1 dose, 2 weights and 3 medications" */
+  function joinParts(parts) {
+    if (!parts.length) return '';
+    if (parts.length === 1) return parts[0];
+    return parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1];
+  }
+
   /** Apply one operation in place. Returns false when it was ignored. */
   function applyOp(state, op, specsByName) {
     if (!state || !op) return false;
@@ -535,9 +727,17 @@
    * @param {Array<{name:string, kind?:'array'|'map', identity?:(item:any)=>string,
    *                timestamp?:(item:any)=>number, equal?:(a,b)=>boolean,
    *                ignore?:string[]}>} [options.collections]
+   * @param {Record<string, string|{one:string,other:string}>} [options.collectionLabels]
+   *        What to call a collection out loud — {shots:'doses'}. Only used for the
+   *        sentences this module writes; the wire name is the fallback.
    * @param {(info:object)=>void} [options.onMerged]  "merged N changes from your
    *        other device". info carries the counts and both pre-merge copies, so a
    *        page can still offer keep-mine / keep-theirs afterwards.
+   *
+   *        It is also the channel for the CATCH-UP NOTICE — info.kind ===
+   *        'catch-up' — which reports a silent containment sync: a sentence in
+   *        info.message, and confirm()/revert() actions. Nothing waits on it, and
+   *        ignoring it is confirming it.
    *
    * @param {(info:{collisions:object[], client:SyncClient}) =>
    *          Promise<Record<string,'delete'|'keep'>|null|undefined>} [options.onItemConflict]
@@ -567,6 +767,7 @@
     this._stateKey = 'syncwip_' + environment + '_' + this.appName + '_state';
     this._baseKey = 'syncwip_' + environment + '_' + this.appName + '_base';
     this._resolvedKey = 'syncwip_' + environment + '_' + this.appName + '_resolved';
+    this._undoKey = 'syncwip_' + environment + '_' + this.appName + '_undo';
     this._deviceKey = 'syncwip_' + environment + '_device';
 
     // State adapter. Without one, this module owns the state and persists it locally.
@@ -597,6 +798,14 @@
     this.onItemConflict = options.onItemConflict || null;
     /** Collisions raised but not yet answered, so a page can re-open its own UI. */
     this._pendingItemConflicts = [];
+
+    /**
+     * Wire name → what a person is called it. `{shots:'doses'}`, or
+     * `{shots:{one:'dose', other:'doses'}}` where the plural is irregular. Used by
+     * the catch-up notice; anything unlisted is named by its collection name.
+     */
+    this.collectionLabels = (options.collectionLabels && typeof options.collectionLabels === 'object')
+      ? options.collectionLabels : null;
 
     this.collections = normaliseCollections(options.collections);
     this._specsByName = Object.create(null);
@@ -712,6 +921,24 @@
 
   SyncClient.prototype._clearBase = function () {
     try { localStorage.removeItem(this._baseKey); } catch (e) { /* nothing else to do */ }
+  };
+
+  /**
+   * Has this device EVER completed a sync — as opposed to holding a base it can
+   * still read?
+   *
+   * The difference matters to exactly one caller: the containment check. A base
+   * that is corrupt, or written by an older format, is unusable — but it is still
+   * evidence that this device once agreed with the account copy, which makes
+   * "the server is missing entries I have" as likely to mean "I am stale about a
+   * deletion" as "the server is behind". That case keeps the prompt, exactly as it
+   * does today. Containment is for a device with no history at all: a first sync,
+   * cleared storage, a backup imported before signing in.
+   *
+   * Unreadable storage answers TRUE — if we cannot tell, we do not optimise.
+   */
+  SyncClient.prototype._hasBaseRecord = function () {
+    try { return localStorage.getItem(this._baseKey) != null; } catch (e) { return true; }
   };
 
   /* ─────────────────────────────── reading ─────────────────────────────── */
@@ -1308,18 +1535,24 @@
 
     // My live state, with their changes folded in.
     var mine = this.getState();
+    var premerge = cloneState(mine);
     var rebase = this._rebaseOps(mine, withoutWithheld(theirOps, screen.withheld), myOps, base.state);
     rebase.stats.bulkDeletesHeld = screen.held;
     rebase.stats.awaitingDecision += screen.notices.length;
 
     var newBase = applyOps(cloneState(base.state), theirOps, this.collections);
+    // The save was the user's; folding in the other device's changes was not. What
+    // this device looked like before that fold-in is stashed, so it can be put back.
+    var message = this._describeChange(premerge, mine, 'Merged changes from your other device');
+    var actionId = this._stashBefore(premerge, { kind: 'merge', message: message, version: conflict.version });
     this._setVersion(conflict.version);
     this._writeBase(newBase, conflict.version);
     this.setState(mine);
 
     this._dirty = true;
     var ok = await this.saveToServer(attempt + 1);
-    this._reportMerge(rebase.stats, theirOps.length, theirState, sending);
+    this._reportMerge(rebase.stats, theirOps.length, theirState, sending,
+      { actionId: actionId, kind: 'merge', message: message });
     // Everything else is already saved. Only the disputed entries are outstanding,
     // and nothing here waits for the answer.
     this._raiseCollisions(rebase.collisions.concat(screen.notices));
@@ -1437,6 +1670,14 @@
         this._setStatus('synced');
         return 'in-sync';
       }
+
+      // Before asking: is one side simply contained in the other? That needs no
+      // base, so it answers precisely the sync where the prompt is least welcome —
+      // the first one on a device. Anything it cannot answer falls straight
+      // through to the prompt below, unchanged.
+      var caughtUp = await this._catchUpByContainment(server, mine);
+      if (caughtUp) return caughtUp;
+
       this._pendingServerState = server.state;
       this._pendingServerVersion = server.version;
       this._noteReplace(server.replace, server.state);
@@ -1483,6 +1724,13 @@
       // I am merely behind. THIS is the case that used to raise a dialog.
       var down = this._screenBulkDeletes(theirOps, base.state);
       if (!down.held) {
+        // Silent, but not unrecorded: the person did not ask for this, so what it
+        // replaced is stashed and it can be put back from the settings list.
+        this._stashBefore(mine, {
+          kind: 'catch-up',
+          message: this._describeChange(mine, server.state, 'Caught up from your account'),
+          version: server.version,
+        });
         this.setState(server.state);
         this._writeBase(server.state, server.version);
         this._setVersion(server.version);
@@ -1494,6 +1742,7 @@
       // Take their copy and put the held entries back into it, then publish that:
       // keeping them here while the account copy has lost them would leave a third
       // device with neither answer.
+      var keptPre = cloneState(mine);
       var kept = cloneState(server.state);
       var byName = this._specsByName;
       theirOps.forEach(function (op) {
@@ -1502,6 +1751,8 @@
         // Nothing to put back means the base never held it either: let it go.
         if (item != null) applyOp(kept, { type: 'add', coll: op.coll, id: op.id, item: item }, byName);
       });
+      var keptMessage = this._describeChange(keptPre, kept, 'Caught up from your account');
+      var keptAction = this._stashBefore(keptPre, { kind: 'catch-up', message: keptMessage, version: server.version });
       this._writeBase(server.state, server.version);
       this._setVersion(server.version);
       this.setState(kept);
@@ -1512,6 +1763,7 @@
           bulkDeletesHeld: down.held, theirDeleteBeatMyEdit: 0, myDeleteBeatTheirEdit: 0,
           keptOverDelete: 0, myEditWon: 0, sameIdAddedBothSides: 0 },
         theirOps.length, server.state, mine,
+        { actionId: keptAction, kind: 'catch-up', message: keptMessage },
       );
       this._raiseCollisions(down.notices);
       return 'merged';
@@ -1531,17 +1783,279 @@
     rebase.stats.bulkDeletesHeld = screen.held;
     rebase.stats.awaitingDecision += screen.notices.length;
     var newBase = applyOps(cloneState(base.state), theirOps, this.collections);
+    // Their changes were folded into this device without anybody being asked, so
+    // the copy that existed before the merge is stashed and can be put back.
+    var mergeMessage = this._describeChange(premerge, mine, 'Merged changes from your other device');
+    var mergeAction = this._stashBefore(premerge, { kind: 'merge', message: mergeMessage, version: server.version });
     this._writeBase(newBase, server.version);
     this._setVersion(server.version);
     this.setState(mine);
 
     this._dirty = true;
     await this.saveToServer();
-    this._reportMerge(rebase.stats, theirOps.length, server.state, premerge);
+    this._reportMerge(rebase.stats, theirOps.length, server.state, premerge,
+      { actionId: mergeAction, kind: 'merge', message: mergeMessage });
     // The merge is saved. Disputed entries are asked about afterwards, and the
     // caller is not kept waiting for the answer.
     this._raiseCollisions(rebase.collisions.concat(screen.notices));
     return 'merged';
+  };
+
+  /* ─────────────────────── the containment catch-up ───────────────────────
+   *
+   * Only ever converts a PROMPT into a silent, additive action. It runs nowhere
+   * near the three-way logic above: with a base, that logic already answers
+   * better, and two paths competing over the same sync is how a resolution policy
+   * gets holes in it.
+   *
+   * Returns 'downloaded' | 'uploaded' | 'in-sync' | 'conflict', or null for "I
+   * cannot say" — which leaves the caller on the prompt it was already heading to.
+   */
+  SyncClient.prototype._catchUpByContainment = async function (server, mine) {
+    // 1. A page that declared nothing has no identities to compare. Never guess.
+    if (!this.collections.length) return null;
+    // 2. Only where there is NO base at all (see _hasBaseRecord).
+    if (this._hasBaseRecord()) return null;
+    // 3. Another device REPLACED everything. A replacement is a statement about
+    //    the whole state, and this module's answer to one has always been to ask.
+    //    Silently adopting it — or silently publishing over it — would be a new
+    //    resolution policy, which this is explicitly not.
+    if (server.replace && server.replace.dev !== this.deviceId) return null;
+
+    var found = containment(mine, server.state, this.collections, this.ignoreKeys);
+    if (!found) return null;
+
+    if (found.direction === 'equal') {
+      // The declared data matches on both sides; only something excluded from it
+      // differs. There is nothing to move and nothing to ask.
+      this._writeBase(mine, server.version);
+      this._setStatus('synced');
+      return 'in-sync';
+    }
+
+    if (found.direction === 'behind') {
+      // LOCAL ⊆ SERVER. This device is behind and nothing here is at risk: every
+      // entry it holds is already on the server, identical.
+      var pre = cloneState(mine);
+      var message = this._catchUpMessage('download', found);
+      var actionId = this._stashBefore(pre, { kind: 'catch-up', message: message, version: server.version });
+      this.setState(server.state);
+      this._writeBase(server.state, server.version);
+      this._setVersion(server.version);
+      this._setStatus('synced');
+      this._reportCatchUp('download', found, message, server.state, pre, actionId);
+      return 'downloaded';
+    }
+
+    // SERVER ⊆ LOCAL. The account copy is behind; publishing this device's state
+    // adds what it is missing and removes nothing. Nothing changes HERE, so there
+    // is nothing to stash and nothing to revert.
+    this._dirty = true;
+    var saved = await this.saveToServer();
+    if (saved === 'conflict') return 'conflict';
+    if (saved === true) {
+      this._reportCatchUp('upload', found, this._catchUpMessage('upload', found), server.state, mine, null);
+    }
+    return 'uploaded';
+  };
+
+  /** What a collection is called out loud, singular or plural to suit the count. */
+  SyncClient.prototype._collectionLabel = function (name, count) {
+    var label = this.collectionLabels ? this.collectionLabels[name] : null;
+    if (label && typeof label === 'object') {
+      return count === 1 ? (label.one || label.other || name) : (label.other || name);
+    }
+    if (typeof label !== 'string' || !label) label = name;
+    return count === 1 ? singularise(label) : label;
+  };
+
+  /**
+   * "Caught up from your account — 2 doses added, 1 weight changed."
+   * The same sentence for a change this module worked out itself rather than by
+   * containment, so the recent-actions list reads consistently whichever path
+   * produced the entry.
+   */
+  SyncClient.prototype._describeChange = function (from, to, lead) {
+    if (!this.collections.length) return lead + '.';
+    var self = this;
+    var summary = diffSummary(from, to, this.collections);
+    var clauses = [];
+    ['added', 'removed', 'changed'].forEach(function (verb) {
+      var parts = [];
+      summary.collections.forEach(function (row) {
+        if (row[verb] > 0) parts.push(row[verb] + ' ' + self._collectionLabel(row.name, row[verb]));
+      });
+      if (parts.length) clauses.push(joinParts(parts) + ' ' + verb);
+    });
+    return lead + (clauses.length ? ' — ' + clauses.join(', ') : '') + '.';
+  };
+
+  /** "Caught up from your account — 1 dose and 3 weights added." */
+  SyncClient.prototype._catchUpMessage = function (direction, found) {
+    var self = this;
+    var parts = [];
+    found.collections.forEach(function (row) {
+      var n = direction === 'download' ? row.toLocal : row.toServer;
+      if (n > 0) parts.push(n + ' ' + self._collectionLabel(row.name, n));
+    });
+    var phrase = parts.length ? joinParts(parts) + ' added' : 'nothing to move';
+    return (direction === 'download' ? 'Caught up from your account — ' : 'Updated your account — ')
+      + phrase + '.';
+  };
+
+  /**
+   * Say what was decided. The client asked for this over a fully silent version,
+   * and it is a NOTICE, not a question: nothing waits on it, and ignoring it is
+   * the same as confirming it. Revert is offered here and, because a dismissed
+   * notice is not a recovery path, from the recent-actions list as well.
+   */
+  SyncClient.prototype._reportCatchUp = function (direction, found, message, theirs, pre, actionId) {
+    var self = this;
+    var moved = direction === 'download' ? found.toLocal : found.toServer;
+    var info = {
+      kind: 'catch-up',
+      direction: direction,
+      message: message,
+      collections: found.collections.map(function (row) {
+        var n = direction === 'download' ? row.toLocal : row.toServer;
+        return { name: row.name, label: self._collectionLabel(row.name, n), count: n };
+      }).filter(function (row) { return row.count > 0; }),
+      // The fields a page's existing onMerged handler already reads.
+      changesFromOtherDevice: direction === 'download' ? moved : 0,
+      applied: direction === 'download' ? moved : 0,
+      sent: direction === 'upload' ? moved : 0,
+      overridden: 0,
+      awaitingDecision: 0,
+      stats: {
+        applied: direction === 'download' ? moved : 0,
+        awaitingDecision: 0, theirDeleteBeatMyEdit: 0, myDeleteBeatTheirEdit: 0,
+        keptOverDelete: 0, myEditWon: 0, sameIdAddedBothSides: 0, bulkDeletesHeld: 0,
+        containment: direction,
+      },
+      theirs: theirs,
+      mine: pre,
+      client: this,
+    };
+    addRevertActions(this, info, actionId, direction === 'upload'
+      ? 'nothing on this device changed'
+      : 'this device could not store a copy to go back to');
+    if (this.onMerged) {
+      try { this.onMerged(info); } catch (e) { console.error(e); }
+    } else {
+      console.info('[SYNC_WIP] ' + message);
+    }
+  };
+
+  /* ─────────────────────── revert: the stash and its stack ───────────────────────
+   *
+   * An automatic change is one the person did not ask for: a catch-up, a silent
+   * merge. Before one of those touches the data, the state it is about to replace
+   * is stashed, and the change becomes revertable — from the notice while it is on
+   * screen, and from the recent-actions list long after it is gone.
+   *
+   * A change the person DID ask for is not stashed. An import already showed a
+   * preview and asked; an edit is the person typing. Filling the stack with those
+   * would push the automatic ones — the only ones nobody chose — off the end.
+   */
+
+  function addRevertActions(client, info, actionId, whyNot) {
+    info.actionId = actionId || null;
+    info.revertable = !!actionId;
+    info.notRevertableBecause = actionId ? null : whyNot;
+    // Dismissing IS confirming. The action already happened; a dismissal, a closed
+    // tab or a page with no UI for this must never undo it.
+    info.confirm = function () { return true; };
+    info.revert = function () {
+      return actionId ? client.revertAction(actionId) : Promise.resolve(false);
+    };
+  }
+
+  SyncClient.prototype._readUndo = function () {
+    var rec = readJson(this._undoKey, null);
+    if (!rec || rec.fmt !== UNDO_FORMAT || !Array.isArray(rec.actions)) return [];
+    return rec.actions.filter(function (a) {
+      return a && typeof a.id === 'string' && a.state && typeof a.state === 'object';
+    });
+  };
+
+  SyncClient.prototype._writeUndo = function (actions) {
+    return writeJson(this._undoKey, { fmt: UNDO_FORMAT, actions: actions });
+  };
+
+  /**
+   * Stash the state an automatic change is about to replace. Returns the action id,
+   * or NULL when it could not be stored — in which case the caller carries on
+   * regardless and the change is simply reported as not revertable. A sync must
+   * never fail over its own undo copy.
+   */
+  SyncClient.prototype._stashBefore = function (preState, meta) {
+    var snapshot = cloneState(preState);
+    if (snapshot == null || typeof snapshot !== 'object') return null;
+    var id = 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    var actions = this._readUndo();
+    actions.unshift({
+      id: id,
+      at: Date.now(),
+      kind: (meta && meta.kind) || 'sync',
+      message: (meta && meta.message) || 'A sync changed this device',
+      version: (meta && isSafeInt(meta.version)) ? meta.version : this.version,
+      state: snapshot,
+    });
+    if (actions.length > UNDO_LIMIT) actions.length = UNDO_LIMIT;      // newest first
+    // A failed write leaves whatever was stored before intact, so older actions
+    // stay revertable; only this one is not.
+    if (!this._writeUndo(actions)) return null;
+    return id;
+  };
+
+  /**
+   * What can still be put back, newest first. Without the stashed states — a page
+   * only needs to name them and offer the button.
+   */
+  SyncClient.prototype.recentActions = function () {
+    return this._readUndo().map(function (a) {
+      return { id: a.id, at: a.at, kind: a.kind, message: a.message, version: a.version, revertable: true };
+    });
+  };
+
+  /**
+   * PUT THIS DEVICE BACK to where it was before an automatic change.
+   *
+   * Reverting means publishing OLDER data over the account copy, which would undo
+   * whatever the other device did in between. That is a wholesale replacement, not
+   * an edit, so it travels the same way an import-replace does: as a marked
+   * snapshot, never as per-item deletions. The other device is TOLD ("this device
+   * went back to an earlier copy — N entries here are not in it") and keeps
+   * everything it has until it answers. A revert cannot delete anything on another
+   * device without somebody agreeing to it.
+   *
+   * Reverting also drops the stashed actions NEWER than this one: they describe
+   * states that no longer happened.
+   */
+  SyncClient.prototype.revertAction = async function (id) {
+    var actions = this._readUndo();
+    var ix = -1;
+    for (var i = 0; i < actions.length; i++) {
+      if (actions[i].id === id) { ix = i; break; }
+    }
+    if (ix === -1) return false;                       // already used, or aged out
+
+    var restored = cloneState(actions[ix].state);
+    if (restored == null) return false;
+
+    var summary = this.collections.length
+      ? diffSummary(this.getState(), restored, this.collections)
+      : null;
+    this._writeUndo(actions.slice(ix + 1));
+
+    var ok = await this.replaceAll(restored, {
+      source: 'revert',
+      removed: summary ? summary.totals.removed : 0,
+      kept: summary ? (summary.totals.identical + summary.totals.changed) : 0,
+    });
+    // replaceAll answers false when there is no account to publish to. The device
+    // itself has still been put back, which is what was asked for.
+    return !!ok || !this.isLoggedIn();
   };
 
   /**
@@ -1549,7 +2063,7 @@
    * the user. Both pre-merge copies ride along so a page can still offer keep-mine
    * or keep-theirs afterwards.
    */
-  SyncClient.prototype._reportMerge = function (stats, theirOpCount, theirState, myState) {
+  SyncClient.prototype._reportMerge = function (stats, theirOpCount, theirState, myState, extra) {
     var overridden = stats.theirDeleteBeatMyEdit + stats.myDeleteBeatTheirEdit
       + stats.keptOverDelete + stats.myEditWon + stats.sameIdAddedBothSides;
     if (!theirOpCount && !overridden && !stats.awaitingDecision) return;   // nothing worth saying
@@ -1563,6 +2077,19 @@
       mine: myState,
       client: this,
     };
+    // A merge is an automatic change too, so it carries the same confirm / revert
+    // the catch-up notice does when its pre-merge state was stashed.
+    //
+    // Every caller today stashes first and passes the id, so a missing id means the
+    // stash genuinely failed (quota). A caller that never attempted one must NOT
+    // inherit that explanation — telling someone their browser is out of space when
+    // nothing was ever written is worse than saying nothing. `stashed: false` says
+    // so honestly.
+    addRevertActions(this, info, extra && extra.actionId,
+      extra && extra.stashed === false
+        ? 'this kind of change is not recorded for undo'
+        : 'this device could not store a copy to go back to');
+    if (extra && extra.message) { info.kind = extra.kind || 'merge'; info.message = extra.message; }
     if (this.onMerged) {
       try { this.onMerged(info); } catch (e) { console.error(e); }
     } else {
@@ -1839,7 +2366,11 @@
     // What a change WOULD do, counted and not applied. An import preview is built
     // on this: added / removed / changed / identical, per collection.
     diffSummary: diffSummary,
+    // Is one side wholly contained in the other? The no-base catch-up is built on
+    // this: 'behind' | 'ahead' | 'equal', or null for "cannot say".
+    containment: containment,
     OP_LOG_COMPACT_THRESHOLD: OP_LOG_COMPACT_THRESHOLD,
+    UNDO_LIMIT: UNDO_LIMIT,
     BULK_DELETE_FRACTION: BULK_DELETE_FRACTION,
     BULK_DELETE_MIN_ITEMS: BULK_DELETE_MIN_ITEMS,
     bulkDeleteThreshold: bulkDeleteThreshold,

@@ -1,0 +1,714 @@
+/* payday.css
+ * ---------------------------------------------------------------------------
+ * ⚠ NO HEX VALUES IN THIS FILE. Every colour is a token from /tokens.css.
+ *
+ * Direction: soft, low-contrast, rounded. The first build used film-manager's 4px
+ * radius and a 15.9:1 ink — correct for a desktop app, wrong here, and Rose's word
+ * for it was "boxy and bright". This follows rosie-notes instead: a radius scale up
+ * to 20px, borders that mostly disappear in favour of surface lift, ink that sits back.
+ *
+ * Restraint: the goal ring is the ONE bold element. Everything around it is quiet.
+ */
+
+* { box-sizing: border-box; }
+body { margin: 0; -webkit-font-smoothing: antialiased; }
+
+/* Wider and tighter than the first pass — Rose: "quite a bit of dead space at the
+   top and sides". 1080 with 20px padding left ~100px of nothing each side on a
+   1280 screen, and the bar's own top padding added more above that. */
+.container {
+  max-inline-size: 1240px; margin-inline: auto;
+  padding: var(--gap-wide) var(--gap-wide) 64px;
+}
+
+/* ── app bar ─────────────────────────────────────────────────────────────── */
+/* Not the site nav. payday is a tool, not a section of the site, so it carries its
+   own identity and the site links move into the menu — still one tap away. */
+
+/* ⚠ FULL BLEED. The bar lives OUTSIDE .container so its background reaches the
+   viewport edges — the notes app does the same, and Rose asked for it explicitly:
+   "the top section dosent span right to the edges just to the edges of view area".
+   Only .app-bar-inner is constrained to the content width. */
+.app-bar {
+  position: sticky; inset-block-start: 0; z-index: 50;
+  background: color-mix(in srgb, var(--ground) 88%, transparent);
+  backdrop-filter: blur(12px) saturate(1.2);
+  border-block-end: 1px solid var(--line);
+}
+/* ⚠ NOT constrained to the content width. Rose: "top bar should be pag bound not
+   center main part bound ... so the page name and the settings button thingy are on
+   the edges instead of in the middle". The bar's CONTENTS run edge to edge; only the
+   page body below it is centred. */
+.app-bar-inner {
+  display: flex; align-items: center; gap: var(--gap-wide); flex-wrap: wrap;
+  padding: 12px var(--pad-lg);
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-mark {
+  inline-size: 26px; block-size: 26px; border-radius: var(--radius-pill);
+  background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.brand-name { font-size: 1.12rem; font-weight: 650; letter-spacing: -0.015em; }
+
+/* The tab strip. A soft inset track with a raised pill — the same shape language as
+   the cards, so navigation reads as part of the surface rather than chrome. */
+.views {
+  display: flex; gap: 2px; margin-inline: auto;
+  background: var(--surface-sunken); padding: 4px; border-radius: var(--radius-pill);
+}
+.view-tab {
+  border: 0; background: transparent; color: var(--ink-dim);
+  padding: 8px 18px; border-radius: var(--radius-pill);
+  font-size: var(--fs-small); font-weight: 550; min-block-size: 0;
+  transition: color .16s ease, background-color .16s ease;
+}
+.view-tab:hover { color: var(--ink); }
+.view-tab.is-active { background: var(--surface-hi); color: var(--ink); box-shadow: var(--shadow-1); }
+
+.bar-right { display: flex; align-items: center; gap: var(--gap); }
+.user-status { color: var(--ink-faint); font-size: var(--fs-small); }
+.user-status.is-live { color: var(--safe-text); }
+
+/* The menu anchors to the button, not the page. Previously it was absolutely
+   positioned with no positioned ancestor, so it resolved against the initial
+   containing block and appeared at the viewport edge instead of under the ⋯. */
+.menu-wrap { position: relative; }
+.app-menu {
+  position: absolute; inset-block-start: calc(100% + 8px); inset-inline-end: 0;
+  background: var(--surface-hi); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2); padding: 6px; z-index: 60; min-inline-size: 230px;
+  animation: rise .16s ease both;
+}
+.menu-group { display: grid; gap: 2px; padding: 4px 0; }
+.menu-group + .menu-group { border-block-start: 1px solid var(--line); }
+.app-menu button, .app-menu a {
+  display: block; inline-size: 100%; text-align: start;
+  background: transparent; border: 0; color: var(--ink);
+  padding: 9px 12px; border-radius: var(--radius-sm);
+  font-size: var(--fs-small); text-decoration: none; min-block-size: 0;
+}
+.app-menu button:hover, .app-menu a:hover { background: var(--surface-sunken); }
+.menu-links a { color: var(--ink-dim); }
+@media (max-width: 420px) {
+  .app-menu { inset-inline-end: 0; min-inline-size: 0; inline-size: max(200px, 60vw); }
+}
+
+@media (max-width: 720px) {
+  .app-bar-inner { gap: var(--gap); padding: 10px var(--pad); }
+  .container { padding-inline: var(--gap); }
+  .views { order: 3; flex: 1 1 100%; margin-inline: 0; justify-content: space-between; }
+  .view-tab { flex: 1; text-align: center; padding-inline: 8px; }
+  .bar-right { margin-inline-start: auto; }
+  .user-status { display: none; }
+}
+
+/* ── views ───────────────────────────────────────────────────────────────── */
+
+.view[hidden] { display: none; }
+.view { animation: rise .22s ease both; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ── controls ────────────────────────────────────────────────────────────── */
+
+button {
+  font: inherit; cursor: pointer;
+  background: var(--surface-hi); color: var(--ink);
+  border: 1px solid transparent; border-radius: var(--radius); padding: 10px 16px;
+  transition: background-color .16s ease, border-color .16s ease, transform .08s ease;
+}
+button:hover { background: var(--line); }
+button:active { transform: translateY(1px); }
+button:disabled { opacity: .35; cursor: default; }
+button.primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+button.primary:hover { background: var(--accent); filter: brightness(1.07); }
+button.ghost {
+  background: transparent; border-color: var(--line-strong); color: var(--ink-dim);
+  font-size: var(--fs-small); padding: 8px 14px;
+}
+button.ghost:hover { background: var(--surface-hi); color: var(--ink); border-color: var(--accent-line); }
+button.ghost.full { inline-size: 100%; margin-block-start: var(--gap); }
+button.ghost.sm { padding: 5px 10px; font-size: var(--fs-small); min-block-size: 0; }
+
+button.icon {
+  min-inline-size: 36px; min-block-size: 36px; padding: 6px 10px; line-height: 1;
+  background: transparent; color: var(--ink-dim); border-radius: var(--radius-pill);
+}
+button.icon:hover { background: var(--surface-hi); color: var(--ink); }
+button.icon.danger:hover { color: var(--danger); background: transparent; }
+button.icon[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-text); }
+
+input, select, textarea {
+  font: inherit;
+  background: var(--surface-sunken); color: var(--ink);
+  border: 1px solid transparent; border-radius: var(--radius); padding: 10px 13px;
+  min-block-size: 42px; max-inline-size: 100%;
+  transition: border-color .16s ease, background-color .16s ease;
+}
+input:hover, select:hover, textarea:hover { border-color: var(--line); }
+input:focus, select:focus, textarea:focus { border-color: var(--accent-line); }
+input::placeholder, textarea::placeholder { color: var(--ink-faint); }
+input.invalid, select.invalid { border-color: var(--danger); }
+textarea { min-block-size: 0; }
+
+/* The UA select arrow is drawn in the platform's own colour and ignores the theme.
+   Two gradients make a chevron out of the ink token instead.
+   ⚠ background-image only — the shorthand above already set the colour, and
+   repeating `background:` here would wipe it out. */
+select {
+  appearance: none; -webkit-appearance: none;
+  padding-inline-end: 32px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink-dim) 50%),
+    linear-gradient(135deg, var(--ink-dim) 50%, transparent 50%);
+  background-position: calc(100% - 18px) calc(50% + 1px), calc(100% - 13px) calc(50% + 1px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
+/* Checkboxes. The UA control is painted by the OS: on a dark page it renders as a
+   pale grey slab that belongs to no theme — the "lil smaller boxes" Rose saw. */
+input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  inline-size: 19px; block-size: 19px;
+  min-inline-size: 19px; min-block-size: 19px;
+  flex: none; padding: 0; margin: 0;
+  border: 1px solid var(--line-strong); border-radius: 6px;
+  background: var(--surface-sunken);
+  display: inline-grid; place-content: center; cursor: pointer;
+  transition: background-color .14s ease, border-color .14s ease;
+}
+input[type="checkbox"]::after {
+  content: ''; inline-size: 11px; block-size: 11px; background: var(--accent-ink);
+  clip-path: polygon(14% 44%, 0 65%, 39% 100%, 100% 16%, 84% 0, 39% 68%);
+  transform: scale(0); transition: transform .14s cubic-bezier(.3, 1.4, .5, 1);
+}
+input[type="checkbox"]:hover { border-color: var(--accent-line); }
+input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent-text); }
+input[type="checkbox"]:checked::after { transform: scale(1); }
+
+button.info {
+  min-inline-size: 17px; min-block-size: 17px; inline-size: 17px; block-size: 17px;
+  padding: 0; margin-inline-start: 5px; border-radius: var(--radius-pill);
+  background: var(--surface-hi); color: var(--ink-faint);
+  font-size: 10px; line-height: 1; vertical-align: middle;
+}
+button.info:hover { background: var(--accent-soft); color: var(--accent-text); }
+
+.panel {
+  background: var(--surface); border-radius: var(--radius-xl);
+  padding: var(--pad-lg); box-shadow: var(--shadow-1);
+}
+.panel-title {
+  margin: 0 0 var(--gap-wide); font-size: var(--fs-small); font-weight: 600;
+  color: var(--ink-dim); letter-spacing: .04em; text-transform: uppercase;
+}
+.eyebrow {
+  margin: 0 0 6px; font-size: var(--fs-small); color: var(--accent-text);
+  letter-spacing: .06em; text-transform: uppercase; font-weight: 600;
+}
+.muted { color: var(--ink-faint); font-size: var(--fs-small); margin: var(--gap) 0; }
+.hedge { color: var(--ink-faint); font-weight: 400; }
+
+/* ── the goal card — the signature ───────────────────────────────────────── */
+
+.goal-card {
+  display: grid; gap: var(--pad-lg); align-items: center; grid-template-columns: minmax(0, 1fr);
+  background: var(--surface); border-radius: var(--radius-xl);
+  padding: var(--pad-lg); margin-block-end: var(--gap-wide);
+  box-shadow: var(--shadow-1); position: relative; overflow: hidden;
+}
+/* A single soft bloom behind the ring — the one decorative flourish on the page.
+   Everything else earns its place by carrying information. */
+.goal-card::before {
+  content: ''; position: absolute; inset-block-start: -40%; inset-inline-start: -10%;
+  inline-size: 340px; block-size: 340px; border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-soft) 0%, transparent 68%);
+  pointer-events: none;
+}
+@media (min-width: 720px) { .goal-card { grid-template-columns: 200px minmax(0, 1fr); } }
+
+.goal-ring-wrap { position: relative; inline-size: 200px; justify-self: center; }
+.goal-ring { inline-size: 200px; block-size: 200px; transform: rotate(-90deg); display: block; }
+.ring-track { fill: none; stroke: var(--surface-sunken); stroke-width: 14; }
+.ring-fill {
+  fill: none; stroke: var(--accent); stroke-width: 14; stroke-linecap: round;
+  transition: stroke-dasharray .6s cubic-bezier(.22, .8, .3, 1);
+}
+.goal-ring-centre {
+  position: absolute; inset: 0; display: grid; place-content: center;
+  text-align: center; gap: 2px; pointer-events: none;
+}
+.goal-pct { font-size: 2.1rem; font-weight: 650; letter-spacing: -0.03em; line-height: 1; }
+.goal-of { font-size: var(--fs-small); color: var(--ink-faint); }
+
+.goal-detail { position: relative; min-inline-size: 0; }
+.goal-detail h2 { margin: 0 0 var(--gap); font-size: 1.5rem; font-weight: 620; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.goal-line { margin: 0 0 6px; color: var(--ink-dim); }
+.goal-when { margin: 0 0 var(--gap-wide); color: var(--ink-dim); }
+.goal-actions { display: flex; gap: var(--gap); flex-wrap: wrap; }
+.goal-card.is-empty .goal-ring-wrap { opacity: .4; }
+
+/* ── overview grid ───────────────────────────────────────────────────────── */
+
+.ov-grid { display: grid; gap: var(--gap-wide); grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .ov-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1000px) { .ov-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* The key needs ~170px to keep a label and its figure apart. Below that it wraps
+   under the ring rather than crushing them together — which is what it did at a
+   third of 1080px: "Essentials$1,800.00" with no space between. */
+.split-wrap { display: flex; align-items: center; gap: var(--gap-wide); flex-wrap: wrap; }
+.split-ring { inline-size: 108px; block-size: 108px; transform: rotate(-90deg); flex: none; }
+.split-ring .seg { fill: none; stroke-width: 16; stroke-linecap: butt; }
+/* Three slices, assigned by MEANING and never cycled: essentials are the fixed
+   floor, spare is what is actually yours. Deliberately NOT the status colours — an
+   amber category would make an amber warning mean nothing. */
+.seg-essential { stroke: var(--ink-faint); }
+.seg-other { stroke: var(--accent); }
+.seg-spare { stroke: var(--safe); }
+.split-key {
+  list-style: none; margin: 0; padding: 0; display: grid; gap: 10px;
+  flex: 1 1 170px; min-inline-size: 0;
+}
+.split-key li {
+  display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; gap: 10px;
+  align-items: baseline; font-size: var(--fs-small);
+}
+.split-key .key-dot { align-self: center; }
+.key-dot { inline-size: 10px; block-size: 10px; border-radius: var(--radius-pill); }
+.key-essential { background: var(--ink-faint); }
+.key-other { background: var(--accent); }
+.key-spare { background: var(--safe); }
+.key-label { color: var(--ink-dim); min-inline-size: 0; }
+.key-val { color: var(--ink); white-space: nowrap; font-weight: 600; }
+.key-over { grid-template-columns: minmax(0, 1fr) !important; color: var(--danger); }
+
+.upcoming { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; font-size: var(--fs-small); }
+.upcoming li { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: var(--gap); align-items: baseline; }
+.upcoming li > * { min-inline-size: 0; overflow-wrap: anywhere; }
+.up-when { color: var(--ink-faint); }
+.up-what { color: var(--ink-dim); }
+
+.queue-preview { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.queue-preview li {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--gap);
+  align-items: baseline; font-size: var(--fs-small);
+}
+.q-name { color: var(--ink); overflow-wrap: anywhere; }
+.q-price { color: var(--ink-dim); }
+.q-when { color: var(--ink-faint); min-inline-size: 58px; text-align: end; }
+
+/* ── items ───────────────────────────────────────────────────────────────── */
+
+.quick-add {
+  background: var(--surface); border-radius: var(--radius-xl);
+  padding: var(--pad); margin-block-end: var(--gap-wide); box-shadow: var(--shadow-1);
+}
+.qa-fields { display: grid; gap: var(--gap); grid-template-columns: minmax(0, 1fr); }
+.qa-fields > * { min-inline-size: 0; }
+.qa-fields #addPrice { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.qa-hint { margin: var(--gap) 0 0; font-size: var(--fs-small); color: var(--danger); }
+.qa-hint.ok { color: var(--safe-text); }
+.qa-hint:empty { display: none; }
+@media (min-width: 760px) {
+  .qa-fields { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.5fr) 120px 150px auto; align-items: center; }
+}
+
+.summary { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--gap-wide);
+  padding: 0 4px var(--gap-wide); margin-block-end: var(--gap-wide); }
+.rates-strip {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-wide);
+  background: var(--surface); border-radius: var(--radius-xl);
+  padding: var(--pad-lg); box-shadow: var(--shadow-1); margin-block-end: var(--gap-wide);
+}
+.stat { display: flex; flex-direction: column; gap: 3px; min-inline-size: 0; }
+.stat-label { font-size: var(--fs-small); color: var(--ink-faint); }
+.stat-value { font-size: 1.15rem; font-weight: 600; letter-spacing: -0.01em; }
+.stat-done { margin-inline-start: auto; align-self: center; }
+.view-toggle {
+  display: flex; gap: 2px; margin-inline-start: auto;
+  background: var(--surface-sunken); padding: 3px; border-radius: var(--radius-pill);
+}
+.rates-strip input { max-inline-size: 160px; font-variant-numeric: tabular-nums; }
+.rates-strip .stat { gap: 5px; }
+@media (max-width: 560px) { .stat-done, .view-toggle { margin-inline-start: 0; } }
+
+.list { display: grid; gap: var(--gap); }
+[data-view="cards"] .list { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+[data-view="table"] .list { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+
+.card, .row {
+  background: var(--surface); border-radius: var(--radius-lg);
+  border: 1px solid transparent; transition: border-color .16s ease;
+}
+.card { box-shadow: var(--shadow-1); overflow: hidden; display: flex; flex-direction: column; }
+.card:hover, .row:hover { border-color: var(--accent-line); }
+.dragging { opacity: .35; }
+.is-done { opacity: .5; }
+.is-done .price { text-decoration: line-through; }
+
+.card-media { aspect-ratio: 16 / 9; background: var(--surface-sunken); display: grid; place-items: center; }
+.card-media img { inline-size: 100%; block-size: 100%; object-fit: contain; }
+/* Most items have no image. A full 16:9 placeholder for each cost a third of a
+   phone screen — collapse it to a hairline instead. */
+.card-media:has(.noimg) { aspect-ratio: auto; block-size: 3px; background: var(--accent-soft); }
+.card-media .noimg { display: none; }
+.card-body { padding: var(--pad); display: flex; flex-direction: column; gap: var(--gap); flex: 1; }
+.card-head { display: flex; align-items: flex-start; gap: var(--gap); }
+.card-head h3 { margin: 0; font-size: var(--fs-body); font-weight: 600; flex: 1; overflow-wrap: anywhere; }
+.card .price { margin: 0; font-size: 1.1rem; font-weight: 600; }
+.card .why { margin: 0; font-size: var(--fs-small); color: var(--ink-faint); }
+.card-actions { display: flex; align-items: center; gap: 2px; padding: 4px var(--gap); }
+
+.row {
+  display: grid; align-items: center; gap: var(--gap);
+  grid-template-columns: 18px minmax(0, 1fr) auto; padding: 8px var(--pad);
+}
+.row .grip { color: var(--ink-faint); cursor: grab; }
+.r-name { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+.r-cat, .r-status, .r-when { display: none; }
+.r-price { text-align: end; font-weight: 600; }
+.r-actions { display: flex; align-items: center; gap: 2px; }
+@media (min-width: 760px) {
+  .row { grid-template-columns: 18px minmax(0, 1fr) 130px 115px 100px auto; }
+  .r-cat, .r-status { display: block; }
+  .r-cat { color: var(--ink-faint); font-size: var(--fs-small); }
+}
+@media (min-width: 940px) {
+  .row { grid-template-columns: 18px minmax(0, 1fr) 130px 115px 100px 108px auto; }
+  .r-when { display: block; }
+}
+.move { display: inline-flex; }
+
+.store-link {
+  text-decoration: none; color: var(--ink-faint); background: var(--surface-hi);
+  border-radius: var(--radius-pill); padding: 3px 9px;
+  font-size: var(--fs-small); line-height: 1.5; flex: none;
+}
+.store-link:hover { color: var(--accent-text); background: var(--accent-soft); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  border-radius: var(--radius-pill); padding: 5px 13px; border: 1px solid transparent;
+  font-size: var(--fs-small); min-block-size: 30px; min-inline-size: 0;
+  background: var(--surface-hi); color: var(--ink-dim);
+}
+.chip:hover { color: var(--ink); background: var(--line); }
+.chip-status.s-saving  { background: var(--accent-soft); color: var(--accent-text); }
+.chip-status.s-ordered { background: var(--accent-soft); color: var(--accent-text); border-color: var(--accent-line); }
+.chip-status.s-bought  { color: var(--safe-text); background: transparent; border-color: var(--safe-text); }
+.chip-status.s-parked  { border-style: dashed; border-color: var(--line-strong); background: transparent; }
+.chip-status.s-dropped { color: var(--ink-faint); text-decoration: line-through; }
+
+.empty {
+  text-align: center; padding: 56px var(--gap-wide);
+  background: var(--surface); border-radius: var(--radius-xl); color: var(--ink-dim);
+}
+.empty h2 { margin: 0 0 var(--gap); font-size: 1.2rem; color: var(--ink); font-weight: 620; }
+.empty p { margin: 0 auto var(--gap); max-inline-size: 46ch; }
+.empty-note { font-size: var(--fs-small); color: var(--ink-faint); }
+
+/* ── money ───────────────────────────────────────────────────────────────── */
+
+.money.in { color: var(--money-in); }
+.money.out { color: var(--money-out); }
+#rateSpare.negative { color: var(--danger); }
+
+.money-cols { display: grid; gap: var(--gap-wide); grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 860px) { .money-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ⚠ minmax(0, 1fr), never 1fr. Grid items default to min-width:auto and refuse to
+   shrink below their content — <input type="date"> is intrinsically wide and
+   overflowed a phone by 30px before this.
+ *
+ * ⚠ TWO ROWS, NOT FIVE ACROSS. These forms live inside a half-width panel, so the
+ * content box is about 540px on a 1400px screen. Five controls in one row left the
+ * name field 72px wide — unusable, and the reason the whole thing read as broken.
+ * Any change here must be checked at 540px, not at the container width. */
+.money-add {
+  display: grid; gap: var(--gap);
+  grid-template-columns: minmax(0, 1fr) 148px;
+}
+.money-add > * { min-inline-size: 0; inline-size: 100%; }
+/* Explicit columns rather than named areas: the two forms have a different number
+   of rows (only costs carry the flags), and a named grid would leave the income
+   form an empty track plus its gap. */
+.fa-name { grid-column: 1; }
+.fa-amt  { grid-column: 2; }
+.fa-cad  { grid-column: 1; }
+.fa-date { grid-column: 2; }
+.fa-opts { grid-column: 1 / -1; margin-block-start: 2px; }
+.fa-add  { grid-column: 1 / -1; margin-block-start: 2px; justify-self: end; inline-size: auto; min-inline-size: 150px; }
+/* Below this the date control's own minimum (~140px in Chrome) stops fitting
+   beside anything, so each field takes its own line and Add spans it. */
+@media (max-width: 430px) {
+  .money-add { grid-template-columns: minmax(0, 1fr); }
+  .money-add > * { grid-column: 1 / -1; }
+  .fa-add { justify-self: stretch; inline-size: 100%; }
+}
+
+/* A visible label per field. Placeholder-only forms lose the label the moment you
+   type, and "$0.00" in a narrow box next to another narrow box tells you nothing. */
+.field { display: grid; gap: 5px; min-inline-size: 0; }
+.field-label { font-size: var(--fs-small); color: var(--ink-faint); padding-inline-start: 2px; }
+.field > input, .field > select { inline-size: 100%; }
+
+.add-opts { display: flex; gap: var(--gap-wide); flex-wrap: wrap; margin-block-start: var(--gap); }
+.field-note { margin: 8px 0 var(--gap-wide); font-size: var(--fs-small); color: var(--ink-faint); }
+.check { display: flex; align-items: center; gap: 8px; font-size: var(--fs-small); color: var(--ink-dim); cursor: pointer; }
+
+/* Inline feedback for the add forms. Errors are the default; a confirmation borrows
+   the safe colour. An add that succeeds in silence looks as broken as one that fails
+   in silence, so both get a line. */
+.add-hint { margin: 0 0 var(--gap); font-size: var(--fs-small); color: var(--danger); line-height: 1.45; }
+.add-hint.ok { color: var(--safe-text); }
+.add-hint:empty { display: none; }
+
+.money-list { display: grid; gap: 2px; }
+.money-row {
+  display: grid; align-items: center; gap: 2px; min-inline-size: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  border-radius: var(--radius);
+}
+.money-row.is-whatif {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  border: 1px dashed var(--line-strong); padding-inline-end: 6px;
+}
+
+/* The row opens the editor. A real <button>, not a div with a click handler, so it
+   is tabbable and announced as actionable — Rose asked to be able to change a
+   name or an amount instead of deleting the row and typing it again. */
+.mr-open {
+  display: grid; align-items: center; gap: 2px var(--gap); min-inline-size: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 9px 12px; border-radius: var(--radius);
+  background: transparent; border: 0; color: inherit; font: inherit;
+  text-align: start; min-block-size: 0;
+}
+.mr-open:hover { background: var(--surface-hi); }
+/* A record, not a control. Same shape, no hover, no button semantics. */
+.mr-open.is-static { cursor: default; }
+.mr-open.is-static:hover { background: transparent; }
+.mr-open > * { min-inline-size: 0; }
+.mr-name { grid-column: 1; grid-row: 1; overflow-wrap: anywhere; }
+/* Narrow: the cadence drops under the name rather than being hidden. It is the
+   difference between $35 a month and $35 a year — not decoration. */
+.mr-meta { grid-column: 1; grid-row: 2; color: var(--ink-faint); font-size: var(--fs-small); }
+.mr-amt {
+  grid-column: 2; grid-row: 1 / span 2; align-self: center;
+  font-weight: 600; text-align: end; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+@media (min-width: 520px) {
+  .mr-open { grid-template-columns: minmax(0, 1fr) auto auto; align-items: baseline; }
+  .mr-name { grid-row: 1; }
+  .mr-meta { grid-column: 2; grid-row: 1; white-space: nowrap; }
+  .mr-amt  { grid-column: 3; grid-row: 1; }
+}
+/* "Add for real" needs a line of its own before it starts squeezing the amount. */
+@media (max-width: 519px) {
+  .money-row.is-whatif { grid-template-columns: minmax(0, 1fr) auto; }
+  .money-row.is-whatif .mr-open   { grid-column: 1; grid-row: 1; }
+  .money-row.is-whatif [data-del] { grid-column: 2; grid-row: 1; }
+  .money-row.is-whatif [data-adopt] { grid-column: 1 / -1; grid-row: 2; justify-self: start; margin: 0 12px 8px; }
+}
+.tag {
+  font-size: 10px; padding: 2px 8px; border-radius: var(--radius-pill);
+  background: var(--surface-hi); color: var(--ink-faint); letter-spacing: .03em;
+}
+.tag-maybe { background: var(--accent-soft); color: var(--accent-text); }
+
+#whatIfPanel { margin-block-start: var(--gap-wide); }
+.whatif-impact { margin: var(--gap-wide) 0 0; color: var(--ink-dim); line-height: 1.6; }
+.whatif-impact strong { color: var(--ink); }
+
+/* ── spending ──────────────────────────────────────────────── */
+
+.dropzone {
+  background: var(--surface); border: 2px dashed var(--line-strong);
+  border-radius: var(--radius-xl); padding: 40px var(--pad-lg);
+  text-align: center; transition: border-color .16s ease, background-color .16s ease;
+}
+.dropzone.is-over { border-color: var(--accent-text); background: var(--accent-soft); }
+/* Once statements have been imported the dropzone has made its point; it shrinks to
+   a bar so the actual figures get the room. */
+.dropzone.is-compact {
+  display: flex; align-items: center; justify-content: center; gap: var(--gap-wide);
+  flex-wrap: wrap; padding: var(--pad) var(--pad-lg); text-align: start;
+}
+.dropzone.is-compact .drop-title { font-size: var(--fs-body); margin: 0; }
+.dropzone.is-compact .drop-sub { margin: 0; }
+.dropzone.is-compact .drop-privacy { display: none; }
+.drop-title { margin: 0 0 6px; font-size: 1.15rem; font-weight: 620; }
+.drop-sub { margin: 0 0 var(--pad-lg); color: var(--ink-dim); font-size: var(--fs-small); }
+/* The privacy line lives ON the control, not in a help page. It is the first thing
+   anyone sane asks about handing over a bank statement. */
+.drop-privacy {
+  margin: var(--pad-lg) auto 0; max-inline-size: 62ch;
+  color: var(--ink-faint); font-size: var(--fs-small); line-height: 1.55;
+}
+
+.bank-help {
+  margin-block-start: var(--gap-wide); background: var(--surface);
+  border-radius: var(--radius-lg); padding: 12px var(--pad);
+}
+.bank-help summary { cursor: pointer; color: var(--ink-dim); font-size: var(--fs-small); }
+.bank-help summary::marker { color: var(--ink-faint); }
+.bank-list { margin: var(--gap) 0 4px; padding-inline-start: 20px; color: var(--ink-dim); font-size: var(--fs-small); line-height: 1.7; }
+
+.sp-summary {
+  display: flex; flex-wrap: wrap; gap: var(--gap-wide); margin-block-start: var(--gap-wide);
+  background: var(--surface); border-radius: var(--radius-xl); padding: var(--pad-lg); box-shadow: var(--shadow-1);
+}
+.sp-cols { display: grid; gap: var(--gap-wide); margin-block-start: var(--gap-wide); grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 860px) { .sp-cols { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); } }
+
+/* A bar per merchant, proportional to the biggest. Sorted by spend, so the answer
+   to "where does it all go" is the first row rather than a number to compare. */
+.merchant-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--gap); }
+.merchant-list li {
+  display: grid; align-items: center; gap: var(--gap);
+  grid-template-columns: minmax(0, 1fr) auto auto; font-size: var(--fs-small);
+}
+/* The merchant name is a button: an unrecognised one is the user's to correct, and
+   the correction applies to every transaction filed under it. */
+.m-name {
+  overflow-wrap: anywhere; text-align: start; min-block-size: 0;
+  background: transparent; border: 0; padding: 0; color: var(--ink);
+  font: inherit; border-block-end: 1px dashed transparent;
+}
+.m-name:hover { color: var(--accent-text); border-block-end-color: var(--accent-line); }
+.m-bar { grid-column: 1 / -1; grid-row: 2; block-size: 5px; background: var(--surface-sunken); border-radius: var(--radius-pill); overflow: hidden; }
+.m-bar > span { display: block; block-size: 100%; background: var(--accent); border-radius: var(--radius-pill); }
+.m-amt { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.m-n { color: var(--ink-faint); min-inline-size: 30px; text-align: end; }
+
+/* ── import preview ─────────────────────────────────────── */
+
+.auth-modal-content.import-panel { inline-size: min(880px, 100%); }
+.map-grid { display: grid; gap: var(--gap); grid-template-columns: minmax(0, 1fr); margin-block-end: var(--gap); }
+@media (min-width: 620px) { .map-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.map-grid .field[hidden] { display: none; }
+
+.preview-wrap { overflow-x: auto; border-radius: var(--radius-lg); background: var(--surface-sunken); }
+.preview { inline-size: 100%; border-collapse: collapse; font-size: var(--fs-small); }
+.preview th, .preview td { padding: 8px 12px; text-align: start; vertical-align: top; }
+.preview th { color: var(--ink-faint); font-weight: 550; position: sticky; inset-block-start: 0; background: var(--surface-sunken); }
+.preview tbody tr + tr td { border-block-start: 1px solid var(--line); }
+.preview .num { text-align: end; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.preview td:first-child { white-space: nowrap; color: var(--ink-dim); }
+.preview .is-dupe { color: var(--ink-faint); }
+
+/* What is kept, above what was read. Seeing both is the whole point of this
+   screen — it is where a sanitiser mistake becomes visible. */
+.pv-merchant { font-weight: 600; }
+.pv-raw { display: block; color: var(--ink-faint); font-size: 0.78rem; margin-block-start: 2px; overflow-wrap: anywhere; }
+.pv-dropped { color: var(--ink-faint); }
+
+/* ── projected dates ─────────────────────────────────────────────────────── */
+/* A projection is not a recorded fact and must never look like one. */
+
+.when {
+  display: inline-block; margin-inline-start: 8px;
+  font-size: var(--fs-small); font-weight: 500;
+  padding: 2px 10px; border-radius: var(--radius-pill);
+  background: var(--surface-hi); color: var(--money-projected); vertical-align: middle;
+}
+.when-high { color: var(--safe-text); background: transparent; box-shadow: inset 0 0 0 1px var(--safe-text); }
+.when-low, .when-far { color: var(--ink-faint); }
+.when-blocked { color: var(--warn); }
+.when-none { color: var(--accent-text); background: var(--accent-soft); }
+@media (min-width: 940px) { .when { margin-inline-start: 0; } }
+
+/* ── modals ──────────────────────────────────────────────────────────────── */
+/* ⚠ THREE class names, inherited from the template: auth-modal, sync-modal, modal.
+   Styling only one leaves the other two rendering as ordinary page content. */
+
+.auth-modal, .sync-modal, .modal {
+  display: none; position: fixed; inset: 0; z-index: 100;
+  background: rgb(0 0 0 / .55); backdrop-filter: blur(3px);
+  align-items: center; justify-content: center; padding: var(--gap-wide);
+}
+.auth-modal-content, .sync-modal-content, .modal-content {
+  background: var(--surface-hi); color: var(--ink);
+  border-radius: var(--radius-xl); padding: var(--pad-lg);
+  inline-size: min(540px, 100%); max-block-size: 88vh; overflow-y: auto;
+  box-shadow: var(--shadow-2); animation: rise .2s ease both;
+}
+.auth-modal-content h2, .sync-modal-content h2, .modal-content h2 {
+  margin-block-start: 0; font-size: 1.15rem; font-weight: 620;
+}
+.close-auth-modal, .close-sync-modal, .close-modal {
+  float: inline-end; cursor: pointer; color: var(--ink-faint); font-size: 1.4rem; line-height: 1;
+}
+.close-auth-modal:hover, .close-sync-modal:hover, .close-modal:hover { color: var(--ink); }
+
+.input-group { display: flex; flex-direction: column; gap: 5px; margin-block-end: var(--gap-wide); }
+.input-group label { font-size: var(--fs-small); color: var(--ink-dim); }
+.input-group .opt { color: var(--ink-faint); }
+.grid-2 { display: grid; gap: var(--gap); grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 520px) { .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.edit-actions { display: flex; gap: var(--gap); justify-content: flex-end; align-items: center;
+  margin-block-start: var(--gap-wide); flex-wrap: wrap; }
+/* Pushes Save/Cancel to the trailing edge, keeping Remove far from them — a
+   destructive control should not sit under the thumb that reaches for Save. */
+.edit-actions .spacer { margin-inline-start: auto; }
+button.danger-ghost:hover { color: var(--danger); border-color: var(--danger); background: transparent; }
+.adjust-note { margin: 0 0 var(--gap-wide); color: var(--ink-dim); font-size: var(--fs-small); }
+/* Replaces the template's inline `color:#ccc`, which survived a theme change and
+   went unreadable on the light background. */
+.modal-note { margin: 0 0 var(--gap-wide); color: var(--ink-dim); font-size: var(--fs-small); line-height: 1.5; }
+.modal-note.centred { text-align: center; }
+#mmFlags .add-opts { margin-block-start: 3px; }
+
+.error-message { color: var(--danger); font-size: var(--fs-small); min-block-size: 1em; }
+.success-message { color: var(--safe-text); font-size: var(--fs-small); min-block-size: 1em; }
+#syncNotice { background: var(--surface-hi); border: 0 !important; border-radius: var(--radius-lg) !important; color: var(--ink); }
+#syncStatus { font-size: var(--fs-small); color: var(--ink-dim); }
+input[type="range"] { accent-color: var(--accent); min-block-size: 0; padding: 0; border: 0; background: transparent; }
+
+/* ── appearance ──────────────────────────────────────────────────────────── */
+
+.seg { display: flex; gap: 2px; background: var(--surface-sunken); padding: 4px; border-radius: var(--radius-pill); }
+.seg button {
+  flex: 1; background: transparent; border: 0; color: var(--ink-dim);
+  padding: 8px; border-radius: var(--radius-pill); font-size: var(--fs-small); min-block-size: 0;
+}
+.seg button.is-on { background: var(--surface); color: var(--ink); }
+
+.swatches { display: flex; gap: var(--gap); flex-wrap: wrap; }
+.swatch {
+  inline-size: 34px; block-size: 34px; min-inline-size: 34px; min-block-size: 34px;
+  border-radius: var(--radius-pill); padding: 0; border: 2px solid transparent; background: var(--sw);
+}
+.swatch.is-on { border-color: var(--ink); box-shadow: 0 0 0 3px var(--accent-soft); }
+.custom-accent { display: flex; align-items: center; gap: var(--gap); flex-wrap: wrap; }
+.custom-accent input[type="color"] {
+  inline-size: 46px; block-size: 38px; padding: 2px; min-block-size: 0;
+  background: var(--surface-sunken); border-radius: var(--radius); cursor: pointer;
+}
+.derived { inline-size: 34px; block-size: 34px; border-radius: var(--radius-pill); background: transparent; }
+.derived-note { font-size: var(--fs-small); color: var(--ink-faint); flex: 1 1 100%; }
+
+/* ── in-page dialogs ─────────────────────────────────────────────────────── */
+/* Replacing prompt()/confirm()/alert(). Native dialogs cannot be themed, block the
+   whole tab, and on a phone look like a browser security warning. */
+
+.ui-dialog .dialog-box { inline-size: min(440px, 100%); }
+.dialog-body { margin: 0 0 var(--gap-wide); color: var(--ink-dim); font-size: var(--fs-small); line-height: 1.55; }
+.dialog-field { margin-block-end: var(--gap); }
+.dialog-input { inline-size: 100%; }
+
+.dialog-choices { list-style: none; margin: 0 0 var(--gap-wide); padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.dialog-choice {
+  border-radius: var(--radius-pill); padding: 7px 14px; min-block-size: 34px;
+  background: var(--surface-sunken); border: 1px solid transparent;
+  color: var(--ink-dim); font-size: var(--fs-small);
+}
+.dialog-choice:hover { background: var(--accent-soft); color: var(--accent-text); border-color: var(--accent-line); }
+
+/* Destructive confirmation. --danger is reserved for exactly this — permanent
+   removal — so that when it appears it still means something. */
+button.danger-btn { background: var(--danger); color: var(--ground); border-color: var(--danger); }
+button.danger-btn:hover { background: var(--danger); filter: brightness(1.08); }
+/* An empty cancel label (a one-button acknowledgement) should not leave a ghost button. */
+.dialog-cancel:empty { display: none; }

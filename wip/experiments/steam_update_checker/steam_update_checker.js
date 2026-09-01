@@ -295,15 +295,38 @@ async function regenerateToken() {
 // ==========================================
 // ACCOUNT SYNC  (via /sync-wip.js)
 // ==========================================
-// The shared module owns the transport, the version check and conflict handling.
-// This page only says what its data is and how two copies combine.
+// The shared module owns the transport, the debounce, the server-assigned
+// version numbers and the merge. This page only describes its own data.
 //
-// Note what `canonical` covers: only the tracker credentials. Everything else
-// here is interface preference — sidebar state, sort order, default page — and
-// those still sync, they just never raise a conflict prompt. Changing a sort on
-// your phone must not interrupt you on your PC.
+// This page holds NO records of its own: tracked games live on the tracker
+// backend, keyed by the Discord user id. What syncs here is a preferences map
+// and the tracker credentials — so there is exactly one collection.
+//
+// Note what `canonical` covers: the tracker credentials and the two preferences
+// that are real choices about data (the site-search template, the query
+// parameters to strip). Sidebar state, sort order, default page and mobile
+// padding are VIEW STATE — they still sync, they just never count as a data
+// change. Changing a sort on your phone must not interrupt you on your PC.
 
 let syncClient = null;
+
+// Preferences that are choices about DATA rather than about the view. Only these
+// take part in the conflict fingerprint; everything else in the map is view state.
+const DATA_PREF_KEYS = ['searchTemplate', 'stripParams'];
+
+const SYNC_COLLECTIONS = [
+    // A key/value section, so a preference changed on one device travels as one
+    // operation on that key instead of as a wholesale overwrite of the map.
+    //
+    // `ignore` is empty on purpose: the one genuinely per-device thing this page
+    // keeps (the collapsed/expanded sidebar) already lives outside the synced
+    // blob, in its own `steam_tracker_sidebar_state` localStorage key.
+    { name: 'ui_preferences', kind: 'map', ignore: [] },
+];
+
+const COLLECTION_LABELS = {
+    ui_preferences: 'preferences',
+};
 
 function initSync() {
     if (!authManager || typeof SyncWip === 'undefined') return;
@@ -311,10 +334,14 @@ function initSync() {
         auth: authManager,
         appName: CONFIG.APP_NAME,
 
+        // `steam_creds` is deliberately NOT a collection. It is a credential blob,
+        // not a set of records: describing it per key would let "unlink this
+        // device" travel as one deletion per field and silently unlink every other
+        // device. Left undeclared, a change to it forces an honest whole-state
+        // save — last write wins, which is what this page has always done with it.
         getState: () => ({
             steam_creds: discordCreds,
             ui_preferences: userPreferences,
-            last_updated: Date.now(),
         }),
         setState: (s) => applySyncedState(s),
 
@@ -322,8 +349,23 @@ function initSync() {
 
         hasData: (s) => !!(s && (s.steam_creds || s.ui_preferences)),
 
-        // credentials only — preferences are view state
-        canonical: (s) => JSON.stringify((s && s.steam_creds) || null),
+        collections: SYNC_COLLECTIONS,
+        collectionLabels: COLLECTION_LABELS,
+
+        // Older copies of this blob carried a `last_updated` stamp written on every
+        // read. The server assigns versions now, so it is no longer written — but a
+        // stored copy may still have one, and it must not read as a change.
+        ignoreKeys: ['last_updated'],
+
+        // Credentials plus the preferences that are actually data. View state is
+        // excluded, so a sort order can never look like a conflict.
+        canonical: (s) => {
+            if (!s) return null;
+            const prefs = s.ui_preferences || {};
+            const data = {};
+            DATA_PREF_KEYS.forEach((k) => { data[k] = prefs[k] != null ? prefs[k] : null; });
+            return JSON.stringify({ creds: s.steam_creds || null, prefs: data });
+        },
 
         // preferences deep-merge; credentials prefer whatever this device holds
         merge: (theirs, mine) => ({
@@ -337,11 +379,93 @@ function initSync() {
                     ...((mine.ui_preferences || {}).searchTemplate || {}),
                 },
             },
-            last_updated: Date.now(),
         }),
 
         onStatus: (status) => console.log('[Sync]', status),
+
+        // Both devices changed something? That is no longer a question for the
+        // user: their changes are applied, mine go on top, and the page just says
+        // what happened. A CATCH-UP (info.kind === 'catch-up') arrives the same
+        // way — sync worked out one side was simply behind and moved the data.
+        //
+        // It is a NOTICE, not a question. Ignoring it is confirming it: the action
+        // already happened, so a dismissal must never undo it.
+        onMerged: (info) => {
+            const n = info.changesFromOtherDevice;
+            let msg = info.message || `Merged ${n} change${n === 1 ? '' : 's'} from your other device`;
+            if (info.stats && info.stats.myEditWon) msg += ` — ${info.stats.myEditWon} kept from this device`;
+            if (info.awaitingDecision) msg += ` — ${info.awaitingDecision} need a decision`;
+
+            if (!info.revertable) {
+                if (info.direction !== 'upload') msg += " — can't be undone on this device";
+                showSyncNotice(msg, []);
+                return;
+            }
+            showSyncNotice(msg, [
+                { label: 'Revert', act: () => info.revert() },
+                { label: 'OK', act: () => info.confirm(), primary: true },
+            ], () => info.confirm());   // dismissing IS confirming
+        },
+
+        // The ONE thing sync will not decide by itself: a preference cleared on one
+        // device and edited on the other. Raised AFTER the rest of the merge is
+        // already saved, so nothing waits on the answer — and anything the user
+        // does not explicitly agree to delete is KEPT.
+        onItemConflict: (info) => confirmItemDeletions(info.collisions),
     });
+}
+
+/**
+ * The silent-merge notice. Same look as showToast — it is the same toast, with
+ * buttons — because this reports something that has ALREADY happened rather than
+ * asking a question. `onDismiss` runs if it times out without a button press.
+ */
+function showSyncNotice(msg, actions, onDismiss) {
+    const toast = document.createElement('div');
+    toast.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: #333; color: white; padding: 12px 20px; border-radius: 4px; border-left: 4px solid #17a2b8; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 3000; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; max-width: 420px;';
+
+    let settled = false;
+    const settle = (fn) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+        if (fn) fn();
+    };
+
+    const text = document.createElement('span');
+    text.textContent = msg;
+    toast.appendChild(text);
+
+    (actions || []).forEach((a) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = a.label;
+        btn.style.cssText = 'background: transparent; color: inherit; border: 1px solid currentColor; border-radius: 4px; padding: 4px 10px; cursor: pointer; font: inherit;';
+        if (a.primary) btn.style.fontWeight = '600';
+        btn.addEventListener('click', () => settle(a.act));
+        toast.appendChild(btn);
+    });
+
+    document.body.appendChild(toast);
+    const timer = setTimeout(() => settle(onDismiss), 9000);
+}
+
+/**
+ * Delete-vs-edit, answered per entry. Opt-IN to deleting: answering no — or
+ * dismissing — KEEPS the entry, because a dismissal must never destroy.
+ * Returns {[key]: 'delete'} for the ones agreed to, or null to keep them all.
+ */
+function confirmItemDeletions(collisions) {
+    const answers = {};
+    (collisions || []).forEach((c) => {
+        const where = c.deletedOnThisDevice
+            ? 'You cleared this here; your other device changed it'
+            : 'Cleared on your other device; you changed it here';
+        if (confirm(`Delete "${c.id}"? (${where}.) Cancel keeps it.`)) answers[c.key] = 'delete';
+    });
+    return Object.keys(answers).length ? answers : null;
 }
 
 /** Apply a copy of the account state to this device. */

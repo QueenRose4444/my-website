@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/png" href="/images/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/images/favicon.svg" />
+    <link rel="shortcut icon" href="/images/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="RoseStuffs" />
+    <link rel="manifest" href="/images/site.webmanifest" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>payday — what you want, and when you can afford it</title>
+    <!-- theme.js MUST be blocking and BEFORE the stylesheets, or the page paints
+         the wrong theme first and then corrects itself. Not defer, not module. -->
+    <script src="/shared/theme.js?v=20260901c"></script>
+    <link rel="stylesheet" href="/shared/tokens.css?v=20260901c">
+    <link rel="stylesheet" href="payday.css?v=20260901c">
+    <!-- WIP page: keep this out of search results. Remove ONLY when promoting the page to a live path. -->
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="canonical" href="https://rosestuffs.org/wip/experiments/payday/" />
+</head>
+<body>
+
+        <!-- Silent-merge notice (sync's onMerged). A NOTICE, not a question: it
+             reports something that has already happened, so dismissing it confirms
+             it. Hidden until sync has something to say. -->
+        <div id="syncNotice" style="display:none;">
+            <span id="syncNoticeText" style="flex:1 1 240px;"></span>
+            <span id="syncNoticeActions"></span>
+        </div>
+
+    <!-- The app bar sits OUTSIDE .container so its background reaches the viewport
+         edges, the way the notes app does it. Only its CONTENTS are constrained to
+         the content width. Sticky, so the tabs stay reachable while scrolling. -->
+    <header class="app-bar">
+      <div class="app-bar-inner">
+        <div class="brand">
+            <span class="brand-mark" aria-hidden="true"></span>
+            <span class="brand-name">payday</span>
+        </div>
+
+        <nav class="views" role="tablist" aria-label="Views">
+            <button type="button" class="view-tab is-active" data-view="overview" role="tab" aria-selected="true">Overview</button>
+            <button type="button" class="view-tab" data-view="items" role="tab" aria-selected="false">Items</button>
+            <button type="button" class="view-tab" data-view="money" role="tab" aria-selected="false">Money</button>
+            <button type="button" class="view-tab" data-view="spending" role="tab" aria-selected="false">Spending</button>
+        </nav>
+
+        <div class="bar-right">
+            <span id="userStatus" class="user-status">Loading…</span>
+            <!-- position:relative, so the menu anchors to the BUTTON rather than to
+                 the page. Without a positioned ancestor it flew to the viewport edge. -->
+            <div class="menu-wrap">
+                <button type="button" id="menuButton" class="icon" aria-label="Menu" aria-expanded="false" aria-haspopup="true">⋯</button>
+                <div id="appMenu" class="app-menu" hidden>
+                    <div class="menu-group">
+                        <button type="button" id="loginButton">Log in</button>
+                        <button type="button" id="registerButton">Create account</button>
+                        <button type="button" id="logoutButton">Log out</button>
+                    </div>
+                    <div class="menu-group">
+                        <button type="button" id="localSyncButton">Export / import a file</button>
+                        <button type="button" id="settingsButton">Settings</button>
+                        <button type="button" id="themeButton">Appearance</button>
+                    </div>
+                    <div class="menu-group menu-links">
+                        <a href="../../home/">Home</a>
+                        <a href="../">Experiments</a>
+                        <a href="../../meds/">Meds</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+        <!-- ══ OVERVIEW ══════════════════════════════════════════════════════ -->
+        <section class="view is-active" id="view-overview" role="tabpanel" aria-label="Overview">
+
+            <!-- The hero answers one question: am I on track, and what's next.
+                 The ring is the signature — saving is a slow fill, and that is the
+                 feeling the page should open with. -->
+            <div class="goal-card" id="goalCard">
+                <div class="goal-ring-wrap">
+                    <svg class="goal-ring" viewBox="0 0 200 200" role="img" aria-labelledby="goalRingLabel">
+                        <title id="goalRingLabel">Progress toward your next item</title>
+                        <circle class="ring-track" cx="100" cy="100" r="86" />
+                        <circle class="ring-fill" cx="100" cy="100" r="86" id="ringFill" />
+                    </svg>
+                    <div class="goal-ring-centre">
+                        <span class="goal-pct money" id="goalPct">0%</span>
+                        <span class="goal-of" id="goalOf">of $0</span>
+                    </div>
+                </div>
+                <div class="goal-detail">
+                    <p class="eyebrow">Next up</p>
+                    <h2 id="goalName">Nothing on the list yet</h2>
+                    <p class="goal-line"><span class="money" id="goalSaved">$0</span> saved · <span class="money" id="goalLeft">$0</span> to go</p>
+                    <p class="goal-when" id="goalWhen"></p>
+                    <div class="goal-actions">
+                        <button type="button" id="goalSpend" class="ghost">I spent some of it</button>
+                        <button type="button" id="goalTopUp" class="ghost">Put money aside</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Where the money goes each month. A donut, because the job is
+                 part-to-whole of one month's income — not a comparison over time. -->
+            <div class="ov-grid">
+                <div class="panel">
+                    <h3 class="panel-title">Your month</h3>
+                    <div class="split-wrap">
+                        <svg class="split-ring" viewBox="0 0 120 120" role="img" aria-labelledby="splitLabel">
+                            <title id="splitLabel">How each month's income is divided</title>
+                            <g id="splitSegments"></g>
+                        </svg>
+                        <ul class="split-key" id="splitKey"></ul>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3 class="panel-title">Coming up</h3>
+                    <ul id="upcoming" class="upcoming"></ul>
+                </div>
+
+                <div class="panel panel-queue">
+                    <h3 class="panel-title">The queue</h3>
+                    <ol id="queuePreview" class="queue-preview"></ol>
+                    <button type="button" class="ghost full" data-goto="items">Open the list →</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══ ITEMS ═════════════════════════════════════════════════════════ -->
+        <section class="view" id="view-items" role="tabpanel" aria-label="Items" hidden>
+            <form class="quick-add" id="quickAdd" onsubmit="return false;">
+                <div class="qa-fields">
+                    <input id="addUrl" type="url" placeholder="Paste a link…" aria-label="Product link" autocomplete="off" inputmode="url">
+                    <input id="addName" type="text" placeholder="What is it?" aria-label="Item name" autocomplete="off">
+                    <input id="addPrice" type="text" placeholder="$0.00" aria-label="Price" autocomplete="off" inputmode="decimal">
+                    <select id="addCategory" aria-label="Category"></select>
+                    <button id="addButton" type="button" class="primary">Add</button>
+                </div>
+                <p class="qa-hint" id="addHint" role="status" aria-live="polite"></p>
+            </form>
+
+            <div class="summary" aria-label="Totals">
+                <div class="stat">
+                    <span class="stat-label">Still to buy</span>
+                    <strong class="stat-value" id="summaryCount">0 items</strong>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Total
+                        <button type="button" class="info" title="Everything not yet bought or dropped. Bought items are kept for the record but not counted.">?</button>
+                    </span>
+                    <strong class="stat-value money" id="summaryTotal">$0.00</strong>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Still to save
+                        <button type="button" class="info" title="The total minus what you have already put aside. This is the figure the dates are worked out from.">?</button>
+                    </span>
+                    <strong class="stat-value money" id="summaryLeft">$0.00</strong>
+                </div>
+                <div class="stat stat-done"><span class="stat-label" id="summaryBought"></span></div>
+                <div class="view-toggle" role="group" aria-label="Layout">
+                    <button type="button" id="viewCards" class="icon" aria-pressed="true" title="Cards">▦</button>
+                    <button type="button" id="viewTable" class="icon" aria-pressed="false" title="Table">☰</button>
+                </div>
+            </div>
+
+            <div id="payday" data-view="cards">
+                <div class="list" id="list"></div>
+                <div class="empty" id="empty" hidden>
+                    <h2>Nothing on the list yet</h2>
+                    <p>Paste a link to something you want, give it a price, and hit Add.</p>
+                    <p class="empty-note">Drag things into the order you want to buy them in. Once your pay
+                       is in, payday works out the date you can afford each one.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══ MONEY ═════════════════════════════════════════════════════════ -->
+        <section class="view" id="view-money" role="tabpanel" aria-label="Money" hidden>
+            <div class="rates-strip">
+                <div class="stat"><span class="stat-label">In</span><strong class="stat-value money in" id="rateIn">$0.00</strong></div>
+                <div class="stat"><span class="stat-label">Out</span><strong class="stat-value money out" id="rateOut">$0.00</strong></div>
+                <div class="stat"><span class="stat-label">Spare a month</span><strong class="stat-value money" id="rateSpare">$0.00</strong></div>
+                <div class="stat">
+                    <span class="stat-label">In the account
+                        <button type="button" class="info" title="What you have right now. Dates run forward from this, so leaving it at zero makes everything look further away than it is.">?</button>
+                    </span>
+                    <input id="startBalance" type="text" inputmode="decimal" placeholder="$0.00" aria-label="Current balance">
+                </div>
+            </div>
+
+            <div class="money-cols">
+                <div class="panel">
+                    <h3 class="panel-title">Pay coming in
+                        <button type="button" class="info" title="Enter what actually lands in your account, not your salary before tax. payday does not work out tax yet — when it does, it will offer to do this for you.">?</button>
+                    </h3>
+                    <!-- Labelled, not placeholder-only. Five controls across one
+                         half-width panel squeezed the name box to 72px; two rows of
+                         two give every field a usable width at any screen size. -->
+                    <div class="money-add">
+                        <label class="field fa-name"><span class="field-label">What is it?</span>
+                            <input id="incLabel" type="text" placeholder="Job" autocomplete="off"></label>
+                        <label class="field fa-amt"><span class="field-label">Take-home each time</span>
+                            <input id="incAmount" type="text" placeholder="$0.00" inputmode="decimal" autocomplete="off"></label>
+                        <label class="field fa-cad"><span class="field-label">How often</span>
+                            <select id="incCadence">
+                                <option value="weekly">Weekly</option>
+                                <option value="fortnightly" selected>Fortnightly</option>
+                                <option value="four_weekly">Every 4 weeks</option>
+                                <option value="monthly">Monthly</option>
+                            </select></label>
+                        <label class="field fa-date"><span class="field-label">A real pay date</span>
+                            <input id="incDate" type="date"></label>
+                        <button type="button" id="incAdd" class="primary fa-add">Add pay</button>
+                    </div>
+                    <p class="add-hint" id="incHint" role="status" aria-live="polite"></p>
+                    <p class="field-note">Any real pay date will do — payday counts forward from it, so a
+                       27-fortnight year comes out right.</p>
+                    <div id="incList" class="money-list"></div>
+                </div>
+
+                <div class="panel">
+                    <h3 class="panel-title">Going out</h3>
+
+                    <!-- Quick-add: name and amount are enough. Everything else has a
+                         sensible default, so a subscription takes two fields and Enter. -->
+                    <div class="money-add">
+                        <label class="field fa-name"><span class="field-label">What is it?</span>
+                            <input id="costName" type="text" placeholder="Netflix" autocomplete="off"></label>
+                        <label class="field fa-amt"><span class="field-label">Amount</span>
+                            <input id="costAmount" type="text" placeholder="$0.00" inputmode="decimal" autocomplete="off"></label>
+                        <label class="field fa-cad"><span class="field-label">How often</span>
+                            <select id="costCadence">
+                                <option value="weekly">Weekly</option>
+                                <option value="fortnightly">Fortnightly</option>
+                                <option value="four_weekly">Every 4 weeks</option>
+                                <option value="monthly" selected>Monthly</option>
+                                <option value="quarterly">Quarterly</option>
+                                <option value="annual">Yearly</option>
+                            </select></label>
+                        <label class="field fa-date"><span class="field-label">Next one due</span>
+                            <input id="costDate" type="date"></label>
+                        <div class="add-opts fa-opts">
+                            <label class="check"><input type="checkbox" id="costEssential"> Essential</label>
+                            <label class="check">
+                                <input type="checkbox" id="costWhatIf"> Just checking
+                                <button type="button" class="info" title="Adds it as a what-if. It does not come out of your money — payday just shows you what it would cost you and how much later it would push things.">?</button>
+                            </label>
+                        </div>
+                        <button type="button" id="costAdd" class="primary fa-add">Add</button>
+                    </div>
+                    <p class="add-hint" id="costHint" role="status" aria-live="polite"></p>
+                    <p class="field-note">"Every 4 weeks" is 13 payments a year, not 12.</p>
+                    <div id="costList" class="money-list"></div>
+                </div>
+            </div>
+
+            <!-- What-if costs, and what they would actually do to the plan. -->
+            <div class="panel" id="whatIfPanel" hidden>
+                <h3 class="panel-title">What if you added these?</h3>
+                <div id="whatIfList" class="money-list"></div>
+                <p class="whatif-impact" id="whatIfImpact"></p>
+            </div>
+        </section>
+
+        <!-- ══ SPENDING ════════════════════════════════════════ -->
+        <section class="view" id="view-spending" role="tabpanel" aria-label="Spending" hidden>
+
+            <!-- ⚠ The file never leaves this browser (D-03). Say so ON the control,
+                 not in a help page — it is the question anyone sane asks first. -->
+            <div class="dropzone" id="dropzone">
+                <input type="file" id="fileInput" accept=".csv,.ofx,.qfx,.qif,.txt" hidden>
+                <p class="drop-title">Drop a bank statement here</p>
+                <p class="drop-sub">CSV, OFX, QFX or QIF · <strong>OFX imports most cleanly</strong></p>
+                <button type="button" class="primary" id="pickFile">Choose a file</button>
+                <p class="drop-privacy">
+                    Read on this device only. Nothing is uploaded, and payday never asks for a bank
+                    login. Store numbers, suburbs, reference numbers and running balances are
+                    stripped before anything is saved — you will see exactly what is kept.
+                </p>
+            </div>
+
+            <details class="bank-help">
+                <summary>Getting the file out of your bank</summary>
+                <ul class="bank-list">
+                    <li><strong>CommBank</strong> — CSV, OFX or QIF. ⚠ Capped at 600 transactions and 2 years, and desktop NetBank only.</li>
+                    <li><strong>Westpac</strong> — CSV, OFX or QIF, from desktop online banking. Not available in the app.</li>
+                    <li><strong>NAB</strong> — personal accounts have no plain CSV; use QIF.</li>
+                    <li><strong>ANZ</strong> — CSV, OFX or QIF.</li>
+                </ul>
+            </details>
+
+            <div class="sp-summary" id="spSummary" hidden>
+                <div class="stat"><span class="stat-label">Transactions</span><strong class="stat-value" id="spCount">0</strong></div>
+                <div class="stat"><span class="stat-label">Covering</span><strong class="stat-value" id="spRange">—</strong></div>
+                <div class="stat"><span class="stat-label" id="spOutLabel">Out</span><strong class="stat-value money out" id="spOut">$0.00</strong></div>
+                <div class="stat"><span class="stat-label" id="spInLabel">In</span><strong class="stat-value money in" id="spIn">$0.00</strong></div>
+            </div>
+
+            <div class="sp-cols" id="spBody" hidden>
+                <div class="panel">
+                    <h3 class="panel-title" id="merchantTitle">Where it went</h3>
+                    <ul class="merchant-list" id="merchantList"></ul>
+                </div>
+                <div class="panel">
+                    <h3 class="panel-title">Imports</h3>
+                    <div class="money-list" id="batchList"></div>
+                    <p class="field-note">Removing an import takes out every transaction that came with it.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Import preview. ⚠ THIS SCREEN IS THE CONSENT STEP (plans/07-import.md §7.3):
+             it shows the SANITISED rows beside what was dropped, before anything is
+             stored. If the sanitiser is wrong, this is where it becomes visible. -->
+        <div id="importModal" class="auth-modal">
+          <div class="auth-modal-content import-panel">
+            <h2 id="impTitle">Check this before it is saved</h2>
+            <p class="adjust-note" id="impSummary"></p>
+
+            <div id="impMapping" class="map-grid" hidden>
+              <label class="field"><span class="field-label">Date column</span><select id="mapDate"></select></label>
+              <label class="field"><span class="field-label">Amount column</span><select id="mapAmount"></select></label>
+              <label class="field"><span class="field-label">Description column</span><select id="mapDesc"></select></label>
+              <label class="field"><span class="field-label">Date format</span><select id="mapOrder"></select></label>
+            </div>
+            <p class="add-hint" id="impWarn" role="status" aria-live="polite"></p>
+
+            <div class="preview-wrap">
+              <table class="preview" id="impPreview">
+                <thead><tr><th>Date</th><th>Kept as</th><th class="num">Amount</th><th>Dropped</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="field-note" id="impMore"></p>
+
+            <div class="edit-actions">
+              <button type="button" id="impCancel" class="ghost">Cancel</button>
+              <span class="spacer"></span>
+              <button type="button" id="impConfirm" class="primary">Import</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Adjust the pot: an unplanned spend, or money put aside. -->
+        <div id="adjustModal" class="auth-modal">
+          <div class="auth-modal-content adjust-panel">
+            <h2 id="adjustTitle">I spent some of it</h2>
+            <p class="adjust-note" id="adjustNote"></p>
+            <div class="input-group">
+              <label for="adjustAmount">How much</label>
+              <input type="text" id="adjustAmount" inputmode="decimal" placeholder="$0.00">
+            </div>
+            <div class="input-group">
+              <label for="adjustWhy">What on <span class="opt">(optional)</span></label>
+              <input type="text" id="adjustWhy" placeholder="Takeaway, car rego…">
+            </div>
+            <div class="edit-actions">
+              <button type="button" id="adjustSave" class="primary">Save</button>
+              <button type="button" id="adjustCancel">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Edit a pay source or a cost. Rose: "the name for the pay and coming out
+             subscriptions/ect need to be able to edit instead of removing". One modal
+             serves both — the two flag checkboxes are hidden for income. -->
+        <div id="moneyModal" class="auth-modal">
+          <div class="auth-modal-content">
+            <h2 id="mmTitle">Edit</h2>
+            <div class="input-group"><label for="mmName">Name</label><input type="text" id="mmName" autocomplete="off"></div>
+            <div class="grid-2">
+              <div class="input-group"><label for="mmAmount" id="mmAmountLabel">Amount</label><input type="text" id="mmAmount" inputmode="decimal"></div>
+              <div class="input-group"><label for="mmCadence">How often</label><select id="mmCadence"></select></div>
+              <div class="input-group"><label for="mmDate" id="mmDateLabel">Next one due</label><input type="date" id="mmDate"></div>
+              <div class="input-group" id="mmFlags">
+                <label>Options</label>
+                <div class="add-opts">
+                  <label class="check"><input type="checkbox" id="mmEssential"> Essential</label>
+                  <label class="check"><input type="checkbox" id="mmWhatIf"> Just checking</label>
+                </div>
+              </div>
+            </div>
+            <p class="add-hint" id="mmHint" role="status" aria-live="polite"></p>
+            <div class="edit-actions">
+              <button type="button" id="mmDelete" class="ghost danger-ghost">Remove</button>
+              <span class="spacer"></span>
+              <button type="button" id="mmSave" class="primary">Save</button>
+              <button type="button" id="mmCancel">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Appearance -->
+        <div id="themeModal" class="auth-modal">
+          <div class="auth-modal-content">
+            <h2>Appearance</h2>
+            <div class="input-group">
+              <label>Theme</label>
+              <div class="seg" id="themeSeg" role="group" aria-label="Theme">
+                <button type="button" data-theme="system">Auto</button>
+                <button type="button" data-theme="light">Light</button>
+                <button type="button" data-theme="dark">Dark</button>
+              </div>
+            </div>
+            <div class="input-group">
+              <label>Accent</label>
+              <div class="swatches" id="accentSwatches"></div>
+            </div>
+            <div class="input-group">
+              <label for="customAccent">Or pick your own
+                <button type="button" class="info" title="payday keeps your colour but adjusts how light it is, so text on it stays readable. The swatch shows what it settled on.">?</button>
+              </label>
+              <div class="custom-accent">
+                <input type="color" id="customAccent" value="#E79BB4">
+                <span class="derived" id="derivedSwatch"></span>
+                <span class="derived-note" id="derivedNote"></span>
+              </div>
+            </div>
+            <div class="edit-actions"><button type="button" id="themeClose" class="primary">Done</button></div>
+          </div>
+        </div>
+
+        <!-- Edit item -->
+        <div id="editModal" class="auth-modal">
+          <div class="auth-modal-content edit-panel">
+            <h2>Edit item</h2>
+            <div class="input-group"><label for="editName">Name</label><input type="text" id="editName"></div>
+            <div class="grid-2">
+              <div class="input-group"><label for="editPrice">Price</label><input type="text" id="editPrice" inputmode="decimal"></div>
+              <div class="input-group">
+                <label for="editTarget">Alert me at
+                  <button type="button" class="info" title="The price you would be happy to pay. When payday starts checking prices, it will tell you if it drops to this.">?</button>
+                </label>
+                <input type="text" id="editTarget" inputmode="decimal" placeholder="optional">
+              </div>
+              <div class="input-group">
+                <label for="editUsed">Second-hand</label>
+                <input type="text" id="editUsed" inputmode="decimal" placeholder="optional">
+              </div>
+              <div class="input-group"><label for="editStatus">Status</label><select id="editStatus"></select></div>
+              <div class="input-group"><label for="editCat">Category</label><select id="editCat"></select></div>
+            </div>
+            <div class="input-group"><label for="editUrl">Link</label><input type="url" id="editUrl"></div>
+            <div class="input-group"><label for="editImage">Image URL</label><input type="url" id="editImage" placeholder="optional"></div>
+            <div class="input-group">
+              <label for="editWork">Used for work: <output id="editWorkOut">0%</output>
+                <button type="button" class="info" title="Roughly how much of your use is for work rather than personal. Nothing is calculated from it yet — the tax part uses it later.">?</button>
+              </label>
+              <input type="range" id="editWork" min="0" max="100" step="5">
+            </div>
+            <div class="input-group">
+              <label for="editWhy">Why you want it</label>
+              <input type="text" id="editWhy" placeholder="optional">
+            </div>
+            <div class="input-group"><label for="editNotes">Notes</label><textarea id="editNotes" rows="2" placeholder="optional"></textarea></div>
+            <div class="edit-actions">
+              <button type="button" id="editSave" class="primary">Save</button>
+              <button type="button" id="editCancel">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+    </main>
+
+    <!-- Modals for Login, Register, Sync, etc. -->
+    <div id="loginModal" class="auth-modal">
+      <div class="auth-modal-content">
+        <span class="close-auth-modal" data-modal-id="loginModal">&times;</span>
+        <h2>Login</h2>
+        <form id="loginForm">
+          <div class="input-group">
+            <label for="loginUsername">Username:</label>
+            <input type="text" id="loginUsername" required>
+          </div>
+          <div class="input-group">
+            <label for="loginPassword">Password:</label>
+            <input type="password" id="loginPassword" required>
+          </div>
+          <button type="submit">Login</button>
+          <button type="button" class="close-auth-modal-button" data-modal-id="loginModal">Cancel</button>
+          <div id="loginError" class="error-message"></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="registerModal" class="auth-modal">
+      <div class="auth-modal-content">
+        <span class="close-auth-modal" data-modal-id="registerModal">&times;</span>
+        <h2>Register</h2>
+        <form id="registerForm">
+          <div class="input-group">
+            <label for="registerUsername">Username:</label>
+            <input type="text" id="registerUsername" required>
+          </div>
+          <div class="input-group">
+            <label for="registerPassword">Password:</label>
+            <input type="password" id="registerPassword" required minlength="4">
+          </div>
+          <div class="input-group">
+            <label for="registerConfirmPassword">Confirm Password:</label>
+            <input type="password" id="registerConfirmPassword" required minlength="4">
+          </div>
+          <button type="submit">Register</button>
+          <button type="button" class="close-auth-modal-button" data-modal-id="registerModal">Cancel</button>
+          <div id="registerError" class="error-message"></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="changePasswordModal" class="auth-modal">
+        <div class="auth-modal-content">
+          <span class="close-auth-modal" data-modal-id="changePasswordModal">&times;</span>
+          <h2>Change Password</h2>
+          <form id="changePasswordForm">
+            <div class="input-group">
+              <label for="currentPassword">Current Password:</label>
+              <input type="password" id="currentPassword" required>
+            </div>
+            <div class="input-group">
+              <label for="newPassword">New Password:</label>
+              <input type="password" id="newPassword" required minlength="4">
+            </div>
+            <div class="input-group">
+              <label for="confirmNewPassword">Confirm New Password:</label>
+              <input type="password" id="confirmNewPassword" required minlength="4">
+            </div>
+            <button type="submit">Update Password</button>
+            <button type="button" class="close-auth-modal-button" data-modal-id="changePasswordModal">Cancel</button>
+            <div id="changePasswordError" class="error-message"></div>
+            <div id="changePasswordSuccess" class="success-message"></div>
+          </form>
+        </div>
+    </div>
+
+    <div id="syncModal" class="sync-modal">
+      <div class="sync-modal-content">
+        <span class="close-sync-modal" data-modal-id="syncModal">&times;</span>
+        <h2>Local File Sync</h2>
+        <p class="modal-note">Export your current data to a file, or import data from a previously exported file. This only affects local browser storage.</p>
+        <div class="input-group">
+          <button id="exportData" class="btn-sync">Export All Data to File</button>
+        </div>
+        <div class="input-group">
+          <label for="importData">Import Data from File:</label>
+          <input type="file" id="importData" accept=".json">
+        </div>
+        <div id="syncStatus" style="min-height: 1em; margin-top: 15px;"></div>
+        <button type="button" class="close-sync-modal-button" data-modal-id="syncModal">Close</button>
+      </div>
+    </div>
+
+    <!-- Delete-vs-edit Modal (sync's onItemConflict) — the one question sync asks.
+         Opt-IN to deleting: nothing goes unless it is ticked, and "Keep everything"
+         (or closing the tab) keeps the lot. A dismissal must never destroy. -->
+    <div id="itemConflictModal" class="auth-modal">
+        <div class="auth-modal-content">
+            <h2>Deleted on one device, edited on another</h2>
+            <p class="modal-note">These notes were deleted on one device and changed on the other. Nothing is deleted unless you tick it.</p>
+            <div id="itemConflictList"></div>
+            <div class="sync-choice-actions">
+                <button id="itemConflictApply" class="btn-download">Delete the ticked notes</button>
+                <button type="button" id="itemConflictKeepAll" class="btn-upload">Keep everything</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sync Choice Modal (no-base fallback: a first sync, or cleared storage) -->
+    <div id="syncChoiceModal" class="auth-modal sync-choice-modal">
+        <div class="auth-modal-content">
+            <h2>Data Sync Conflict</h2>
+            <p class="modal-note centred">Your local data is different from your server data. Choose which version you want to keep.</p>
+            <div class="comparison-container">
+                <div class="data-column">
+                    <h3>Local Data<br>(This Browser)</h3>
+                    <p><strong>Last Update:</strong> <span id="localLastUpdate">N/A</span></p>
+                    <p><strong>Entries:</strong> <span id="localEntryCount">N/A</span></p>
+                </div>
+                <div class="data-column">
+                    <h3>Server Data<br>(Your Account)</h3>
+                    <p><strong>Last Update:</strong> <span id="serverLastUpdate">N/A</span></p>
+                    <p><strong>Entries:</strong> <span id="serverEntryCount">N/A</span></p>
+                </div>
+            </div>
+            <div class="sync-choice-actions">
+                <button id="useLocalDataBtn" class="btn-upload">Use Local Data (Upload)</button>
+                <button id="useServerDataBtn" class="btn-download">Use Server Data (Download)</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="settingsModal" class="modal">
+      <div class="modal-content">
+        <span class="close-modal" data-modal-id="settingsModal">&times;</span>
+        <h2>Settings</h2>
+        <p>No configurable settings are available.</p>
+        <div style="margin-top: 20px;">
+            <button id="changePasswordButton" style="display: none;">Change Password</button>
+            <button type="button" class="close-modal-button" data-modal-id="settingsModal">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- The shared auth + sync modules (root path).
+         The ?v= cache-buster is not decoration: Cloudflare caches each FULL URL
+         including the query string. If you change a shared module, bump the buster on
+         EVERY page that loads it, in the same push — half-bumping is worse than not
+         bumping at all, because a page then loads a new module beside a months-old
+         cached one and dies on a name that no longer exists. -->
+    <script src="/auth-wip.js?v=20260814a"></script>
+    <script src="/sync-wip.js?v=20260814a"></script>
+    <!-- Your experiment-specific script -->
+    <script src="js/money.js?v=20260901c"></script>
+    <script src="js/ui.js?v=20260901c"></script>
+    <script src="js/dates.js?v=20260901c"></script>
+    <script src="js/engine.js?v=20260901c"></script>
+    <script src="js/app.js?v=20260901c"></script>
+    <script src="js/wishlist.js?v=20260901c"></script>
+    <script src="js/budget.js?v=20260901c"></script>
+    <script src="js/statements.js?v=20260901c"></script>
+    <script src="js/spending.js?v=20260901c"></script>
+    <script src="js/views.js?v=20260901c"></script>
+    <script type="module">
+      // The accent picker needs the OKLCH maths. Loading it as a module keeps
+      // theme.js synchronous (a module would defer and cause a flash of the wrong
+      // theme), while still sharing ONE implementation with the contrast checker.
+      import * as C from '/shared/color-utils.mjs?v=20260901c';
+      window.ColorUtils = C;
+    </script>
+
+</body>
+</html>
