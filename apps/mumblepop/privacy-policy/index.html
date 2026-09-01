@@ -210,10 +210,21 @@
             It does not read your screen generally and does not log what you type.
         </p>
         <p>
+            It does see the name of the app you are currently typing in &mdash; the
+            package name of the focused field, in every app, not only some. It has to:
+            that is how it knows whether you have told it to stay away from this app,
+            and which style or filters you have set for it. The name is used on the
+            spot and, like the field's contents, is never stored or transmitted.
+        </p>
+        <p>
             In apps you have told it to ignore, the bubble never appears and nothing is
-            ever typed into them. To know which app you are in, the service still sees
-            the focused field's package name in those apps &mdash; it has to, in order
-            to know to stay away.
+            ever typed into them.
+        </p>
+        <p>
+            So that you can choose those apps in the first place, MumblePop can also
+            see the list of apps you have installed that can be opened. It uses that
+            only to draw the list you pick from. The list is never sent anywhere, and
+            only the apps you actually choose are remembered, on the phone.
         </p>
 
         <h2>The other permissions, and why</h2>
@@ -240,8 +251,8 @@
                         <td>Only to sort the "apps to ignore" list by what you have opened recently. Declining it costs you the sorting and nothing else.</td>
                     </tr>
                     <tr>
-                        <td>Ignore battery optimisations <em>(optional)</em></td>
-                        <td>To stop some phones killing the bubble after the phone sits idle.</td>
+                        <td>Battery optimisation <em>(optional, and not a permission)</em></td>
+                        <td>Some phones kill the bubble once the phone sits idle. MumblePop does not ask for the permission that would let it exempt itself &mdash; it only opens Android's own battery settings, where you can allow it if you want to. Nothing changes unless you do it yourself.</td>
                     </tr>
                 </tbody>
             </table>
