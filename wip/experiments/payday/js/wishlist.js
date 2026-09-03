@@ -6,7 +6,7 @@
  * app.js, and changes them ONLY through updateData(), which persists locally and
  * lets sync ship the difference.
  *
- * The brief for this page is Rose's own account of why a spreadsheet failed:
+ * The brief for this page is a first-hand account of why a spreadsheet failed:
  *   "the whole thing feels clunky to use? i gotta manually edit each cell"
  *   "how do i add new items quickly?"
  *   "i wanted single click to open urls instead of these click into cell then open"
@@ -154,7 +154,7 @@
   /* ── ordering ──────────────────────────────────────────────────────────── */
 
   /* Explicit move buttons exist alongside drag because drag-and-drop is unreliable
-   * on touch and unusable from a keyboard. Rose uses a phone; these are the
+   * on touch and unusable from a keyboard. This page is used on a phone; these are the
    * primary control, not the fallback. */
   function move(id, delta) {
     var sorted = Order.sorted(wishlist);

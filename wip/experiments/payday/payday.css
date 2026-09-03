@@ -2,10 +2,10 @@
  * ---------------------------------------------------------------------------
  * ⚠ NO HEX VALUES IN THIS FILE. Every colour is a token from /tokens.css.
  *
- * Direction: soft, low-contrast, rounded. The first build used film-manager's 4px
- * radius and a 15.9:1 ink — correct for a desktop app, wrong here, and Rose's word
- * for it was "boxy and bright". This follows rosie-notes instead: a radius scale up
- * to 20px, borders that mostly disappear in favour of surface lift, ink that sits back.
+ * Direction: soft, low-contrast, rounded. A 4px radius with a 15.9:1 ink is right
+ * for a desktop app and reads as boxy and bright on the web. This follows rosie-notes
+ * instead: a radius scale up to 20px, borders that mostly disappear in favour of
+ * surface lift, ink that sits back.
  *
  * Restraint: the goal ring is the ONE bold element. Everything around it is quiet.
  */
@@ -13,9 +13,9 @@
 * { box-sizing: border-box; }
 body { margin: 0; -webkit-font-smoothing: antialiased; }
 
-/* Wider and tighter than the first pass — Rose: "quite a bit of dead space at the
-   top and sides". 1080 with 20px padding left ~100px of nothing each side on a
-   1280 screen, and the bar's own top padding added more above that. */
+/* Wider and tighter than the obvious default. 1080 with 20px padding leaves ~100px
+   of nothing each side on a 1280 screen, and a sticky bar's own top padding adds
+   more above that. */
 .container {
   max-inline-size: 1240px; margin-inline: auto;
   padding: var(--gap-wide) var(--gap-wide) 64px;
@@ -26,19 +26,17 @@ body { margin: 0; -webkit-font-smoothing: antialiased; }
    own identity and the site links move into the menu — still one tap away. */
 
 /* ⚠ FULL BLEED. The bar lives OUTSIDE .container so its background reaches the
-   viewport edges — the notes app does the same, and Rose asked for it explicitly:
-   "the top section dosent span right to the edges just to the edges of view area".
-   Only .app-bar-inner is constrained to the content width. */
+   viewport edges rather than stopping at the content width. Only .app-bar-inner is
+   constrained. */
 .app-bar {
   position: sticky; inset-block-start: 0; z-index: 50;
   background: color-mix(in srgb, var(--ground) 88%, transparent);
   backdrop-filter: blur(12px) saturate(1.2);
   border-block-end: 1px solid var(--line);
 }
-/* ⚠ NOT constrained to the content width. Rose: "top bar should be pag bound not
-   center main part bound ... so the page name and the settings button thingy are on
-   the edges instead of in the middle". The bar's CONTENTS run edge to edge; only the
-   page body below it is centred. */
+/* ⚠ NOT constrained to the content width. The bar's CONTENTS run edge to edge, so
+   the page name and the settings button sit at the edges rather than floating in
+   the middle; only the page body below it is centred. */
 .app-bar-inner {
   display: flex; align-items: center; gap: var(--gap-wide); flex-wrap: wrap;
   padding: 12px var(--pad-lg);
@@ -166,7 +164,7 @@ select {
 }
 
 /* Checkboxes. The UA control is painted by the OS: on a dark page it renders as a
-   pale grey slab that belongs to no theme — the "lil smaller boxes" Rose saw. */
+   pale grey slab that belongs to no theme. */
 input[type="checkbox"] {
   appearance: none; -webkit-appearance: none;
   inline-size: 19px; block-size: 19px;
@@ -476,8 +474,8 @@ button.info:hover { background: var(--accent-soft); color: var(--accent-text); }
 }
 
 /* The row opens the editor. A real <button>, not a div with a click handler, so it
-   is tabbable and announced as actionable — Rose asked to be able to change a
-   name or an amount instead of deleting the row and typing it again. */
+   is tabbable and announced as actionable — changing a name or an amount should not
+   mean deleting the row and typing it again. */
 .mr-open {
   display: grid; align-items: center; gap: 2px var(--gap); min-inline-size: 0;
   grid-template-columns: minmax(0, 1fr) auto;

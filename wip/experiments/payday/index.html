@@ -271,8 +271,8 @@
         <!-- ══ SPENDING ════════════════════════════════════════ -->
         <section class="view" id="view-spending" role="tabpanel" aria-label="Spending" hidden>
 
-            <!-- ⚠ The file never leaves this browser (D-03). Say so ON the control,
-                 not in a help page — it is the question anyone sane asks first. -->
+            <!-- ⚠ The file never leaves this browser. Say so ON the control, not in
+                 a help page — it is the question anyone sane asks first. -->
             <div class="dropzone" id="dropzone">
                 <input type="file" id="fileInput" accept=".csv,.ofx,.qfx,.qif,.txt" hidden>
                 <p class="drop-title">Drop a bank statement here</p>
@@ -367,9 +367,9 @@
           </div>
         </div>
 
-        <!-- Edit a pay source or a cost. Rose: "the name for the pay and coming out
-             subscriptions/ect need to be able to edit instead of removing". One modal
-             serves both — the two flag checkboxes are hidden for income. -->
+        <!-- Edit a pay source or a cost. Both must be editable in place; deleting a
+             row and retyping it is not an edit. One modal serves both — the two flag
+             checkboxes are hidden for income. -->
         <div id="moneyModal" class="auth-modal">
           <div class="auth-modal-content">
             <h2 id="mmTitle">Edit</h2>

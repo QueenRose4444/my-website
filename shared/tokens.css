@@ -61,22 +61,22 @@
    * The first build had one token doing both jobs, so the light theme darkened the
    * whole accent to make the text case legible — rose went #E79BB4 -> #9C4468,
    * OKLCH lightness 0.77 -> 0.51. Correct for the text, and it made every fill look
-   * muddy. Rose noticed: the meds page and the transcribe app "look nice and not
-   * weird" in light mode, and both keep one vivid accent.
+   * muddy. The pages that read best in light mode all keep one vivid accent rather
+   * than darkening it.
    *
    * Splitting the token takes the good half of both: ONE vivid hex for the fills in
    * both themes, and a separate --accent-text derived at 4.5:1 against the PALEST
    * place accent text lands — an --accent-soft pill over --surface — so passing
    * there passes on the ground and the panel for free.
    *
-   * ⚠⚠ THE FILL EXEMPTION — A DELIBERATE, RECORDED TRADE-OFF (D-42).
+   * ⚠⚠ THE FILL EXEMPTION — A DELIBERATE TRADE-OFF.
    *
    * A fully vivid accent measures 1.7-2.6:1 against the light page, and 1.5-2.3:1
    * against the ring track it sits on. WCAG 1.4.11 wants 3:1 for a graphic that
-   * carries meaning, so THE LIGHT-THEME FILLS DO NOT MEET IT. That is Rose's call,
-   * made twice and with the numbers in front of her: an accent darkened enough to
-   * pass sits at OKLCH lightness 0.51-0.66 and reads as dull, and payday is a tool
-   * for two people who both prefer the vivid one.
+   * carries meaning, so THE LIGHT-THEME FILLS DO NOT MEET IT. This was chosen
+   * knowingly: an accent darkened enough to pass sits at OKLCH lightness 0.51-0.66
+   * and reads as dull. Text and controls still meet contrast; only decorative fills
+   * are exempt. Anything that must be READ does not rely on a fill.
    *
    * What is NOT exempt, and must keep passing:
    *   --accent-text  4.5:1 wherever the accent is TEXT
@@ -115,7 +115,7 @@
 
   /* geometry
      ⚠ NOT film-manager's 4px. That is a desktop-app radius and it reads as boxy on
-     the web — Rose's word. rosie-notes runs a scale to 24px, and this matches it.
+     the web. rosie-notes runs a scale to 24px, and this matches it.
      Controls 10, cards 14, panels 20, pills full. */
   --radius-sm: 8px;
   --radius: 10px;

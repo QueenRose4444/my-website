@@ -89,7 +89,7 @@
 }
 
 /* ---- accents ------------------------------------------------------------
-   Rose is the product's own colour and stays the default. The five others are
+   Rose is the product's own accent colour and stays the default. The five others are
    picked to sit clear of the hues that carry meaning — brass = private,
    clay = consequence, sage = fine, periwinkle = somebody else — so no accent
    can ever be mistaken for one of those. Each is checked at 4.5:1 in both
@@ -1125,8 +1125,8 @@
   /* ===================== people ========================================= */
   var ME = 'rose';
   var P = {
-    rose: { id: 'rose', name: 'Rose', init: 'RO', cls: 'a-rose' },
-    ryla: { id: 'ryla', name: 'Ryla', init: 'RY', cls: 'a-ryla' }
+    rose: { id: 'rose', name: 'Ada', init: 'AD', cls: 'a-rose' },
+    ryla: { id: 'ryla', name: 'Bea', init: 'BE', cls: 'a-ryla' }
   };
 
   /* ===================== settings ======================================= */
@@ -1471,8 +1471,8 @@
     G('dreams', null, 'Dreams', 'dreams', { shareWith: ['rose', 'ryla'] });
     /* the quick-tag list is Dreams', and everything under it uses that one list rather
        than a copy — so the panel on an entry can name where its tags actually come from */
-    G('d-rose', 'dreams', "Rose's dreams", 'dreams', { shareWith: ['rose', 'ryla'], quickTags: [] }, { owner: 'rose' });
-    G('d-ryla', 'dreams', "Ryla's dreams", 'dreams', { shareWith: ['rose', 'ryla'], quickTags: [] }, { owner: 'ryla' });
+    G('d-rose', 'dreams', "Ada's dreams", 'dreams', { shareWith: ['rose', 'ryla'], quickTags: [] }, { owner: 'rose' });
+    G('d-ryla', 'dreams', "Bea's dreams", 'dreams', { shareWith: ['rose', 'ryla'], quickTags: [] }, { owner: 'ryla' });
 
     var days = [
       ['d9', '9 August 2026', '2026-08-09'],
@@ -1487,7 +1487,7 @@
       a: '<p>The house had no stairs. Everyone behaved as if this were ordinary — my mother handed me a cup of tea and asked whether I had been up yet, and I said no, obviously, and she nodded.</p><p>I spent what felt like an hour looking for a way up and kept ending up in the kitchen. Woke up annoyed rather than frightened.</p>',
       b: '<p>Driving a car from the back seat. Not steering — the car was fine — just aware that nobody was in front and that this was going to become a problem at the roundabout.</p>',
       c: '<p>A version of the flat where one room is always one room further than I remember. Recurring. Third time this month.</p>',
-      d: '<p>Ryla was reading something out loud and I could hear the rhythm of it but not the words. Kept asking her to start again and she did, patiently, every time.</p>',
+      d: '<p>Someone was reading out loud and I could hear the rhythm of it but not the words. Kept asking them to start again and she did, patiently, every time.</p>',
       e: '<p>Sorting a very large pile of cables by colour. Deeply satisfying. Nothing else happened.</p>',
       f: '<p>The old server room, but underwater, and the fans still turning. I was worried about the drives rather than about breathing.</p>'
     };
@@ -1517,7 +1517,7 @@
     Nt('dy1', 'dy-a', 'The lift that kept going', { owner: 'ryla', unread: true, created: '2026-08-08T08:20', updated: '2026-08-08T08:20',
       body: '<p>Twenty-two floors and it kept going. Not frightening. I was mostly worried about being late.</p>' });
     Nt('dy2', 'dy-a', 'Dream — 8 August 2026 (2)', { owner: 'ryla', created: '2026-08-08T08:55', updated: '2026-08-08T08:55',
-      body: '<p>Rose was explaining a card game with rules that changed as she described them.</p>' });
+      body: '<p>Somebody was explaining a card game with rules that changed as they described them.</p>' });
     Nt('dy3', 'dy-b', 'Dream — 2 August 2026', { owner: 'ryla', created: '2026-08-02T07:30', updated: '2026-08-02T07:30',
       body: '<p>A market where everything was sold in pairs.</p>' });
 
@@ -1555,44 +1555,44 @@
       body: '<p>Nearly done. The last chapter has been nearly done since May.</p>' });
 
     /* ---------- Perspectives ---------- */
-    G('adhd', null, 'Why Rose has ADHD', 'persp', { shareWith: ['rose', 'ryla'] });
-    Nt('adhd-rose', 'adhd', "Rose's points", { owner: 'rose', updated: '2026-08-10T20:15', created: '2026-08-08T19:00',
+    G('adhd', null, 'Why the kitchen plan keeps stalling', 'persp', { shareWith: ['rose', 'ryla'] });
+    Nt('adhd-rose', 'adhd', "Ada's points", { owner: 'rose', updated: '2026-08-10T20:15', created: '2026-08-08T19:00',
       points: [
-        { id: 'p1', depth: 0, text: 'I lose the thread mid-sentence if someone interrupts, and I cannot get it back. I have to start the whole thought again from the beginning.' },
-        { id: 'p2', depth: 1, text: 'This happens on the phone too, with people I know well, so it is not nerves.' },
-        { id: 'p2a', depth: 2, text: 'It happens while reading as well — I get to the bottom of a page and none of it landed.' },
-        { id: 'p2b', depth: 3, text: 'Which is why the headphones live on the desk and not in a drawer.' },
-        { id: 'p2c', depth: 4, text: 'And why I read on the phone in a different room rather than at the desk.' },
-        { id: 'p3', depth: 0, text: 'Time is not a quantity from the inside. Ten minutes and two hours feel the same until I look at a clock.' },
-        { id: 'p3a', depth: 1, text: 'Deadlines work. Durations do not.' },
-        { id: 'p4', depth: 0, text: 'I can do six hours on a build script and forget to eat, then not open my email for a week.' },
-        { id: 'p5', depth: 1, text: 'The forgetting is not avoidance. The emails genuinely stop existing.' },
-        { id: 'p5a', depth: 2, text: 'They exist again the second somebody says one out loud.' },
-        { id: 'p6', depth: 0, text: 'Every project starts with a folder structure. That part is easy and it is never the part that stalls.' }
+        { id: 'p1', depth: 0, text: 'The layout was settled in March. Everything since has been us re-deciding the same three things.' },
+        { id: 'p2', depth: 1, text: 'Mostly the splashback, which nobody actually has an opinion about.' },
+        { id: 'p2a', depth: 2, text: 'We have reopened it four times and landed on the same tile each time.' },
+        { id: 'p2b', depth: 3, text: 'So the tile is not the problem. The reopening is.' },
+        { id: 'p2c', depth: 4, text: 'Writing the decision down would have cost five minutes in March.' },
+        { id: 'p3', depth: 0, text: 'The quotes all expire before we compare them, so we get new ones and compare those instead.' },
+        { id: 'p3a', depth: 1, text: 'Three rounds of that now.' },
+        { id: 'p4', depth: 0, text: 'I can spend a whole weekend on the plan and none of it on booking anyone.' },
+        { id: 'p5', depth: 1, text: 'Planning feels like progress in a way that phone calls do not.' },
+        { id: 'p6', depth: 0, text: 'Every version starts with a fresh drawing. The drawing is never what stalls.' }
       ] });
-    Nt('adhd-ryla', 'adhd', "Ryla's points", { owner: 'ryla', updated: '2026-08-10T20:40', created: '2026-08-08T19:02', unread: true,
+    Nt('adhd-ryla', 'adhd', "Bea's points", { owner: 'ryla', updated: '2026-08-10T20:40', created: '2026-08-08T19:02', unread: true,
       points: [
-        { id: 'q1', depth: 0, text: 'You answer a question I have not asked yet. I have learned to just wait for the rest of it.' },
-        { id: 'q2', depth: 0, text: 'The flat is either spotless or a disaster. There is no middle week.' },
-        { id: 'q3', depth: 1, text: 'It flips within a day, usually right after you have been stuck on something.' },
-        { id: 'q3a', depth: 2, text: 'The tidying is the thinking. I have stopped reading it as avoidance.' },
-        { id: 'q4', depth: 0, text: 'You remember the exact wording of a conversation from 2019 but not that we spoke yesterday.' },
-        { id: 'q5', depth: 0, text: 'You are not disorganised. The organising is the hobby. It is the bit afterwards that stalls.' }
+        { id: 'q1', depth: 0, text: 'You answer the question I am halfway through asking, then we both forget what it was.' },
+        { id: 'q2', depth: 0, text: 'The plan is either finished or completely torn up. There is no in-between week.' },
+        { id: 'q3', depth: 1, text: 'It flips within a day, usually right after a quote comes back.' },
+        { id: 'q3a', depth: 2, text: 'The redrawing is the thinking. I have stopped reading it as avoidance.' },
+        { id: 'q4', depth: 0, text: 'You remember the exact price of a tap from February but not who we rang last week.' },
+        { id: 'q5', depth: 0, text: 'It is not disorganised. The organising is the hobby. It is the bit afterwards that stalls.' }
       ] });
 
     /* A contributor that is not a person: a manual slot, created and pasted into by
-       Rose. `contrib` is what makes it one — the note still records who added it, so
-       "who decided this belonged in the document" has an answer six months from now. */
-    Nt('adhd-ai', 'adhd', 'claude-Rose', {
+       whoever owns it. `contrib` is what makes it one — the note still records who
+       added it, so "who decided this belonged in the document" has an answer six
+       months from now. */
+    Nt('adhd-ai', 'adhd', 'claude-Ada', {
       owner: 'rose', updated: '2026-08-10T21:05', created: '2026-08-10T21:02',
-      contrib: { kind: 'manual', agent: 'Claude', by: 'rose', label: 'claude-Rose', added: '2026-08-10T21:02' },
+      contrib: { kind: 'manual', agent: 'Claude', by: 'rose', label: 'claude-Ada', added: '2026-08-10T21:02' },
       points: [
-        { id: 'c1', depth: 0, text: 'Both columns describe the same interruption cost from opposite sides: Rose reports that a dropped thread restarts rather than resumes, and Ryla reports answers arriving before the question is finished. Two independent vantage points on one behaviour.' },
+        { id: 'c1', depth: 0, text: 'Both columns describe the same reopening cost from opposite sides: one reports decisions restarting rather than resuming, the other reports answers arriving before the question is finished. Two independent vantage points on one behaviour.' },
         { id: 'c1a', depth: 1, text: 'That agreement is the strongest thing in this document. Most of the rest is one person reporting on themselves.' },
-        { id: 'c2', depth: 0, text: 'Time appears twice and in two forms — duration not being felt from the inside, and the flat flipping state within a day. Both are consistent with time being tracked by events rather than by elapsed minutes.' },
-        { id: 'c3', depth: 0, text: 'Both of you separate starting from finishing: the folder structure is easy, the week after it is not. Worth keeping those as two observations rather than collapsing them into "disorganised", which neither column actually claims.' },
-        { id: 'c4', depth: 0, text: 'Absent from both columns: anything from before adulthood, anything about sleep, and any account of an ordinary good day. An assessment will ask for all three, so they are worth writing down while they are easy to remember.' },
-        { id: 'c5', depth: 0, text: 'This column summarises what the two of you wrote. It is not an assessment and it is not evidence of one — only a reading of the notes above it.' }
+        { id: 'c2', depth: 0, text: 'Time appears twice and in two forms — quotes expiring before they are compared, and the plan flipping state within a day. Both are consistent with progress being tracked by events rather than by elapsed weeks.' },
+        { id: 'c3', depth: 0, text: 'Both columns separate starting from finishing: the drawing is easy, the week after it is not. Worth keeping those as two observations rather than collapsing them into "disorganised", which neither column actually claims.' },
+        { id: 'c4', depth: 0, text: 'Absent from both columns: any budget, any deadline anybody agreed to out loud, and any account of a week where it went fine. All three would change the reading, so they are worth writing down while they are easy to remember.' },
+        { id: 'c5', depth: 0, text: 'This column summarises what the two columns beside it say. It is a reading of those notes and nothing more.' }
       ] });
   }
   build();
@@ -3476,7 +3476,7 @@
     var mobile = '<div class="only-narrow" style="margin-bottom:20px"><input class="field" id="rn-search-m" value="' + esc(S.q) + '" placeholder="Search every note" data-edit="search"></div>';
     if (!q) {
       return head + mobile + '<div class="setgroup"><div class="setgroup-head"><h3>Try</h3></div><div class="setlist">' +
-        ['dream', 'manifest', 'orchestrator', 'ADHD'].map(function (s) {
+        ['dream', 'manifest', 'orchestrator', 'kitchen'].map(function (s) {
           return '<button class="setrow" data-a="suggest" data-v="' + s + '"><span class="setrow-main"><span class="setrow-label">' + s + '</span></span>' +
             '<span class="setrow-value">' + ico('search') + '</span></button>';
         }).join('') + '</div></div>';
@@ -3730,7 +3730,7 @@
     walk(gid, function (c) { if (c.t === 'g' && c.own.share) custom.push(c); });
     S.casc = { gid: gid, value: value, choice: 'uncustomised', picks: {} };
     custom.forEach(function (c) { S.casc.picks[c.id] = false; });
-    var who = value === 'people' ? 'Ryla' : 'anyone with the link';
+    var who = value === 'people' ? 'Bea' : 'anyone with the link';
     openLayer(function () {
       var c = S.casc;
       return '<div class="scrim" data-a="close"><div class="sheet" role="dialog" aria-modal="true" data-stop="1">' +
@@ -3974,7 +3974,7 @@
         if (n.t === 'g') { go({ v: 'group', id: id }); break; }
         var og = groupOf(n);
         /* a member note of a side-by-side group IS that group's screen — a search hit on
-           "Rose's points" has to land where walking there by hand lands */
+           "Ada's points" has to land where walking there by hand lands */
         if (og && og.s.memberSections && og.s.sectionsAs === 'columns') {
           S.pcol = pcolKey(n) || 'all';
           n.unread = false;

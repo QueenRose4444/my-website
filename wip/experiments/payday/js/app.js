@@ -44,7 +44,7 @@ let wishlist = [];      // [{id, name, url, priceCents, ..., posNum, posDen, upd
 let categories = [];    // [{id, name}]
 let income = [];        // [{id, label, netPerPayCents, cadence, anchorDate, active}]
 let recurring = [];     // [{id, name, amountCents, cadence, anchorDate, essential, endsOn, history}]
-// Imported statement rows, ALREADY SANITISED (D-21/D-22, plans/07-import.md §7).
+// Imported statement rows, ALREADY SANITISED — see statements.js.
 // The raw description never reaches this array: only a canonical merchant name and a
 // one-way hash of the original line, which exists solely to spot re-imports.
 let transactions = [];  // [{id, date, amountCents, merchant, categoryId, batchId, dedupe, updatedAt}]
@@ -58,7 +58,7 @@ const defaultSettings = {
     // it every date is measured from zero and reads as pessimistic.
     startBalanceCents: 0,
     spendLog: [],           // [{at, amountCents, why}] — unplanned spends, for the record
-    // Per-user random salt for the transaction dedupe hash (D-22). Synced, because
+    // Per-user random salt for the transaction dedupe hash. Synced, because
     // the same transaction must hash identically on every device. Without a salt a
     // rainbow table over common merchant strings would reverse every hash, which
     // would defeat the point of not storing the raw description.
@@ -129,8 +129,8 @@ const STATUSES = [
 // One login covers every app on the site; APP_NAME only scopes the DATA.
 //
 // NOTE: signing in needs crypto.subtle, which browsers only expose in a secure
-// context. Test this page over https://rosiesite-old.rosestuffs.org/ (or localhost),
-// never http://192.168.0.250:8080 — over plain http the login throws by design.
+// context. Serve this page over https:// (or localhost); over plain http:// the
+// sign-in throws by design rather than deriving something weaker.
 const authManager = new AuthManagerWip(APP_NAME, ENVIRONMENT);
 
 // The sync client is created once the data model exists — see initSync().
@@ -261,7 +261,7 @@ function normalizeState(raw) {
         .map((i) => ({
             id: i.id,
             label: String(i.label || 'Pay'),
-            // NET, not gross. Rose's build order (D-25) puts tax LAST, so the
+            // NET, not gross. Tax is handled last, so the
             // timeline must work from the take-home figure the user types. When the
             // tax module lands it OFFERS to derive this from gross; it never requires it.
             netPerPayCents: Math.round(Number(i.netPerPayCents) || 0),
@@ -308,7 +308,7 @@ function normalizeState(raw) {
             merchant: String(t.merchant || 'Unknown'),
             categoryId: t.categoryId || null,
             batchId: t.batchId || null,
-            // A hash of the ORIGINAL line (D-22). Not reversible, never displayed.
+            // A hash of the ORIGINAL line. Not reversible, never displayed.
             dedupe: String(t.dedupe || ''),
             note: t.note || '',
             updatedAt: Number(t.updatedAt) || 0,

@@ -104,8 +104,8 @@ const COLLECTION_LABELS = {
 // One login covers every app on the site; APP_NAME only scopes the DATA.
 //
 // NOTE: signing in needs crypto.subtle, which browsers only expose in a secure
-// context. Test this page over https://rosiesite-old.rosestuffs.org/ (or localhost),
-// never http://192.168.0.250:8080 — over plain http the login throws by design.
+// context. Serve this page over https:// (or localhost); over plain http:// the
+// sign-in throws by design rather than deriving something weaker.
 const authManager = new AuthManagerWip(APP_NAME, ENVIRONMENT);
 
 // The sync client is created once the data model exists — see initSync().

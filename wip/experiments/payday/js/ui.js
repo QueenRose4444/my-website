@@ -2,8 +2,8 @@
  * ---------------------------------------------------------------------------
  * `prompt()`, `confirm()` and `alert()` open OS/Chrome chrome that has none of the
  * page's styling, cannot be themed, blocks the whole tab, and looks like a phishing
- * warning on a phone. Rose spotted it immediately: "even adding categories opens a
- * chrome popup instead of a webpage popup".
+ * warning on a phone — a native popup where a page dialog belongs is obvious the
+ * first time you see it on a small screen.
  *
  * These are promise-based drop-in replacements. They return the same shapes the
  * natives do — a string or null from ask(), a boolean from confirm() — so a call

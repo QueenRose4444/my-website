@@ -135,7 +135,7 @@ const DEMO_DB = {
   arma_servers: [
     {
       id: 1, guild_id: 855675560902262785, display_name: "Sandbox",
-      ptero_panel_url: "http://192.168.0.250:8447", ptero_client_key: "•••••••• (set)",
+      ptero_panel_url: "http://panel.example:8447", ptero_client_key: "•••••••• (set)",
       ptero_server_identifier: "5e01be65", summary_channel_id: "1234567890123456789",
       summary_channel_template: "{state_emoji} {server_name}", detail_channel_id: "1234567890123456791",
       detail_message_id: "9988776655443322110", poll_interval_sec: 60, enabled: true,
