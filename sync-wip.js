@@ -1,16 +1,8 @@
-// sync-wip.js — shared browser data-sync module (WIP).
+// Shared browser data sync, backed by an OPERATION LOG.
 //
-// This started as the meds v2 sync engine, generalised. What it adds on top of that
-// is an OPERATION LOG, which is what finally makes two devices behave.
-//
-// ── the bug this exists to kill ──────────────────────────────────────────────
-// The old check was two-way: `if (local !== server) → ask the user`. That treats
-// "I am merely behind" as a conflict. A real case: a device last updated on 18 July
-// (82 doses, 94 weights) met an account copy from 2 August (82 doses, 95 weights).
-// The device had changed nothing since 18 July. It should have downloaded and said
-// nothing. It showed a conflict dialog instead.
-//
-// So there are now two independent questions, and they are answered separately:
+// Syncing two devices by comparing whole states cannot tell "I am behind" apart from
+// "we disagree", so it asks the user about changes that were never in conflict. This
+// module answers those as two separate questions instead:
 //
 //   Did I change?    Diff my state against the BASE — my own state as of the last
 //                    successful sync — not a dirty flag. A flag can be wrong after a
@@ -29,19 +21,13 @@
 //                              from your other device")
 //
 // ── the sync with no base at all ─────────────────────────────────────────────
-// All of the above needs a base. The FIRST sync on a device has none, and that is
-// exactly where a prompt is least welcome. A second real case: both devices had
-// imported a backup, so neither had a base, and the fallback asked
-//
-//     This device : 1165 doses, 92 weights
-//     Your account: 1166 doses, 95 weights
-//
-// The device's entries were a strict subset of the account's — it was behind, and
-// nothing had diverged. So before falling back, CONTAINMENT is checked: if every
-// entry on one side is present and identical on the other, the side that is behind
-// catches up silently and is simply told what moved. Anything else — a shared id
-// holding different content, a collection that will not key, a genuine divergence
-// — falls through to the prompt untouched. See `containment` below.
+// All of the above needs a base, and the FIRST sync on a device has none — which is
+// exactly where a prompt is least welcome. So before falling back to one,
+// CONTAINMENT is checked: if every entry on one side is present and identical on the
+// other, the side that is behind catches up silently and is told what moved.
+// Anything else — a shared id holding different content, a collection that will not
+// key, a genuine divergence — falls through to the prompt untouched. See
+// `containment` below.
 //
 // ── putting an automatic change back ─────────────────────────────────────────
 // A change nobody asked for is revertable. Before a catch-up or a silent merge,
@@ -505,14 +491,11 @@
    *
    * Everything above needs a BASE — this device's state as of its last sync. On the
    * FIRST sync of a device there is none, and the fallback below asks the user to
-   * compare two columns of numbers:
+   * compare two columns of numbers and pick a side.
    *
-   *     This device : 1165 doses, 92 weights
-   *     Your account: 1166 doses, 95 weights
-   *
-   * That question did not need asking. Every entry on the device was also on the
-   * account copy, byte for byte. The device was merely behind; nothing diverged, so
-   * there was nothing to decide.
+   * Most of the time that question does not need asking: one side simply holds
+   * everything the other does, and a little more. Nothing has diverged, so there is
+   * nothing to decide.
    *
    * So before falling back to the prompt, ask something that needs no base: is one
    * side's data WHOLLY CONTAINED in the other's?
@@ -626,7 +609,7 @@
   /* ─────────────────── naming a collection out loud ─────────────────── */
 
   /**
-   * "doses", not "shots". A page hands over its own labels (meds has had a
+   * "doses", not "shots". A page hands over its own labels (the meds app has had a
    * COLLECTION_LABELS map for the import preview since before this existed); the
    * wire name is the fallback, never a guess at a nicer one.
    *

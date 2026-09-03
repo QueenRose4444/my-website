@@ -2,16 +2,15 @@
  * ---------------------------------------------------------------------------
  * The two inputs the timeline needs. Without them every item is dateless.
  *
- * ⚠ INCOME IS ENTERED AS TAKE-HOME PAY, NOT GROSS (D-25). Rose's build order puts
- * tax last, so the timeline must work from the figure that actually lands in the
- * account. When the tax module arrives it will OFFER to work this out from a gross
- * salary — it must never require it, or stage 3 stops working.
+ * ⚠ INCOME IS ENTERED AS TAKE-HOME PAY, NOT GROSS. Tax handling comes later, so
+ * the timeline has to work from the figure that actually lands in the account. A
+ * tax module may OFFER to work this out from a gross salary; it must never require
+ * one, or every timeline without tax details stops working.
  *
- * ⚠ NOTHING HERE MAY FAIL SILENTLY. The first version called input.focus() and
- * returned when a field was wrong, which from the outside is a dead button — Rose:
- * "the adding outcoming dosent work". A part-typed <input type="date"> reads as ''
- * and hit exactly that path. Every rejection now says what is wrong, and a missing
- * date is filled in rather than treated as an error.
+ * ⚠ NOTHING HERE MAY FAIL SILENTLY. Calling input.focus() and returning when a
+ * field is wrong is, from the outside, a dead button — and a part-typed
+ * <input type="date"> reads as '' and hits exactly that path. Every rejection says
+ * what is wrong, and a missing date is filled in rather than treated as an error.
  */
 (function () {
   'use strict';
@@ -203,7 +202,7 @@
   }
 
   /* Removal is permanent and there is no undo, so it asks first — in-page, never a
-   * native confirm() (D-30). */
+   * native confirm(). */
   async function removeFrom(kind, id) {
     var it = find(kind, id);
     if (!it) return;

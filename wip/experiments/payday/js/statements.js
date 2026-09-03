@@ -4,12 +4,12 @@
  * plain objects back, so it can be tested on its own — which matters, because a
  * parser that is wrong by one column silently mis-files a year of spending.
  *
- * D-03 is absolute: statement files are parsed ENTIRELY IN THE BROWSER and never
+ * This is absolute: statement files are parsed ENTIRELY IN THE BROWSER and never
  * uploaded, and no bank credential is ever collected. See research/02-bank-data.md —
  * CDR accreditation is built for companies, the cheapest aggregator floor is about
  * $250/month, and screen-scraping voids the user's ePayments Code protections.
  *
- * ⚠ AND THE PART THAT MATTERS MOST (D-21, plans/07-import.md §7): there is no
+ * ⚠ AND THE PART THAT MATTERS MOST: there is no
  * client-side encryption, so identifying detail is REMOVED HERE instead. A raw line
  *
  *     03/09/2026,-87.30,"WOOLWORTHS 4521 NEW FARM QLD AUS",1043.22,"REF 8891042"
@@ -402,7 +402,7 @@
     return { rows: rows, warnings: warnings };
   }
 
-  /* ── sanitisation — this module's most important job (D-21) ────────────── */
+  /* ── sanitisation — this module's most important job ───────────────────── */
 
   /* Canonical names. Their real value is not tidiness: collapsing WOOLWORTHS 4521,
    * WOOLWORTHS METRO 8832 and WOOLWORTHS ONLINE to one entry is what makes

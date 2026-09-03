@@ -7,9 +7,9 @@
  * each DST boundary; after enough boundaries it lands on the wrong day. The bug
  * appears months later and is very hard to see.
  *
- * ⚠ Rose is in Australia/Brisbane, which has NO daylight saving. This class of bug
- * will therefore NEVER show up in her own testing. It is prevented here by
- * construction, not by observation.
+ * ⚠ This class of bug NEVER shows up when testing from a timezone without daylight
+ * saving, which is easy to do by accident. It is prevented here by construction
+ * rather than by observation.
  *
  * Date objects are used only as a calendar, always via UTC accessors so no local
  * timezone can shift the day.
