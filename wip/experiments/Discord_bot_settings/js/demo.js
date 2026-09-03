@@ -15,7 +15,7 @@ const DEMO_DB = {
   },
   bots: [{ name: "arma3-testing", label: "Arma3 (testing)" }],
   guilds: [
-    { guild_id: "855675560902262785", name: "ARMA3", icon: null, bot_name: "arma3-testing", bot_label: "Arma3 (testing)" },
+    { guild_id: "111222333444555666", name: "ARMA3", icon: null, bot_name: "arma3-testing", bot_label: "Arma3 (testing)" },
     { guild_id: "144144144144144144", name: "Important stuff", icon: null, bot_name: "arma3-testing", bot_label: "Arma3 (testing)" },
   ],
   settings: {
@@ -31,7 +31,7 @@ const DEMO_DB = {
     { id: "1486995648502038578", name: "test dm bot 2", color: 15158332 },
   ],
   available_roles: [
-    { id: "855675560902262785", name: "@everyone", color: 0 },
+    { id: "111222333444555666", name: "@everyone", color: 0 },
     { id: "922302344031526933", name: "ARMA III", color: 3447003 },
     { id: "1486995648502038578", name: "test dm bot 2", color: 15158332 },
     { id: "988770000000000000", name: "Officers", color: 15844367 },
@@ -44,9 +44,9 @@ const DEMO_DB = {
     { id: "1234567890123456794", name: "modlist", type: 0 },
   ],
   detection_rules: [
-    { id: 1, guild_id: 855675560902262785, match_text: "MISSION AVAILABLE", template_id: 7, priority: 0, created_at: "2026-05-31T08:00:00+00:00" },
-    { id: 2, guild_id: 855675560902262785, match_text: "TRAINING", template_id: 8, priority: 0, created_at: "2026-05-31T08:05:00+00:00" },
-    { id: 3, guild_id: 855675560902262785, match_text: "SIDE OPERATION", template_id: 9, priority: 10, created_at: "2026-05-31T08:10:00+00:00" },
+    { id: 1, guild_id: 111222333444555666, match_text: "MISSION AVAILABLE", template_id: 7, priority: 0, created_at: "2026-05-31T08:00:00+00:00" },
+    { id: 2, guild_id: 111222333444555666, match_text: "TRAINING", template_id: 8, priority: 0, created_at: "2026-05-31T08:05:00+00:00" },
+    { id: 3, guild_id: 111222333444555666, match_text: "SIDE OPERATION", template_id: 9, priority: 10, created_at: "2026-05-31T08:10:00+00:00" },
   ],
   nextRuleId: 4,
   modlist: {
@@ -60,7 +60,7 @@ const DEMO_DB = {
       id: 42, channel_id: "1234567890123456790", message_id: "9876543210987654321",
       author_id: "123456789012345678", role_ids: ["922302344031526933"],
       mission_utc: futureISO(3, 30), raw_content: "@ARMA III\n**⚠MISSION AVAILABLE⚠**\nDate: 16.05.26\nTime: 2030hrs (GMT+8)\n\nAttention @ARMA III,\nInsurgent forces have expanded operations into Kalah Desa, seizing control of key structures and using the area as a staging ground for further activity.\n\n> Objective:\n> Retake Kalah Desa and neutralize insurgent presence.",
-      jump_url: "https://discord.com/channels/855675560902262785/1234567890123456790/9876543210987654321",
+      jump_url: "https://discord.com/channels/111222333444555666/1234567890123456790/9876543210987654321",
       created_at: "2026-05-12T08:00:00+00:00", cancelled: false, title: "Operation Kalah Desa",
       template_override_id: 7,
       modlist_url: "https://cdn.discordapp.com/attachments/1234/Arma3Preset_2026-05-31.html",
@@ -71,7 +71,7 @@ const DEMO_DB = {
       id: 41, channel_id: "1234567890123456790", message_id: "9876543210987654320",
       author_id: "123456789012345678", role_ids: ["922302344031526933"],
       mission_utc: futureISO(5, 0), raw_content: "@ARMA III\n**SIDE OPERATION**\nDate: 18.05.26\nTime: 2030hrs (GMT+8)\n\nReconnaissance only — no contact.",
-      jump_url: "https://discord.com/channels/855675560902262785/1234567890123456790/9876543210987654320",
+      jump_url: "https://discord.com/channels/111222333444555666/1234567890123456790/9876543210987654320",
       created_at: "2026-05-12T09:00:00+00:00", cancelled: false, title: null,
       rsvps: { going: [], maybe: [], not: [] },
     },
@@ -79,7 +79,7 @@ const DEMO_DB = {
       id: 38, channel_id: "1234567890123456790", message_id: "9876543210987654300",
       author_id: "123456789012345678", role_ids: ["922302344031526933"],
       mission_utc: pastISO(6), raw_content: "@ARMA III\n**OPERATION NIGHTFALL**\nNight insertion completed. Outstanding work, operators.",
-      jump_url: "https://discord.com/channels/855675560902262785/1234567890123456790/9876543210987654300",
+      jump_url: "https://discord.com/channels/111222333444555666/1234567890123456790/9876543210987654300",
       created_at: "2026-05-01T09:00:00+00:00", cancelled: false, title: "Operation Nightfall",
       rsvps: { going: ["111","222","333","444","888","999"], maybe: ["555"], not: ["777","666"] },
     },
@@ -87,13 +87,13 @@ const DEMO_DB = {
       id: 35, channel_id: "1234567890123456790", message_id: "9876543210987654200",
       author_id: "123456789012345678", role_ids: ["988770000000000000"],
       mission_utc: pastISO(14), raw_content: "@Officers\n**LEADERSHIP BRIEF**\nQuarterly planning session.",
-      jump_url: "https://discord.com/channels/855675560902262785/1234567890123456790/9876543210987654200",
+      jump_url: "https://discord.com/channels/111222333444555666/1234567890123456790/9876543210987654200",
       created_at: "2026-04-20T09:00:00+00:00", cancelled: true, title: "Leadership Brief Q2",
       rsvps: { going: ["111","222"], maybe: [], not: [] },
     },
   ],
   templates: [
-    { id: 7, guild_id: 855675560902262785, kind: "mission_dm", name: "Default mission DM", is_default: true,
+    { id: 7, guild_id: 111222333444555666, kind: "mission_dm", name: "Default mission DM", is_default: true,
       created_at: "2026-05-12T08:00:00+00:00", updated_at: "2026-05-12T08:00:00+00:00",
       json_blob: { color: "#57f287", title: "🎯 Mission announcement — {server_name}", timestamp: "message",
         fields: [
@@ -104,11 +104,11 @@ const DEMO_DB = {
           { name: "Jump", value: "[Original message]({jump_url})", inline: false },
           { name: "Your status", value: "{user_notify} · {user_rsvp}", inline: false },
         ] } },
-    { id: 8, guild_id: 855675560902262785, kind: "mission_dm", name: "Training op", is_default: false,
+    { id: 8, guild_id: 111222333444555666, kind: "mission_dm", name: "Training op", is_default: false,
       created_at: "2026-05-12T08:00:00+00:00", updated_at: "2026-05-12T08:00:00+00:00",
       json_blob: { color: "#5865f2", title: "📚 Training — {mission_title}", description: "Training session\n\n{mission_body}",
         fields: [{ name: "Starts", value: "{mission_starts_at}", inline: false }] } },
-    { id: 9, guild_id: 855675560902262785, kind: "reminder_dm", name: "Default reminder", is_default: true,
+    { id: 9, guild_id: 111222333444555666, kind: "reminder_dm", name: "Default reminder", is_default: true,
       created_at: "2026-05-12T08:00:00+00:00", updated_at: "2026-05-12T08:00:00+00:00",
       json_blob: { color: "#faa61a", title: "⏰ {minutes_before_human} reminder — {server_name}", timestamp: "start",
         fields: [
@@ -116,7 +116,7 @@ const DEMO_DB = {
           { name: "Message", value: "{mission_body}", inline: false },
           { name: "Your status", value: "{user_notify} · {user_rsvp}", inline: false },
         ] } },
-    { id: 10, guild_id: 855675560902262785, kind: "rsvp_summary", name: "Live tally", is_default: true,
+    { id: 10, guild_id: 111222333444555666, kind: "rsvp_summary", name: "Live tally", is_default: true,
       created_at: "2026-05-12T08:00:00+00:00", updated_at: "2026-05-12T08:00:00+00:00",
       json_blob: { color: "#5865f2", title: "🎯 {mission_title}", description: "Starts {mission_starts_at} ({mission_starts_relative})\n[Original message]({jump_url})",
         fields: [
@@ -124,7 +124,7 @@ const DEMO_DB = {
           { name: "❓ Maybe ({maybe_count})", value: "{maybe_list}", inline: true },
           { name: "❌ Not going ({not_count})", value: "{not_list}", inline: true },
         ], footer: { text: "Mission #{mission_id} · Awaiting {awaiting_count} / {eligible_count}" } } },
-    { id: 11, guild_id: 855675560902262785, kind: "announcement", name: "Standard announcement", is_default: true,
+    { id: 11, guild_id: 111222333444555666, kind: "announcement", name: "Standard announcement", is_default: true,
       created_at: "2026-05-12T08:00:00+00:00", updated_at: "2026-05-12T08:00:00+00:00",
       json_blob: { color: "#5865f2", title: "**{mission_title}**", description: "{mission_body}\n\nStarts {mission_starts_at} ({mission_starts_relative})", footer: { text: "{server_name}" } } },
   ],
@@ -134,7 +134,7 @@ const DEMO_DB = {
   nextTemplateId: 12,
   arma_servers: [
     {
-      id: 1, guild_id: 855675560902262785, display_name: "Sandbox",
+      id: 1, guild_id: 111222333444555666, display_name: "Sandbox",
       ptero_panel_url: "http://panel.example:8447", ptero_client_key: "•••••••• (set)",
       ptero_server_identifier: "5e01be65", summary_channel_id: "1234567890123456789",
       summary_channel_template: "{state_emoji} {server_name}", detail_channel_id: "1234567890123456791",
@@ -268,7 +268,7 @@ async function demoFetch(path, opts = {}) {
   if (sub === "/templates" && method === "POST") {
     const id = db.nextTemplateId++;
     if (body.is_default) db.templates.forEach((t) => { if (t.kind === body.kind) t.is_default = false; });
-    db.templates.push({ id, guild_id: 855675560902262785, ...body,
+    db.templates.push({ id, guild_id: 111222333444555666, ...body,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
     return { id };
   }
@@ -298,7 +298,7 @@ async function demoFetch(path, opts = {}) {
   if (sub === "/detection-rules" && method === "GET") return { rules: clone(db.detection_rules) };
   if (sub === "/detection-rules" && method === "POST") {
     const id = db.nextRuleId++;
-    db.detection_rules.push({ id, guild_id: 855675560902262785, match_text: body.match_text, template_id: body.template_id, priority: body.priority || 0, created_at: new Date().toISOString() });
+    db.detection_rules.push({ id, guild_id: 111222333444555666, match_text: body.match_text, template_id: body.template_id, priority: body.priority || 0, created_at: new Date().toISOString() });
     return { id };
   }
   const rPatch = sub.match(/^\/detection-rules\/(\d+)$/);
@@ -345,7 +345,7 @@ async function demoFetch(path, opts = {}) {
   if (sub === "/arma-servers" && method === "POST") {
     const id = db.nextArmaId++;
     db.arma_servers.push({
-      id, guild_id: 855675560902262785,
+      id, guild_id: 111222333444555666,
       display_name: body.display_name || "", ptero_panel_url: body.ptero_panel_url || "",
       ptero_client_key: body.ptero_client_key ? "•••••••• (set)" : null,
       ptero_server_identifier: body.ptero_server_identifier || "",
