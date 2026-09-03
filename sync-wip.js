@@ -954,7 +954,11 @@
   SyncClient.prototype.fetchFromServer = async function () {
     if (!this.isLoggedIn()) return null;
     try {
-      var res = await this.auth.fetchWithAuth(this.endpoint, { method: 'GET' });
+      // `?v=2` says "I understand the versioned envelope". Without it the worker
+      // answers in the pre-envelope shape — which is what keeps /meds/, still on the
+      // old client against the live backend, working across the promotion. See
+      // handleGetAppData in main-backend-wip/sync-wip.js.
+      var res = await this.auth.fetchWithAuth(this.endpoint + '?v=2', { method: 'GET' });
       if (!res.ok) throw new Error('fetch failed with ' + res.status);
       var body = await res.json();
 
