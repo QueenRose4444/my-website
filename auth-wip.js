@@ -229,6 +229,7 @@
       refresh: base + '/api/auth/refresh',
       logout: base + '/api/auth/logout',
       changePassword: base + '/api/auth/change-password',
+      setEmail: base + '/api/auth/set-email',
       me: base + '/api/auth/me',
       data: base + '/api/data/' + encodeURIComponent(appName),
       dataFor: function (name) { return base + '/api/data/' + encodeURIComponent(name); },
@@ -437,6 +438,49 @@
     if (!res.ok) throw new Error((data && data.error) || 'Password change failed');
 
     global.dispatchEvent(new CustomEvent('auth:password-changed', { detail: { message: data.message } }));
+    return data;
+  };
+
+  /**
+   * Set, change, or remove this account's recovery email address.
+   *
+   * Pass `newEmailOrNull` as null (or leave it out) to remove the address — that
+   * leaves the account with NO recovery path, same as never having set one at
+   * signup, and the response says so back in `recoveryWarning`.
+   *
+   * The current password is required and proved the same way a login proves it:
+   * this device derives an authSecret from the account's own salt and KDF
+   * parameters, never sending the password itself. A valid access token alone is
+   * not enough for this — a token found lying around should not be enough to
+   * redirect password recovery to somewhere else.
+   */
+  AuthManagerWip.prototype.setEmail = async function (currentPassword, newEmailOrNull) {
+    if (!this.isLoggedIn()) throw new Error('User must be logged in to change the account email.');
+    if (typeof currentPassword !== 'string' || currentPassword.length === 0) {
+      throw new Error('Current password is required.');
+    }
+
+    var username = (this.currentUser && this.currentUser.username) || '';
+    var pre = await this.prelogin(username);
+
+    var payload = { email: newEmailOrNull || null };
+    if (pre.scheme === 'legacy') {
+      payload.currentPassword = currentPassword;
+    } else {
+      payload.currentAuthSecret = await deriveAuthSecret(currentPassword, pre.salt, pre.kdf);
+    }
+
+    var res = await this.fetchWithAuth(this.endpoints.setEmail, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    var data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (!res.ok) throw new Error((data && data.error) || 'Could not update email');
+
+    global.dispatchEvent(new CustomEvent('auth:email-changed', {
+      detail: { email: data.email, recovery: data.recovery, recoveryWarning: data.recoveryWarning },
+    }));
     return data;
   };
 
