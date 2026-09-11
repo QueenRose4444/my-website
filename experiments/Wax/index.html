@@ -1,0 +1,1988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>GlowWax 3D - Hard Wax Guidance & Anatomy Assistant</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,600&display=swap" rel="stylesheet">
+
+  <!-- Three.js and OrbitControls via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #fff0f5 0%, #fce4ec 50%, #f8bbd0 100%);
+      --pastel-pink-50: #fff5f8;
+      --pastel-pink-100: #fde8ef;
+      --pastel-pink-200: #fbcfe8;
+      --pastel-pink-300: #f9a8d4;
+      --pastel-pink-400: #f472b6;
+      --pastel-pink-500: #ec4899;
+      --pastel-pink-600: #db2777;
+      --rose-deep: #be185d;
+      --card-bg: rgba(255, 255, 255, 0.88);
+      --card-border: rgba(249, 168, 212, 0.4);
+      --text-main: #4a2839;
+      --text-muted: #83586f;
+      --shadow-soft: 0 10px 25px -5px rgba(236, 72, 153, 0.12), 0 8px 10px -6px rgba(236, 72, 153, 0.08);
+      --shadow-glow: 0 0 20px rgba(244, 114, 182, 0.35);
+      --radius-lg: 20px;
+      --radius-md: 14px;
+      --radius-full: 9999px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body {
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Navigation Header */
+    header {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--card-border);
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-full);
+      background: linear-gradient(135deg, var(--pastel-pink-400), var(--rose-deep));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 1.2rem;
+      box-shadow: 0 4px 10px rgba(219, 39, 119, 0.3);
+    }
+
+    .brand-text h1 {
+      font-size: 1.25rem;
+      font-family: 'Playfair Display', serif;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--rose-deep);
+    }
+
+    .brand-text span {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 0.6rem;
+    }
+
+    .pill-btn {
+      background: white;
+      border: 1px solid var(--pastel-pink-200);
+      color: var(--rose-deep);
+      padding: 0.45rem 0.9rem;
+      border-radius: var(--radius-full);
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+    }
+
+    .pill-btn:hover, .pill-btn.active {
+      background: var(--pastel-pink-500);
+      color: white;
+      border-color: var(--pastel-pink-500);
+      box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3);
+    }
+
+    /* Main Grid Layout */
+    .app-container {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 430px;
+      height: calc(100vh - 65px);
+      overflow: hidden;
+      position: relative;
+    }
+
+    @media (max-width: 1024px) {
+      .app-container {
+        grid-template-columns: 1fr;
+        grid-template-rows: 52vh 1fr;
+        height: auto;
+        overflow: visible;
+      }
+    }
+
+    /* 3D Viewport Area */
+    .viewport-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at center, #ffffff 0%, #fff0f5 70%, #fce4ec 100%);
+      overflow: hidden;
+    }
+
+    #threejs-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+    }
+
+    #threejs-canvas:active {
+      cursor: grabbing;
+    }
+
+    /* Floating Viewport Overlays */
+    .viewport-overlay-top {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      right: 1rem;
+      display: flex;
+      justify-content: space-between;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .overlay-chip {
+      pointer-events: auto;
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(10px);
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius-full);
+      border: 1px solid var(--card-border);
+      box-shadow: var(--shadow-soft);
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--rose-deep);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .viewport-controls-bottom {
+      position: absolute;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 0.5rem;
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(12px);
+      padding: 0.4rem 0.8rem;
+      border-radius: var(--radius-full);
+      border: 1px solid var(--card-border);
+      box-shadow: var(--shadow-soft);
+      z-index: 10;
+      max-width: 95%;
+      overflow-x: auto;
+    }
+
+    .body-chip-btn {
+      background: transparent;
+      border: none;
+      padding: 0.4rem 0.75rem;
+      border-radius: var(--radius-full);
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+
+    .body-chip-btn:hover, .body-chip-btn.active {
+      background: var(--pastel-pink-200);
+      color: var(--rose-deep);
+    }
+
+    .legend-box {
+      position: absolute;
+      bottom: 4.5rem;
+      left: 1rem;
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(10px);
+      border-radius: var(--radius-md);
+      padding: 0.6rem 0.9rem;
+      border: 1px solid var(--card-border);
+      font-size: 0.72rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      box-shadow: var(--shadow-soft);
+      pointer-events: none;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+    }
+
+    /* Sidebar / Assistant Panel */
+    .sidebar {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-left: 1px solid var(--card-border);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      padding: 1.25rem;
+    }
+
+    .panel-card {
+      background: white;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--card-border);
+      padding: 1.2rem;
+      box-shadow: var(--shadow-soft);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .panel-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: linear-gradient(to bottom, var(--pastel-pink-400), var(--rose-deep));
+      opacity: 0.6;
+    }
+
+    .card-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--rose-deep);
+      margin-bottom: 0.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .badge {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 0.2rem 0.55rem;
+      border-radius: var(--radius-full);
+      background: var(--pastel-pink-100);
+      color: var(--rose-deep);
+      border: 1px solid var(--pastel-pink-200);
+    }
+
+    /* Body Configuration Box */
+    .config-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .config-toggle {
+      flex: 1;
+      padding: 0.55rem;
+      border: 1px solid var(--pastel-pink-200);
+      background: var(--pastel-pink-50);
+      border-radius: var(--radius-md);
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+
+    .config-toggle.active {
+      background: linear-gradient(135deg, var(--pastel-pink-400), var(--rose-deep));
+      color: white;
+      border-color: transparent;
+      box-shadow: 0 4px 10px rgba(236, 72, 153, 0.25);
+    }
+
+    /* Selected Zone Guide Card */
+    .zone-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+    }
+
+    .zone-name {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.4rem;
+      color: var(--rose-deep);
+      font-weight: 600;
+    }
+
+    .instruction-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      margin: 0.9rem 0;
+    }
+
+    .step-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+      background: var(--pastel-pink-50);
+      padding: 0.65rem 0.8rem;
+      border-radius: var(--radius-md);
+      border-left: 3px solid var(--pastel-pink-400);
+      font-size: 0.82rem;
+      line-height: 1.4;
+    }
+
+    .step-icon {
+      font-size: 1.1rem;
+      line-height: 1;
+    }
+
+    .step-text strong {
+      color: var(--rose-deep);
+      display: block;
+      font-size: 0.84rem;
+      margin-bottom: 0.15rem;
+    }
+
+    .patch-spec-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+      margin-top: 0.6rem;
+    }
+
+    .spec-box {
+      background: white;
+      border: 1px solid var(--pastel-pink-200);
+      padding: 0.5rem 0.7rem;
+      border-radius: var(--radius-md);
+      text-align: center;
+    }
+
+    .spec-label {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .spec-val {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--rose-deep);
+      margin-top: 0.1rem;
+    }
+
+    /* Timer Widget */
+    .timer-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.8rem;
+      padding: 0.5rem 0;
+    }
+
+    .timer-circle-wrap {
+      position: relative;
+      width: 140px;
+      height: 140px;
+    }
+
+    .timer-svg {
+      transform: rotate(-90deg);
+      width: 100%;
+      height: 100%;
+    }
+
+    .timer-track {
+      fill: none;
+      stroke: var(--pastel-pink-100);
+      stroke-width: 8;
+    }
+
+    .timer-progress {
+      fill: none;
+      stroke: var(--pastel-pink-500);
+      stroke-width: 8;
+      stroke-linecap: round;
+      stroke-dasharray: 377;
+      stroke-dashoffset: 0;
+      transition: stroke-dashoffset 0.5s ease, stroke 0.3s ease;
+    }
+
+    .timer-content {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+
+    .timer-digits {
+      font-size: 2.1rem;
+      font-weight: 700;
+      color: var(--rose-deep);
+      line-height: 1;
+    }
+
+    .timer-status {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-top: 0.3rem;
+    }
+
+    .timer-controls {
+      display: flex;
+      gap: 0.5rem;
+      width: 100%;
+    }
+
+    .action-btn {
+      flex: 1;
+      background: linear-gradient(135deg, var(--pastel-pink-400), var(--rose-deep));
+      color: white;
+      border: none;
+      padding: 0.65rem;
+      border-radius: var(--radius-full);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(219, 39, 119, 0.25);
+      transition: all 0.2s ease;
+    }
+
+    .action-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(219, 39, 119, 0.35);
+    }
+
+    .secondary-btn {
+      background: white;
+      border: 1px solid var(--pastel-pink-200);
+      color: var(--text-muted);
+      padding: 0.65rem 1rem;
+      border-radius: var(--radius-full);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .secondary-btn:hover {
+      background: var(--pastel-pink-100);
+      color: var(--rose-deep);
+    }
+
+    /* Hair Length Calibration Widget */
+    .length-slider-box {
+      margin-top: 0.5rem;
+    }
+
+    .grain-comparison {
+      background: var(--pastel-pink-50);
+      border: 1px dashed var(--pastel-pink-300);
+      border-radius: var(--radius-md);
+      padding: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      margin: 0.75rem 0;
+    }
+
+    .visual-hair-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .hair-line {
+      width: 3px;
+      background: #333;
+      border-radius: 2px;
+      transition: height 0.2s ease;
+    }
+
+    .rice-grain-graphic {
+      width: 7px;
+      height: 24px; /* Represents ~6mm / 1/4 inch */
+      background: #fdfaf3;
+      border: 1.5px solid #d4c5a9;
+      border-radius: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .length-alert {
+      font-size: 0.76rem;
+      line-height: 1.35;
+      padding: 0.5rem 0.7rem;
+      border-radius: var(--radius-md);
+      margin-top: 0.5rem;
+    }
+
+    .alert-good {
+      background: #ecfdf5;
+      color: #065f46;
+      border: 1px solid #a7f3d0;
+    }
+
+    .alert-warn {
+      background: #fffbeb;
+      color: #92400e;
+      border: 1px solid #fde68a;
+    }
+
+    .alert-bad {
+      background: #fef2f2;
+      color: #991b1b;
+      border: 1px solid #fecaca;
+    }
+
+    /* Progress Checklist */
+    .progress-bar-wrap {
+      background: var(--pastel-pink-100);
+      height: 8px;
+      border-radius: var(--radius-full);
+      overflow: hidden;
+      margin-bottom: 0.8rem;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(to right, var(--pastel-pink-400), var(--rose-deep));
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .zone-checklist {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      max-height: 180px;
+      overflow-y: auto;
+      padding-right: 0.3rem;
+    }
+
+    .check-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.4rem 0.6rem;
+      border-radius: var(--radius-md);
+      background: var(--pastel-pink-50);
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .check-item:hover {
+      background: var(--pastel-pink-100);
+    }
+
+    .check-item.done {
+      background: #fdf2f8;
+      text-decoration: line-through;
+      color: var(--text-muted);
+    }
+
+    .checkbox-custom {
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+      border: 1.5px solid var(--pastel-pink-400);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      color: white;
+    }
+
+    .check-item.done .checkbox-custom {
+      background: var(--pastel-pink-500);
+      border-color: var(--pastel-pink-500);
+    }
+
+    /* Next Wax Cycle Tool */
+    .cycle-calc {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      font-size: 0.8rem;
+    }
+
+    .date-input {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--pastel-pink-200);
+      font-size: 0.82rem;
+      color: var(--text-main);
+      background: white;
+    }
+
+    /* Modal for GitHub / Mobile Export */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(5px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      z-index: 100;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal-window {
+      background: white;
+      border-radius: var(--radius-lg);
+      max-width: 520px;
+      width: 100%;
+      padding: 1.75rem;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+      max-height: 85vh;
+      overflow-y: auto;
+      position: relative;
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: var(--pastel-pink-100);
+      border: none;
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-full);
+      cursor: pointer;
+      color: var(--rose-deep);
+      font-weight: 700;
+    }
+
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.4);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--pastel-pink-300);
+      border-radius: var(--radius-full);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">✨</div>
+      <div class="brand-text">
+        <h1>GlowWax 3D</h1>
+        <span>Hard Wax Assistant & Body Map</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="pill-btn" onclick="openModal('repoModal')">📱 Push to GitHub from Phone</button>
+      <button class="pill-btn active" onclick="resetCameraView()">🔄 Reset 3D View</button>
+    </div>
+  </header>
+
+  <!-- App Layout -->
+  <div class="app-container">
+
+    <!-- Left 3D Viewport -->
+    <div class="viewport-container">
+      <div class="viewport-overlay-top">
+        <div class="overlay-chip" id="current-zone-badge">
+          <span>🎯</span> <strong id="chip-zone-title">Full Body Overview</strong>
+        </div>
+        <div class="overlay-chip">
+          <span>👆</span> Tap any body part to zoom & guide
+        </div>
+      </div>
+
+      <!-- Canvas for Three.js -->
+      <canvas id="threejs-canvas"></canvas>
+
+      <!-- Visual Legend -->
+      <div class="legend-box">
+        <div class="legend-item">
+          <div class="legend-dot" style="background: #10b981;"></div>
+          <span>Hair Growth & Paste Direction (Apply WITH)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background: #f43f5e;"></div>
+          <span>Pull Direction (Fast & Flat AGAINST)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background: rgba(244, 114, 182, 0.8);"></div>
+          <span>Suggested Wax Patch Contour</span>
+        </div>
+      </div>
+
+      <!-- Bottom Body Part Quick Bar -->
+      <div class="viewport-controls-bottom">
+        <button class="body-chip-btn active" onclick="selectZone('full')">🌐 Full View</button>
+        <button class="body-chip-btn" onclick="selectZone('face')">Face & Lip</button>
+        <button class="body-chip-btn" onclick="selectZone('neck')">Neck</button>
+        <button class="body-chip-btn" onclick="selectZone('underarms')">Underarms</button>
+        <button class="body-chip-btn" onclick="selectZone('chest')">Chest & Ribs</button>
+        <button class="body-chip-btn" onclick="selectZone('arms')">Arms & Hands</button>
+        <button class="body-chip-btn" onclick="selectZone('bikini')">Intimate / Bikini</button>
+        <button class="body-chip-btn" onclick="selectZone('butt')">Buttocks</button>
+        <button class="body-chip-btn" onclick="selectZone('legs')">Legs & Feet</button>
+      </div>
+    </div>
+
+    <!-- Right Sidebar Assistant -->
+    <div class="sidebar">
+
+      <!-- Configuration Card -->
+      <div class="panel-card">
+        <div class="card-title">
+          <span>Anatomy & Frame Profile</span>
+          <span class="badge">V1.0 Customizer</span>
+        </div>
+
+        <div style="font-size: 0.76rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+          Configure body frame shape independently from intimate anatomy to tailor directional guidance:
+        </div>
+
+        <div class="config-row">
+          <button class="config-toggle active" id="btn-frame-fem" onclick="setBodyFrame('feminine')">🌸 Feminine Frame</button>
+          <button class="config-toggle" id="btn-frame-masc" onclick="setBodyFrame('masculine')">🌿 Masculine Frame</button>
+        </div>
+
+        <div class="config-row">
+          <button class="config-toggle active" id="btn-agab-afab" onclick="setAnatomyConfig('afab')">Vulvar / Labial Guidance</button>
+          <button class="config-toggle" id="btn-agab-amab" onclick="setAnatomyConfig('amab')">Scrotal / Inguinal Guidance</button>
+        </div>
+
+        <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 0.4rem;">
+          Skin Tone Selector:
+        </div>
+        <div style="display: flex; gap: 0.4rem; margin-top: 0.35rem;">
+          <button style="width: 24px; height: 24px; border-radius: 50%; background: #fbe6db; border: 2px solid white; cursor: pointer;" onclick="setSkinTone('#fbe6db')"></button>
+          <button style="width: 24px; height: 24px; border-radius: 50%; background: #f2cca8; border: 2px solid white; cursor: pointer;" onclick="setSkinTone('#f2cca8')"></button>
+          <button style="width: 24px; height: 24px; border-radius: 50%; background: #d79d71; border: 2px solid white; cursor: pointer;" onclick="setSkinTone('#d79d71')"></button>
+          <button style="width: 24px; height: 24px; border-radius: 50%; background: #9d6443; border: 2px solid white; cursor: pointer;" onclick="setSkinTone('#9d6443')"></button>
+          <button style="width: 24px; height: 24px; border-radius: 50%; background: #5b3524; border: 2px solid white; cursor: pointer;" onclick="setSkinTone('#5b3524')"></button>
+        </div>
+      </div>
+
+      <!-- Active Body Zone Detailed Guide -->
+      <div class="panel-card">
+        <div class="zone-header">
+          <div class="zone-name" id="guide-zone-title">Underarms</div>
+          <span class="badge" id="guide-zone-badge">High Sensitivity</span>
+        </div>
+
+        <p id="guide-zone-desc" style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.45;">
+          Underarm hair grows in two distinct swirl patterns. Never wax in one single strip! Divide into upper and lower patches.
+        </p>
+
+        <div class="instruction-steps" id="guide-steps-container">
+          <!-- Populated by JavaScript -->
+        </div>
+
+        <div class="patch-spec-grid">
+          <div class="spec-box">
+            <div class="spec-label">Ideal Patch Size</div>
+            <div class="spec-val" id="guide-patch-size">1.5" &times; 2" (Small)</div>
+          </div>
+          <div class="spec-box">
+            <div class="spec-label">Hold Technique</div>
+            <div class="spec-val" id="guide-skin-tension">Lift arm, stretch taut</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Application & Cooling Timer -->
+      <div class="panel-card">
+        <div class="card-title">
+          <span>Hard Wax Cooling Timer</span>
+          <span class="badge">Auditory & Haptic</span>
+        </div>
+
+        <div class="timer-container">
+          <div class="timer-circle-wrap">
+            <svg class="timer-svg" viewBox="0 0 140 140">
+              <circle class="timer-track" cx="70" cy="70" r="60"></circle>
+              <circle class="timer-progress" id="timer-progress-ring" cx="70" cy="70" r="60"></circle>
+            </svg>
+            <div class="timer-content">
+              <div class="timer-digits" id="timer-number">30</div>
+              <div class="timer-status" id="timer-phase">Ready</div>
+            </div>
+          </div>
+
+          <div style="font-size: 0.74rem; text-align: center; color: var(--text-muted); max-width: 280px;" id="timer-guidance-text">
+            Tap "Start Application" as soon as you press the wax strip onto the skin.
+          </div>
+
+          <div class="timer-controls">
+            <button class="action-btn" id="timer-btn-main" onclick="toggleTimer()">Start Timer (30s)</button>
+            <button class="secondary-btn" onclick="resetTimer()">Reset</button>
+          </div>
+          
+          <div style="display: flex; justify-content: center; gap: 0.8rem; font-size: 0.75rem; color: var(--text-muted);">
+            <label><input type="radio" name="timerDur" value="20" onchange="setTimerDuration(20)"> Fast (20s)</label>
+            <label><input type="radio" name="timerDur" value="30" checked onchange="setTimerDuration(30)"> Standard (30s)</label>
+            <label><input type="radio" name="timerDur" value="45" onchange="setTimerDuration(45)"> Thick (45s)</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Interactive Hair Length Visualizer -->
+      <div class="panel-card">
+        <div class="card-title">
+          <span>Hair Length Calibration</span>
+          <span class="badge">Grain of Rice Test</span>
+        </div>
+
+        <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;">
+          For hard wax to shrink-wrap the follicle, hair must be approximately <strong>1/4 inch (6 mm)</strong> long.
+        </div>
+
+        <div class="grain-comparison">
+          <div class="visual-hair-wrap">
+            <div style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted);">Grain of Rice</div>
+            <div class="rice-grain-graphic" title="Standard 1/4 inch grain of rice reference"></div>
+            <div style="font-size: 0.68rem; color: var(--rose-deep); font-weight: 600;">6 mm (Ideal)</div>
+          </div>
+
+          <div style="font-size: 1.2rem; color: var(--pastel-pink-300);">vs</div>
+
+          <div class="visual-hair-wrap">
+            <div style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted);">Your Hair Length</div>
+            <div class="hair-line" id="interactive-hair-render" style="height: 24px;"></div>
+            <div style="font-size: 0.68rem; color: var(--text-main); font-weight: 700;" id="slider-length-display">6 mm (1/4 inch)</div>
+          </div>
+        </div>
+
+        <div class="length-slider-box">
+          <input type="range" min="1" max="18" value="6" step="1" style="width: 100%; accent-color: var(--pastel-pink-500);" id="hair-slider" oninput="updateHairLength(this.value)">
+          <div style="display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--text-muted); margin-top: 0.2rem;">
+            <span>1 mm (Stubble)</span>
+            <span>6 mm (1/4 inch)</span>
+            <span>18 mm (Overgrown)</span>
+          </div>
+        </div>
+
+        <div id="hair-length-feedback" class="length-alert alert-good">
+          ✨ <strong>Ideal Wax Length:</strong> The hard wax will properly grip the hair shaft without sticking solely to the skin. Perfect for a clean root pull!
+        </div>
+      </div>
+
+      <!-- Waxing Progress Map -->
+      <div class="panel-card">
+        <div class="card-title">
+          <span>Session Progress Tracker</span>
+          <span class="badge" id="progress-percent">0% Done</span>
+        </div>
+
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="progress-bar"></div>
+        </div>
+
+        <div class="zone-checklist" id="zone-checklist-container">
+          <!-- Populated by JavaScript -->
+        </div>
+      </div>
+
+      <!-- Cycle Calculator -->
+      <div class="panel-card">
+        <div class="card-title">
+          <span>Next Wax Cycle Estimator</span>
+          <span class="badge">Hair Cycles</span>
+        </div>
+
+        <div class="cycle-calc">
+          <div style="font-size: 0.76rem; color: var(--text-muted);">
+            Waxing pulls hair from the root, requiring <strong>3 to 5 weeks</strong> for the three growth phases (Anagen, Catagen, Telogen) to synchronize.
+          </div>
+          <label style="font-size: 0.72rem; font-weight: 700; color: var(--rose-deep);">Date of Today's Wax:</label>
+          <input type="date" class="date-input" id="wax-date-input" onchange="calculateNextWax()">
+          
+          <div id="next-wax-result" style="background: var(--pastel-pink-50); padding: 0.6rem; border-radius: var(--radius-md); font-size: 0.78rem; border: 1px solid var(--pastel-pink-200); display: none;">
+            <!-- Calculated result -->
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Modal: Phone to GitHub Push Instructions -->
+  <div class="modal-overlay" id="repoModal">
+    <div class="modal-window">
+      <button class="modal-close" onclick="closeModal('repoModal')">✕</button>
+      <div class="card-title" style="font-size: 1.15rem; margin-bottom: 0.5rem;">
+        📱 How to Push This Web App to GitHub From Your Phone
+      </div>
+      <div style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1rem;">
+        You can easily host and version this entire web app straight from your mobile device using several convenient methods:
+      </div>
+
+      <div class="instruction-steps">
+        <div class="step-item">
+          <div class="step-icon">🌐</div>
+          <div class="step-text">
+            <strong>Method 1: Direct Web Upload (Zero Installs)</strong>
+            1. Open <em>github.com</em> in Chrome/Firefox on your phone (switch to "Desktop site" in your browser menu for the easiest view).<br>
+            2. Open your repository, tap <strong>Add file</strong> ➔ <strong>Upload files</strong>.<br>
+            3. Select this saved <code>index.html</code> file from your phone's downloads and tap <strong>Commit changes</strong>!<br>
+            4. Turn on <strong>GitHub Pages</strong> under repo Settings ➔ Pages to make it instantly live.
+          </div>
+        </div>
+
+        <div class="step-item">
+          <div class="step-icon">⚡</div>
+          <div class="step-text">
+            <strong>Method 2: Mobile Code Editors (Spck Editor / GitJournal)</strong>
+            Download <em>Spck Editor</em> (available on Android). It has built-in Git clone, commit, branch, and push tools with an integrated web runner!
+          </div>
+        </div>
+
+        <div class="step-item">
+          <div class="step-icon">💻</div>
+          <div class="step-text">
+            <strong>Method 3: Termux (Mobile Bash & Git)</strong>
+            Run:
+            <code style="display: block; background: #2d1b28; color: #fbcfe8; padding: 0.4rem; border-radius: 6px; margin-top: 0.3rem; font-family: monospace;">
+              git add index.html<br>
+              git commit -m "Add GlowWax 3D V1.0"<br>
+              git push origin main
+            </code>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 1rem; text-align: center;">
+        <button class="action-btn" style="width: 100%;" onclick="closeModal('repoModal')">Got It!</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* =========================================================================
+       1. DATA DEFINITIONS: BODY ZONES & WAXING GUIDES
+       ========================================================================= */
+    const BODY_ZONES = {
+      full: {
+        title: "Full Body Overview",
+        badge: "Interactive Map",
+        desc: "Rotate, pan, and tap on any body region on the 3D dummy to inspect suggested patch sizes, hair growth directions, and peeling angles.",
+        patchSize: "Full Body Map",
+        skinTension: "Dependent on Zone",
+        camera: { x: 0, y: 1.0, z: 4.8 },
+        target: { x: 0, y: 0.9, z: 0 },
+        steps: [
+          { title: "Select a Zone", text: "Tap directly on the 3D model or choose an area from the quick-bar below.", icon: "👆" },
+          { title: "Examine Grain Direction", text: "Green arrows show hair growth and wax paste direction; red arrows show removal direction.", icon: "🎯" },
+          { title: "Prep the Skin", text: "Cleanse with antiseptic, ensure completely dry, and apply a light dusting of powder if humid.", icon: "✨" }
+        ]
+      },
+      face: {
+        title: "Face & Upper Lip",
+        badge: "Delicate Zone",
+        desc: "Facial skin is thin and easily bruised. Upper lip hair grows outward and downward from the septum toward the corners of the mouth.",
+        patchSize: '0.5" × 1.5" (Precision)',
+        skinTension: "Tuck lip over teeth",
+        camera: { x: 0, y: 1.62, z: 1.1 },
+        target: { x: 0, y: 1.62, z: 0 },
+        steps: [
+          { title: "Paste Direction (WITH)", text: "Apply with hair growth: from the nose septum outwards and downwards toward the corner of the lip.", icon: "⬇️" },
+          { title: "Create Lip Edge", text: "Leave a thicker rounded edge at the corner of the lip for grip.", icon: "💧" },
+          { title: "Pull Direction (AGAINST)", text: "Pull skin tight across teeth. Peel against hair growth: from corner of mouth towards center, strictly parallel.", icon: "⬅️" },
+          { title: "Special Caution", text: "Never wax full dense beard hair (testosterone-driven roots are deeply anchored and will tear skin).", icon: "⚠️" }
+        ]
+      },
+      neck: {
+        title: "Neck & Throat",
+        badge: "Sensitive Skin",
+        desc: "Neck hair typically grows downward toward the collarbone, but can swirl at the base of the jawline.",
+        patchSize: '1.5" × 2.5" (Medium)',
+        skinTension: "Tilt head back, stretch skin flat",
+        camera: { x: 0, y: 1.48, z: 1.2 },
+        target: { x: 0, y: 1.48, z: 0 },
+        steps: [
+          { title: "Paste Direction (WITH)", text: "Smooth wax downward following the slope of the throat toward the sternum.", icon: "⬇️" },
+          { title: "Skin Support", text: "Place non-dominant fingers firmly at the collarbone to pull the throat skin completely smooth.", icon: "✋" },
+          { title: "Pull Direction (AGAINST)", text: "Lift the bottom lip edge, pull upward parallel to the neck surface.", icon: "⬆️" }
+        ]
+      },
+      underarms: {
+        title: "Underarms",
+        badge: "Multi-Directional Growth",
+        desc: "Underarm hair grows in two distinct swirl patterns. Never wax in one single strip! Always divide into top and bottom patches.",
+        patchSize: '1.5" × 2" (Small Patches)',
+        skinTension: "Elbow high behind head",
+        camera: { x: -0.45, y: 1.35, z: 1.2 },
+        target: { x: -0.28, y: 1.35, z: 0 },
+        steps: [
+          { title: "Top Half (Upward Swirl)", text: "Apply wax upward toward the shoulder; pull downward toward the ribcage.", icon: "⬆️" },
+          { title: "Bottom Half (Downward Swirl)", text: "Apply wax downward toward the ribs; pull upward toward the armpit center.", icon: "⬇️" },
+          { title: "Two-Hand Stretch", text: "Skin is very loose here. Place hand behind head to naturally stretch the hollow.", icon: "💪" }
+        ]
+      },
+      chest: {
+        title: "Chest & Lower Ribs",
+        badge: "Coarse Follicles",
+        desc: "Chest hair generally grows downward and slightly inward toward the center of the sternum.",
+        patchSize: '2" × 4" (Medium-Large)',
+        skinTension: "Anchor hand at sternum",
+        camera: { x: 0, y: 1.25, z: 1.5 },
+        target: { x: 0, y: 1.25, z: 0 },
+        steps: [
+          { title: "Paste Direction (WITH)", text: "Apply wax from the outer chest inward and downward toward the breastbone.", icon: "↘️" },
+          { title: "Avoid Areolas", text: "Never apply wax directly over areola tissue; outline around them with small margins.", icon: "🚫" },
+          { title: "Pull Direction (AGAINST)", text: "Anchor skin firmly on opposite side; pull outward/upward against hair direction.", icon: "↖️" }
+        ]
+      },
+      arms: {
+        title: "Arms & Hands",
+        badge: "Uniform Grain",
+        desc: "Forearm hair flows downward toward the wrist. On back of hands and fingers, hair grows toward fingertips.",
+        patchSize: '1.5" × 4" (Arms) / 0.5" × 1" (Fingers)',
+        skinTension: "Bend wrist downward to tauten skin",
+        camera: { x: 0.58, y: 1.05, z: 1.4 },
+        target: { x: 0.45, y: 1.05, z: 0 },
+        steps: [
+          { title: "Paste Direction (WITH)", text: "Smooth wax from elbow down toward wrist; on fingers, apply down toward knuckle.", icon: "⬇️" },
+          { title: "Thick End Lip", text: "End each strip just before the joint with a thick rounded lip.", icon: "💧" },
+          { title: "Pull Direction (AGAINST)", text: "Pull from wrist back toward elbow, keeping strip flush against the arm.", icon: "⬆️" }
+        ]
+      },
+      bikini: {
+        title: "Intimate / Bikini Zone",
+        badge: "Maximum Sensitivity (SFW)",
+        desc: "Hair on pubic mound grows downward and inward toward the midline. Delicate labial or scrotal areas require tiny patches and aggressive skin tautness.",
+        patchSize: '1" × 2" (Small Sections)',
+        skinTension: "Crucial 2-point tension",
+        camera: { x: 0, y: 0.85, z: 1.2 },
+        target: { x: 0, y: 0.85, z: 0 },
+        steps: [
+          { title: "Mons Pubis (Mound)", text: "Apply downward and inward toward center line; pull upward against growth.", icon: "⬇️" },
+          { title: "Labial / Vulvar Guidance", text: "Stretch skin outward towards thigh crease with flat fingers. Apply down, pull up.", icon: "🌸" },
+          { title: "Scrotal / Inguinal Guidance", text: "Extremely elastic skin! Must be stretched flat against pelvic bone using two hands to prevent bruising.", icon: "🌿" },
+          { title: "Work in Small Patches", text: "Never apply large sheets. Small 1x2-inch strips drastically minimize pain and skin trauma.", icon: "📏" }
+        ]
+      },
+      butt: {
+        title: "Buttocks & Lower Back",
+        badge: "Friction-Prone",
+        desc: "Gluteal hair typically radiates outward from the crease toward the hips and thighs.",
+        patchSize: '2" × 3" (Medium)',
+        skinTension: "Stand with leg elevated or bend forward",
+        camera: { x: 0, y: 0.85, z: -1.4 },
+        target: { x: 0, y: 0.85, z: 0 },
+        steps: [
+          { title: "Paste Direction (WITH)", text: "Apply from the center crease outward toward the outer hip.", icon: "➡️" },
+          { title: "Pull Direction (AGAINST)", text: "Anchor outer cheek with one palm; pull inward toward center.", icon: "⬅️" },
+          { title: "Post-Wax Care", text: "Wear loose cotton underwear to avoid friction folliculitis.", icon: "🩲" }
+        ]
+      },
+      legs: {
+        title: "Legs & Feet",
+        badge: "Broad Coverage",
+        desc: "Shin and calf hair flows straight downward toward the ankles. Thighs can angle slightly inward.",
+        patchSize: '2" × 5" (Large Strips)',
+        skinTension: "Flex knee or point toes",
+        camera: { x: 0, y: 0.45, z: 1.6 },
+        target: { x: 0, y: 0.45, z: 0 },
+        steps: [
+          { title: "Paste Direction (WITH)", text: "Apply downward from knee to ankle in long, smooth, even strokes.", icon: "⬇️" },
+          { title: "Form Lip at Ankle", text: "Create a distinct lip right at the base of the shin for instant grip.", icon: "💧" },
+          { title: "Pull Direction (AGAINST)", text: "Pull skin tight just above ankle; pull upward toward knee strictly flat to the leg.", icon: "⬆️" },
+          { title: "Knee Caps", text: "Bend the knee at 90° before applying wax to stretch the bumpy joint skin flat.", icon: "🦵" }
+        ]
+      }
+    };
+
+    /* Checklist Item Database */
+    const CHECKLIST_ITEMS = [
+      { id: "face_lip", label: "Upper Lip & Chin", zone: "face" },
+      { id: "underarm_l", label: "Left Underarm (Top & Bottom)", zone: "underarms" },
+      { id: "underarm_r", label: "Right Underarm (Top & Bottom)", zone: "underarms" },
+      { id: "arm_l", label: "Left Forearm & Hand", zone: "arms" },
+      { id: "arm_r", label: "Right Forearm & Hand", zone: "arms" },
+      { id: "chest_main", label: "Chest & Sternum", zone: "chest" },
+      { id: "bikini_front", label: "Intimate / Bikini Front Mound", zone: "bikini" },
+      { id: "bikini_lower", label: "Intimate / Delicate Inguinal Crease", zone: "bikini" },
+      { id: "butt_glutes", label: "Glutes & Lower Back", zone: "butt" },
+      { id: "leg_l_shin", label: "Left Shin & Calf", zone: "legs" },
+      { id: "leg_r_shin", label: "Right Shin & Calf", zone: "legs" },
+      { id: "leg_thighs", label: "Upper Thighs (Left & Right)", zone: "legs" }
+    ];
+
+    let sessionCompletedPatches = new Set();
+    let currentBodyFrame = 'feminine';
+    let currentAnatomy = 'afab';
+    let currentActiveZone = 'full';
+
+    /* =========================================================================
+       2. THREE.JS 3D HUMAN ANATOMY & SCENE SETUP
+       ========================================================================= */
+    let scene, camera, renderer, controls;
+    let mannequinGroup, hairArrowsGroup, waxPatchGroup;
+    let skinMaterial, modestyMaterial, arrowMaterial, pullArrowMaterial, waxPatchMaterial;
+    let raycaster = new THREE.Raycaster();
+    let mouse = new THREE.Vector2();
+
+    // Body Meshes mapped for raycasting and zone zooming
+    let bodyMeshParts = {};
+
+    function init3D() {
+      const container = document.querySelector('.viewport-container');
+      const canvas = document.getElementById('threejs-canvas');
+
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      // 1. Scene
+      scene = new THREE.Scene();
+      scene.background = null; // transparent to show radial gradient
+
+      // 2. Camera
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+      camera.position.set(0, 1.0, 4.8);
+
+      // 3. Renderer
+      renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      // 4. Controls
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.target.set(0, 0.9, 0);
+      controls.maxPolarAngle = Math.PI - 0.1;
+      controls.minDistance = 0.6;
+      controls.maxDistance = 7.0;
+
+      // 5. Lighting: Soft Studio Setup with Pink Rim Accents
+      const ambientLight = new THREE.AmbientLight(0xfff0f5, 0.85);
+      scene.add(ambientLight);
+
+      const mainKeyLight = new THREE.DirectionalLight(0xffffff, 0.9);
+      mainKeyLight.position.set(2, 4, 3);
+      mainKeyLight.castShadow = true;
+      scene.add(mainKeyLight);
+
+      const fillLight = new THREE.DirectionalLight(0xfce4ec, 0.6);
+      fillLight.position.set(-2, 2, 2);
+      scene.add(fillLight);
+
+      const backRimLight = new THREE.DirectionalLight(0xf472b6, 0.5);
+      backRimLight.position.set(0, 2, -3);
+      scene.add(backRimLight);
+
+      // 6. Materials
+      initMaterials('#f2cca8');
+
+      // 7. Build Anatomical Mannequin
+      mannequinGroup = new THREE.Group();
+      hairArrowsGroup = new THREE.Group();
+      waxPatchGroup = new THREE.Group();
+      mannequinGroup.add(hairArrowsGroup);
+      mannequinGroup.add(waxPatchGroup);
+
+      buildHumanDummy();
+      scene.add(mannequinGroup);
+
+      // 8. Event Listeners
+      window.addEventListener('resize', onWindowResize);
+      canvas.addEventListener('pointerdown', onPointerDown);
+
+      // 9. Initial overlays
+      renderGrowthOverlays('full');
+
+      // 10. Start Animation Loop
+      animate();
+    }
+
+    /* Procedural Skin Texture Generation for Realistic Pores & Follicles */
+    function createProceduralSkinTexture() {
+      const size = 512;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+
+      // Base smooth tone
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, size, size);
+
+      // Fine skin micro-pore noise
+      const imgData = ctx.getImageData(0, 0, size, size);
+      const data = imgData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        const noise = (Math.random() - 0.5) * 16;
+        data[i] = Math.min(255, Math.max(0, 250 + noise));
+        data[i + 1] = Math.min(255, Math.max(0, 245 + noise));
+        data[i + 2] = Math.min(255, Math.max(0, 240 + noise));
+      }
+      ctx.putImageData(imgData, 0, 0);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(4, 4);
+      return texture;
+    }
+
+    function initMaterials(baseHex) {
+      const skinTexture = createProceduralSkinTexture();
+
+      skinMaterial = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(baseHex),
+        roughness: 0.52,
+        metalness: 0.04,
+        map: skinTexture,
+        bumpMap: skinTexture,
+        bumpScale: 0.008
+      });
+
+      modestyMaterial = new THREE.MeshStandardMaterial({
+        color: 0xf472b6,
+        roughness: 0.7,
+        metalness: 0.0
+      });
+
+      arrowMaterial = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+      pullArrowMaterial = new THREE.MeshBasicMaterial({ color: 0xf43f5e });
+
+      waxPatchMaterial = new THREE.MeshStandardMaterial({
+        color: 0xf472b6,
+        transparent: true,
+        opacity: 0.65,
+        roughness: 0.3,
+        metalness: 0.1
+      });
+    }
+
+    function setSkinTone(hex) {
+      skinMaterial.color.set(hex);
+    }
+
+    /* Build Anatomical Mannequin Mesh Hierarchy */
+    function buildHumanDummy() {
+      // Clear previous if any
+      while(mannequinGroup.children.length > 2) {
+        mannequinGroup.remove(mannequinGroup.children[2]);
+      }
+
+      bodyMeshParts = {};
+
+      const isFem = (currentBodyFrame === 'feminine');
+
+      // --- HEAD & FACE ---
+      const headGeom = new THREE.SphereGeometry(0.14, 32, 32);
+      headGeom.scale(0.85, 1.15, 0.95);
+      const head = new THREE.Mesh(headGeom, skinMaterial);
+      head.position.set(0, 1.66, 0);
+      head.userData = { zone: 'face', name: 'Face' };
+      mannequinGroup.add(head);
+      bodyMeshParts.face = head;
+
+      // Nose / Facial detail
+      const noseGeom = new THREE.ConeGeometry(0.02, 0.05, 16);
+      noseGeom.rotateX(Math.PI / 2);
+      const nose = new THREE.Mesh(noseGeom, skinMaterial);
+      nose.position.set(0, 1.65, 0.14);
+      head.add(nose);
+
+      // --- NECK ---
+      const neckGeom = new THREE.CylinderGeometry(0.055, 0.07, 0.14, 24);
+      const neck = new THREE.Mesh(neckGeom, skinMaterial);
+      neck.position.set(0, 1.50, 0);
+      neck.userData = { zone: 'neck', name: 'Neck' };
+      mannequinGroup.add(neck);
+      bodyMeshParts.neck = neck;
+
+      // --- UPPER TORSO / CHEST ---
+      const chestWidthTop = isFem ? 0.22 : 0.28;
+      const chestWidthBottom = isFem ? 0.19 : 0.24;
+      const chestGeom = new THREE.CylinderGeometry(chestWidthTop, chestWidthBottom, 0.26, 32);
+      chestGeom.scale(1.0, 1.0, 0.65);
+      const chest = new THREE.Mesh(chestGeom, skinMaterial);
+      chest.position.set(0, 1.30, 0);
+      chest.userData = { zone: 'chest', name: 'Chest' };
+      mannequinGroup.add(chest);
+      bodyMeshParts.chest = chest;
+
+      // Feminine Breasts or Masculine Pecs
+      if (isFem) {
+        const breastGeom = new THREE.SphereGeometry(0.065, 24, 24);
+        breastGeom.scale(1.0, 0.9, 1.1);
+        const breastL = new THREE.Mesh(breastGeom, skinMaterial);
+        breastL.position.set(-0.08, 0.03, 0.11);
+        breastL.userData = { zone: 'chest' };
+        chest.add(breastL);
+
+        const breastR = breastL.clone();
+        breastR.position.x = 0.08;
+        chest.add(breastR);
+      } else {
+        const pecGeom = new THREE.BoxGeometry(0.12, 0.09, 0.04);
+        const pecL = new THREE.Mesh(pecGeom, skinMaterial);
+        pecL.position.set(-0.075, 0.04, 0.11);
+        pecL.userData = { zone: 'chest' };
+        chest.add(pecL);
+
+        const pecR = pecL.clone();
+        pecR.position.x = 0.075;
+        chest.add(pecR);
+      }
+
+      // --- ABDOMEN / WAIST ---
+      const waistWidthTop = chestWidthBottom;
+      const waistWidthBottom = isFem ? 0.23 : 0.22;
+      const abdomenGeom = new THREE.CylinderGeometry(waistWidthTop, waistWidthBottom, 0.24, 32);
+      abdomenGeom.scale(1.0, 1.0, 0.68);
+      const abdomen = new THREE.Mesh(abdomenGeom, skinMaterial);
+      abdomen.position.set(0, 1.05, 0);
+      abdomen.userData = { zone: 'chest', name: 'Abdomen' };
+      mannequinGroup.add(abdomen);
+
+      // --- PELVIS / INTIMATE / BUTTOCKS (SFW Modesty Contour) ---
+      const pelvisWidthTop = waistWidthBottom;
+      const pelvisWidthBottom = isFem ? 0.25 : 0.21;
+      const pelvisGeom = new THREE.CylinderGeometry(pelvisWidthTop, pelvisWidthBottom, 0.22, 32);
+      pelvisGeom.scale(1.0, 1.0, 0.75);
+      const pelvis = new THREE.Mesh(pelvisGeom, modestyMaterial);
+      pelvis.position.set(0, 0.83, 0);
+      pelvis.userData = { zone: 'bikini', name: 'Intimate / Bikini Area' };
+      mannequinGroup.add(pelvis);
+      bodyMeshParts.bikini = pelvis;
+
+      // Glutes (Back)
+      const gluteGeom = new THREE.SphereGeometry(isFem ? 0.11 : 0.09, 24, 24);
+      gluteGeom.scale(1.0, 1.15, 0.9);
+      const gluteL = new THREE.Mesh(gluteGeom, modestyMaterial);
+      gluteL.position.set(-0.09, -0.01, -0.08);
+      gluteL.userData = { zone: 'butt' };
+      pelvis.add(gluteL);
+
+      const gluteR = gluteL.clone();
+      gluteR.position.x = 0.09;
+      pelvis.add(gluteR);
+      bodyMeshParts.butt = gluteL;
+
+      // --- ARMS & UNDERARMS ---
+      const armRadius = isFem ? 0.042 : 0.052;
+      
+      // Shoulders
+      const shoulderGeom = new THREE.SphereGeometry(armRadius * 1.15, 20, 20);
+      const shoulderL = new THREE.Mesh(shoulderGeom, skinMaterial);
+      shoulderL.position.set(-(chestWidthTop + 0.04), 1.40, 0);
+      shoulderL.userData = { zone: 'underarms' };
+      mannequinGroup.add(shoulderL);
+      bodyMeshParts.underarms = shoulderL;
+
+      const shoulderR = shoulderL.clone();
+      shoulderR.position.x = (chestWidthTop + 0.04);
+      mannequinGroup.add(shoulderR);
+
+      // Upper Arms
+      const upperArmGeom = new THREE.CylinderGeometry(armRadius, armRadius * 0.9, 0.28, 20);
+      const upperArmL = new THREE.Mesh(upperArmGeom, skinMaterial);
+      upperArmL.position.set(-(chestWidthTop + 0.055), 1.23, 0);
+      upperArmL.rotation.z = -0.08;
+      upperArmL.userData = { zone: 'arms' };
+      mannequinGroup.add(upperArmL);
+      bodyMeshParts.arms = upperArmL;
+
+      const upperArmR = upperArmL.clone();
+      upperArmR.position.x = (chestWidthTop + 0.055);
+      upperArmR.rotation.z = 0.08;
+      mannequinGroup.add(upperArmR);
+
+      // Forearms & Hands
+      const forearmGeom = new THREE.CylinderGeometry(armRadius * 0.88, armRadius * 0.72, 0.28, 20);
+      const forearmL = new THREE.Mesh(forearmGeom, skinMaterial);
+      forearmL.position.set(-(chestWidthTop + 0.075), 0.96, 0);
+      forearmL.userData = { zone: 'arms' };
+      mannequinGroup.add(forearmL);
+
+      const forearmR = forearmL.clone();
+      forearmR.position.x = (chestWidthTop + 0.075);
+      mannequinGroup.add(forearmR);
+
+      const handGeom = new THREE.BoxGeometry(0.04, 0.09, 0.025);
+      const handL = new THREE.Mesh(handGeom, skinMaterial);
+      handL.position.set(-(chestWidthTop + 0.08), 0.78, 0);
+      handL.userData = { zone: 'arms' };
+      mannequinGroup.add(handL);
+
+      const handR = handL.clone();
+      handR.position.x = (chestWidthTop + 0.08);
+      mannequinGroup.add(handR);
+
+      // --- LEGS & FEET ---
+      const thighRadiusTop = isFem ? 0.095 : 0.085;
+      const thighRadiusBottom = 0.065;
+      const legSpacing = isFem ? 0.11 : 0.095;
+
+      // Thighs
+      const thighGeom = new THREE.CylinderGeometry(thighRadiusTop, thighRadiusBottom, 0.38, 24);
+      const thighL = new THREE.Mesh(thighGeom, skinMaterial);
+      thighL.position.set(-legSpacing, 0.54, 0);
+      thighL.userData = { zone: 'legs' };
+      mannequinGroup.add(thighL);
+      bodyMeshParts.legs = thighL;
+
+      const thighR = thighL.clone();
+      thighR.position.x = legSpacing;
+      mannequinGroup.add(thighR);
+
+      // Shins & Calves
+      const shinGeom = new THREE.CylinderGeometry(0.062, 0.045, 0.40, 24);
+      const shinL = new THREE.Mesh(shinGeom, skinMaterial);
+      shinL.position.set(-legSpacing, 0.18, 0);
+      shinL.userData = { zone: 'legs' };
+      mannequinGroup.add(shinL);
+
+      const shinR = shinL.clone();
+      shinR.position.x = legSpacing;
+      mannequinGroup.add(shinR);
+
+      // Feet
+      const footGeom = new THREE.BoxGeometry(0.07, 0.05, 0.16);
+      const footL = new THREE.Mesh(footGeom, skinMaterial);
+      footL.position.set(-legSpacing, -0.04, 0.04);
+      footL.userData = { zone: 'legs' };
+      mannequinGroup.add(footL);
+
+      const footR = footL.clone();
+      footR.position.x = legSpacing;
+      mannequinGroup.add(footR);
+    }
+
+    /* Render Directional Hair Growth Vectors & Suggested Wax Patches */
+    function renderGrowthOverlays(zoneKey) {
+      // Clear previous overlays
+      while(hairArrowsGroup.children.length > 0) {
+        hairArrowsGroup.remove(hairArrowsGroup.children[0]);
+      }
+      while(waxPatchGroup.children.length > 0) {
+        waxPatchGroup.remove(waxPatchGroup.children[0]);
+      }
+
+      function createArrow3D(from, dir, length, isPull = false) {
+        const arrow = new THREE.ArrowHelper(
+          dir.clone().normalize(),
+          from,
+          length,
+          isPull ? 0xf43f5e : 0x10b981,
+          length * 0.3,
+          length * 0.2
+        );
+        hairArrowsGroup.add(arrow);
+      }
+
+      function createWaxPatch3D(pos, rot, size) {
+        const patchGeom = new THREE.BoxGeometry(size.x, size.y, size.z);
+        const patch = new THREE.Mesh(patchGeom, waxPatchMaterial);
+        patch.position.copy(pos);
+        patch.rotation.set(rot.x, rot.y, rot.z);
+        waxPatchGroup.add(patch);
+      }
+
+      // Add overlays according to zone
+      if (zoneKey === 'full' || zoneKey === 'legs') {
+        // Shins: Hair grows DOWN (green); Pull UP (red)
+        createArrow3D(new THREE.Vector3(-0.11, 0.32, 0.07), new THREE.Vector3(0, -1, 0), 0.15);
+        createArrow3D(new THREE.Vector3(-0.11, 0.08, 0.07), new THREE.Vector3(0, 1, 0), 0.15, true);
+        createWaxPatch3D(new THREE.Vector3(-0.11, 0.20, 0.065), { x: 0, y: 0, z: 0 }, { x: 0.08, y: 0.22, z: 0.01 });
+
+        createArrow3D(new THREE.Vector3(0.11, 0.32, 0.07), new THREE.Vector3(0, -1, 0), 0.15);
+        createArrow3D(new THREE.Vector3(0.11, 0.08, 0.07), new THREE.Vector3(0, 1, 0), 0.15, true);
+        createWaxPatch3D(new THREE.Vector3(0.11, 0.20, 0.065), { x: 0, y: 0, z: 0 }, { x: 0.08, y: 0.22, z: 0.01 });
+      }
+
+      if (zoneKey === 'full' || zoneKey === 'underarms') {
+        // Left Underarm: Top half UP, Bottom half DOWN
+        createArrow3D(new THREE.Vector3(-0.25, 1.39, 0.05), new THREE.Vector3(0.2, 0.8, 0), 0.08);
+        createArrow3D(new THREE.Vector3(-0.25, 1.33, 0.05), new THREE.Vector3(-0.2, -0.8, 0), 0.08);
+        createWaxPatch3D(new THREE.Vector3(-0.25, 1.36, 0.05), { x: 0, y: 0, z: 0.2 }, { x: 0.06, y: 0.09, z: 0.01 });
+      }
+
+      if (zoneKey === 'full' || zoneKey === 'bikini') {
+        // Pubic Mound: Down and Inward
+        createArrow3D(new THREE.Vector3(-0.06, 0.89, 0.18), new THREE.Vector3(0.4, -0.8, 0.1), 0.08);
+        createArrow3D(new THREE.Vector3(0.06, 0.89, 0.18), new THREE.Vector3(-0.4, -0.8, 0.1), 0.08);
+        createWaxPatch3D(new THREE.Vector3(0, 0.85, 0.18), { x: 0.2, y: 0, z: 0 }, { x: 0.09, y: 0.07, z: 0.01 });
+      }
+
+      if (zoneKey === 'full' || zoneKey === 'face') {
+        // Upper Lip: Outward and Downward
+        createArrow3D(new THREE.Vector3(-0.01, 1.62, 0.14), new THREE.Vector3(-0.8, -0.4, 0), 0.04);
+        createArrow3D(new THREE.Vector3(0.01, 1.62, 0.14), new THREE.Vector3(0.8, -0.4, 0), 0.04);
+        createWaxPatch3D(new THREE.Vector3(0, 1.62, 0.145), { x: 0, y: 0, z: 0 }, { x: 0.06, y: 0.02, z: 0.005 });
+      }
+
+      if (zoneKey === 'full' || zoneKey === 'chest') {
+        // Chest: Down and Inward toward sternum
+        createArrow3D(new THREE.Vector3(-0.08, 1.30, 0.13), new THREE.Vector3(0.3, -0.9, 0), 0.11);
+        createArrow3D(new THREE.Vector3(0.08, 1.30, 0.13), new THREE.Vector3(-0.3, -0.9, 0), 0.11);
+        createWaxPatch3D(new THREE.Vector3(0, 1.28, 0.13), { x: 0, y: 0, z: 0 }, { x: 0.14, y: 0.12, z: 0.01 });
+      }
+
+      if (zoneKey === 'full' || zoneKey === 'arms') {
+        // Forearms: Down toward wrist
+        createArrow3D(new THREE.Vector3(-0.34, 1.05, 0.04), new THREE.Vector3(0, -1, 0), 0.12);
+        createWaxPatch3D(new THREE.Vector3(-0.34, 0.98, 0.04), { x: 0, y: 0, z: 0 }, { x: 0.06, y: 0.14, z: 0.01 });
+      }
+    }
+
+    /* Raycasting on 3D Body Click */
+    function onPointerDown(event) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(mannequinGroup.children, true);
+
+      if (intersects.length > 0) {
+        let hit = intersects[0].object;
+        while (hit && !hit.userData.zone && hit.parent !== mannequinGroup) {
+          hit = hit.parent;
+        }
+        if (hit && hit.userData.zone) {
+          selectZone(hit.userData.zone);
+        }
+      }
+    }
+
+    /* Smooth Camera Transition */
+    let cameraTween = null;
+
+    function tweenCamera(targetPos, lookAtTarget, duration = 800) {
+      const startPos = camera.position.clone();
+      const startLook = controls.target.clone();
+      const startTime = performance.now();
+
+      function update(now) {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1.0);
+        // Ease Out Cubic
+        const ease = 1 - Math.pow(1 - progress, 3);
+
+        camera.position.lerpVectors(startPos, targetPos, ease);
+        controls.target.lerpVectors(startLook, lookAtTarget, ease);
+
+        if (progress < 1.0) {
+          requestAnimationFrame(update);
+        }
+      }
+      requestAnimationFrame(update);
+    }
+
+    function resetCameraView() {
+      selectZone('full');
+    }
+
+    function onWindowResize() {
+      const container = document.querySelector('.viewport-container');
+      if (!container || !renderer) return;
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+
+      // Gentle floating/breathing animation for 3D model
+      const t = performance.now() * 0.001;
+      if (currentActiveZone === 'full') {
+        mannequinGroup.position.y = Math.sin(t * 1.5) * 0.015;
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    /* =========================================================================
+       3. INTERACTIVE ASSISTANT & UI LOGIC
+       ========================================================================= */
+
+    function selectZone(zoneKey) {
+      currentActiveZone = zoneKey;
+      const zone = BODY_ZONES[zoneKey] || BODY_ZONES.full;
+
+      // Update Quick Bar Active State
+      document.querySelectorAll('.body-chip-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.textContent.toLowerCase().includes(zoneKey) || (zoneKey === 'full' && btn.textContent.includes('Full'))) {
+          btn.classList.add('active');
+        }
+      });
+
+      // Update Floating Badge
+      document.getElementById('chip-zone-title').textContent = zone.title;
+
+      // Update Sidebar Guide Content
+      document.getElementById('guide-zone-title').textContent = zone.title;
+      document.getElementById('guide-zone-badge').textContent = zone.badge;
+      document.getElementById('guide-zone-desc').textContent = zone.desc;
+      document.getElementById('guide-patch-size').textContent = zone.patchSize;
+      document.getElementById('guide-skin-tension').textContent = zone.skinTension;
+
+      // Render Steps
+      const stepsContainer = document.getElementById('guide-steps-container');
+      stepsContainer.innerHTML = '';
+      zone.steps.forEach(step => {
+        const div = document.createElement('div');
+        div.className = 'step-item';
+        div.innerHTML = `
+          <div class="step-icon">${step.icon}</div>
+          <div class="step-text">
+            <strong>${step.title}</strong>
+            ${step.text}
+          </div>
+        `;
+        stepsContainer.appendChild(div);
+      });
+
+      // Smooth Zoom 3D Camera
+      const camPos = new THREE.Vector3(zone.camera.x, zone.camera.y, zone.camera.z);
+      const camTarget = new THREE.Vector3(zone.target.x, zone.target.y, zone.target.z);
+      tweenCamera(camPos, camTarget);
+
+      // Render 3D Vector Overlays
+      renderGrowthOverlays(zoneKey);
+    }
+
+    function setBodyFrame(frame) {
+      currentBodyFrame = frame;
+      document.getElementById('btn-frame-fem').classList.toggle('active', frame === 'feminine');
+      document.getElementById('btn-frame-masc').classList.toggle('active', frame === 'masculine');
+      buildHumanDummy();
+      renderGrowthOverlays(currentActiveZone);
+    }
+
+    function setAnatomyConfig(config) {
+      currentAnatomy = config;
+      document.getElementById('btn-agab-afab').classList.toggle('active', config === 'afab');
+      document.getElementById('btn-agab-amab').classList.toggle('active', config === 'amab');
+
+      if (config === 'amab') {
+        BODY_ZONES.bikini.steps[2] = {
+          title: "Scrotal Tensioning",
+          text: "Scrotal tissue is extremely elastic! Must be stretched completely taut against the pelvic bone with two hands to avoid hematomas.",
+          icon: "⚠️"
+        };
+      } else {
+        BODY_ZONES.bikini.steps[2] = {
+          title: "Vulvar / Labial Tensioning",
+          text: "Place flat fingers firmly on outer labia and pull outward toward the thigh crease to create a flat, immobile waxing surface.",
+          icon: "🌸"
+        };
+      }
+      if (currentActiveZone === 'bikini') {
+        selectZone('bikini');
+      }
+    }
+
+    /* =========================================================================
+       4. TIMER WITH WEB AUDIO API & VIBRATION
+       ========================================================================= */
+    let timerDuration = 30;
+    let timerRemaining = 30;
+    let timerInterval = null;
+    let timerRunning = false;
+
+    // Web Audio Synthesizer for Chime (No external audio files needed!)
+    function playChime(freq = 880, type = 'sine', duration = 0.6) {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        // Exponential decay for soothing chime
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {
+        console.log("Audio not allowed yet by user interaction");
+      }
+    }
+
+    function setTimerDuration(dur) {
+      if (timerRunning) resetTimer();
+      timerDuration = dur;
+      timerRemaining = dur;
+      document.getElementById('timer-number').textContent = dur;
+      document.getElementById('timer-btn-main').textContent = `Start Timer (${dur}s)`;
+    }
+
+    function toggleTimer() {
+      if (timerRunning) {
+        pauseTimer();
+      } else {
+        startTimer();
+      }
+    }
+
+    function startTimer() {
+      timerRunning = true;
+      document.getElementById('timer-btn-main').textContent = "Pause Timer";
+      playChime(587.33, 'triangle', 0.2); // Start beep
+
+      const totalDash = 377; // 2 * PI * 60
+      const ring = document.getElementById('timer-progress-ring');
+      const numElem = document.getElementById('timer-number');
+      const phaseElem = document.getElementById('timer-phase');
+      const guidanceElem = document.getElementById('timer-guidance-text');
+
+      timerInterval = setInterval(() => {
+        timerRemaining--;
+        numElem.textContent = timerRemaining;
+
+        // Progress ring offset
+        const progressFrac = timerRemaining / timerDuration;
+        ring.style.strokeDashoffset = totalDash * (1 - progressFrac);
+
+        // Dynamic Phases
+        if (timerRemaining > timerDuration - 5) {
+          phaseElem.textContent = "Smoothing";
+          guidanceElem.textContent = "Spread with 45° pressure, building a thick rounded lip at the end.";
+        } else if (timerRemaining > 5) {
+          phaseElem.textContent = "Cooling";
+          guidanceElem.textContent = "Wax is shrink-wrapping follicles. Do not touch or disturb.";
+        } else if (timerRemaining > 0) {
+          phaseElem.textContent = "Tap Test";
+          guidanceElem.textContent = "Tap with a clean glove: if firm and not tacky, prepare to pull!";
+        } else {
+          // Timer Finish!
+          clearInterval(timerInterval);
+          timerRunning = false;
+          phaseElem.textContent = "PULL NOW!";
+          guidanceElem.innerHTML = "<strong>Pull parallel against hair growth!</strong> Immediately press skin with palm to soothe.";
+          document.getElementById('timer-btn-main').textContent = "Start Again";
+          ring.style.stroke = "#10b981";
+
+          // Sound Chime & Vibration
+          playChime(1046.50, 'sine', 0.8);
+          if (navigator.vibrate) {
+            navigator.vibrate([200, 100, 300]);
+          }
+        }
+      }, 1000);
+    }
+
+    function pauseTimer() {
+      clearInterval(timerInterval);
+      timerRunning = false;
+      document.getElementById('timer-btn-main').textContent = "Resume";
+      document.getElementById('timer-phase').textContent = "Paused";
+    }
+
+    function resetTimer() {
+      clearInterval(timerInterval);
+      timerRunning = false;
+      timerRemaining = timerDuration;
+      document.getElementById('timer-number').textContent = timerDuration;
+      document.getElementById('timer-phase').textContent = "Ready";
+      document.getElementById('timer-guidance-text').textContent = "Tap 'Start Application' as soon as you press the wax onto skin.";
+      document.getElementById('timer-btn-main').textContent = `Start Timer (${timerDuration}s)`;
+      document.getElementById('timer-progress-ring').style.strokeDashoffset = 0;
+      document.getElementById('timer-progress-ring').style.stroke = "var(--pastel-pink-500)";
+    }
+
+    /* =========================================================================
+       5. HAIR LENGTH VISUALIZER & CALIBRATION
+       ========================================================================= */
+    function updateHairLength(val) {
+      val = parseInt(val);
+      const hairRender = document.getElementById('interactive-hair-render');
+      const label = document.getElementById('slider-length-display');
+      const feedback = document.getElementById('hair-length-feedback');
+
+      // Scale height: 6mm is ~24px (standard grain of rice)
+      const heightPx = Math.max(4, val * 4);
+      hairRender.style.height = `${heightPx}px`;
+
+      const inchFrac = (val / 25.4).toFixed(2);
+      label.textContent = `${val} mm (~${inchFrac}")`;
+
+      if (val < 4) {
+        feedback.className = "length-alert alert-bad";
+        feedback.innerHTML = "❌ <strong>Too Short (< 4 mm):</strong> The wax cannot wrap around the hair shaft. It will only grip your skin, causing painful skin pulling without hair removal. Wait 5–7 more days!";
+      } else if (val >= 4 && val <= 8) {
+        feedback.className = "length-alert alert-good";
+        feedback.innerHTML = "✨ <strong>Ideal Length (~6 mm / 1/4 inch):</strong> Exactly the size of a grain of rice. Wax shrink-wraps the follicle perfectly for a clean, root-level pull!";
+      } else if (val > 8 && val <= 13) {
+        feedback.className = "length-alert alert-warn";
+        feedback.innerHTML = "⚠️ <strong>Slightly Long (8–13 mm):</strong> Waxing is possible, but hairs may snag and pull slightly more. Work in smaller patches.";
+      } else {
+        feedback.className = "length-alert alert-bad";
+        feedback.innerHTML = "✂️ <strong>Too Long (> 1/2 inch):</strong> Long hairs will tangle and mat in the wax, breaking mid-shaft instead of pulling from the root. <strong>Trim to 1/4 inch with scissors or clippers before waxing!</strong>";
+      }
+    }
+
+    /* =========================================================================
+       6. CHECKLIST & BODY PROGRESS TRACKER
+       ========================================================================= */
+    function initChecklist() {
+      const container = document.getElementById('zone-checklist-container');
+      container.innerHTML = '';
+
+      CHECKLIST_ITEMS.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'check-item';
+        div.id = `chk-${item.id}`;
+        div.onclick = () => toggleCheckItem(item.id, item.zone);
+        div.innerHTML = `
+          <span>${item.label}</span>
+          <div class="checkbox-custom" id="box-${item.id}">✓</div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function toggleCheckItem(id, zoneKey) {
+      if (sessionCompletedPatches.has(id)) {
+        sessionCompletedPatches.delete(id);
+      } else {
+        sessionCompletedPatches.add(id);
+        playChime(659.25, 'sine', 0.15);
+      }
+
+      const itemElem = document.getElementById(`chk-${id}`);
+      itemElem.classList.toggle('done', sessionCompletedPatches.has(id));
+
+      updateProgress();
+    }
+
+    function updateProgress() {
+      const total = CHECKLIST_ITEMS.length;
+      const completed = sessionCompletedPatches.size;
+      const percent = Math.round((completed / total) * 100);
+
+      document.getElementById('progress-bar').style.width = `${percent}%`;
+      document.getElementById('progress-percent').textContent = `${percent}% Done (${completed}/${total})`;
+    }
+
+    /* =========================================================================
+       7. NEXT WAX CYCLE CALCULATOR
+       ========================================================================= */
+    function calculateNextWax() {
+      const dateVal = document.getElementById('wax-date-input').value;
+      if (!dateVal) return;
+
+      const waxDate = new Date(dateVal);
+      // Add 4 weeks (28 days) for minimum, 6 weeks (42 days) for max
+      const minDate = new Date(waxDate.getTime() + (28 * 24 * 60 * 60 * 1000));
+      const maxDate = new Date(waxDate.getTime() + (42 * 24 * 60 * 60 * 1000));
+
+      const options = { month: 'short', day: 'numeric', year: 'numeric' };
+      const minStr = minDate.toLocaleDateString(undefined, options);
+      const maxStr = maxDate.toLocaleDateString(undefined, options);
+
+      const resultBox = document.getElementById('next-wax-result');
+      resultBox.style.display = 'block';
+      resultBox.innerHTML = `
+        <strong style="color: var(--rose-deep);">Target Window:</strong> ${minStr} — ${maxStr} (4 to 6 weeks)<br>
+        <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem; display: block;">
+          Waiting 4 weeks allows hairs currently in the Catagen/Telogen resting phases to enter the active Anagen growth phase so they can all be removed together.
+        </span>
+      `;
+    }
+
+    /* Modal Controls */
+    function openModal(id) {
+      document.getElementById(id).classList.add('open');
+    }
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('open');
+    }
+
+    /* Initialize Everything On Load */
+    window.addEventListener('DOMContentLoaded', () => {
+      init3D();
+      initChecklist();
+      selectZone('full');
+
+      // Set default date in date input to today
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('wax-date-input').value = today;
+      calculateNextWax();
+    });
+  </script>
+</body>
+</html>
