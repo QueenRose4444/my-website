@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <link rel="icon" type="image/png" href="/images/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/images/favicon.svg" />
+    <link rel="shortcut icon" href="/images/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="RoseStuffs" />
+    <link rel="manifest" href="/images/site.webmanifest" />
+
+    <title>LLM Export Privacy Policy - Browser Extension</title>
+    <meta name="description"
+        content="LLM Export has no servers, no accounts and no analytics. It reads the page you are on when you click it, writes a file to your computer, and sends nothing anywhere." />
+    <meta name="theme-color" content="#08090b" />
+    <link rel="canonical" href="https://rosestuffs.org/apps/llm-export/privacy-policy/" />
+
+    <!--
+      Deliberately indexable. Every other one-off page on this site carries a
+      noindex, but a privacy policy is a public document by definition: the Chrome
+      Web Store will not accept a listing without a reachable one, and a policy
+      nobody can find is not serving the purpose it exists for.
+    -->
+    <link rel="stylesheet" href="/shared/tokens.css" />
+    <style>
+        body {
+            margin: 0;
+            background: var(--bg, #08090b);
+            color: var(--text, #e7e9ee);
+            font-family: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+            line-height: 1.65;
+            -webkit-text-size-adjust: 100%;
+        }
+
+        .wrap {
+            /* ~68 characters of running text; anything wider is tiring to read. */
+            max-width: 46rem;
+            margin: 0 auto;
+            padding: 3rem 1.25rem 6rem;
+        }
+
+        a { color: var(--accent, #ff4f9a); }
+
+        h1 {
+            font-size: clamp(1.9rem, 5vw, 2.6rem);
+            line-height: 1.15;
+            margin: 0 0 .35rem;
+            text-wrap: balance;
+        }
+
+        h2 {
+            font-size: 1.2rem;
+            margin: 2.75rem 0 .5rem;
+            text-wrap: balance;
+        }
+
+        .updated {
+            color: var(--text-3, #8b909b);
+            font-size: .875rem;
+            margin: 0 0 2rem;
+        }
+
+        .lede {
+            font-size: 1.075rem;
+            color: var(--text-2, #aeb2bd);
+        }
+
+        .callout {
+            border-left: 3px solid var(--accent, #ff4f9a);
+            background: color-mix(in srgb, var(--accent, #ff4f9a) 8%, transparent);
+            padding: .85rem 1.1rem;
+            border-radius: 0 10px 10px 0;
+            margin: 1.5rem 0;
+        }
+
+        /* Wide content scrolls inside itself; the page body never does. */
+        .table-scroll { overflow-x: auto; }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            min-width: 30rem;
+            margin: .75rem 0;
+            font-size: .95rem;
+        }
+
+        th, td {
+            text-align: left;
+            padding: .6rem .75rem;
+            border-bottom: 1px solid var(--border, #2a2d35);
+            vertical-align: top;
+        }
+
+        th { color: var(--text-2, #aeb2bd); font-weight: 600; }
+
+        ul { padding-left: 1.15rem; }
+        li { margin: .3rem 0; }
+
+        footer {
+            margin-top: 3.5rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid var(--border, #2a2d35);
+            color: var(--text-3, #8b909b);
+            font-size: .875rem;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * { animation: none !important; transition: none !important; }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="wrap">
+        <h1>LLM Export Privacy Policy</h1>
+        <p class="updated">Last updated: 21 September 2026</p>
+
+        <p class="lede">
+            LLM Export is a browser extension. It turns the AI chat you are looking at
+            into a Markdown file and a JSON file, saved to your own computer.
+        </p>
+
+        <div class="callout">
+            <p style="margin:0">
+                <strong>Nothing is collected, and nothing is transmitted.</strong>
+                LLM Export has no server, makes no network requests of any kind, and
+                contains no analytics, tracking or advertising. The developer cannot
+                see your conversations, your exports, or that you used the extension
+                at all, because none of it is ever sent anywhere.
+            </p>
+        </div>
+
+        <h2>What it reads, and when</h2>
+        <p>
+            When you click the extension's toolbar button, or choose
+            <em>Export this chat</em> from the right-click menu, it reads the
+            conversation displayed on that page &mdash; the messages, and any thinking
+            or tool blocks the page contains &mdash; and writes them to a file.
+        </p>
+        <p>
+            <strong>It can only do this at the moment you click.</strong> The extension
+            requests no host permissions. It has no standing access to any website, and
+            it cannot read pages in the background, on other tabs, or when you are not
+            using it. Chrome grants it access to the one page you invoked it on, for
+            that action only.
+        </p>
+
+        <h2>Where the file goes</h2>
+        <p>
+            Into your own Downloads folder, in a subfolder called
+            <code>llm-export</code>. That file is created on your computer and stays
+            there. It is not uploaded, not copied, and not shared with anyone.
+        </p>
+        <div class="callout">
+            <p style="margin:0">
+                <strong>The export contains your conversation.</strong> That is the
+                point of it &mdash; but it means the file is as private as the chat
+                was. If you send it to someone, you are sending them the whole
+                conversation. Treat it the way you would treat any document containing
+                what you wrote.
+            </p>
+        </div>
+
+        <h2>What it stores</h2>
+        <p>
+            Only your own preferences: which file types to save, whether to open
+            thinking and tool blocks, whether to prompt for a file name, and whether
+            developer mode is on. These are kept locally in the browser so they persist
+            between uses. They are not synced and not transmitted.
+        </p>
+        <p>
+            A summary of your most recent export &mdash; how many messages it found and
+            what the files were called &mdash; is held in the browser's session storage
+            so the popup can show you the result. It is discarded when you close the
+            browser.
+        </p>
+
+        <h2>Page captures</h2>
+        <p>
+            The extension has an optional developer mode, off by default, which adds a
+            <em>Capture this page</em> button. It saves the structure of an unsupported
+            chat site so support for that site can be added.
+        </p>
+        <p>
+            A capture is written to your Downloads folder like any other export, and is
+            sent nowhere. <strong>It contains the entire conversation on the page.</strong>
+            If you choose to attach one to a public bug report, everyone who can see
+            that report can read it. The extension warns you about this, and the safest
+            capture is a throwaway chat made for the purpose.
+        </p>
+
+        <h2>Permissions, and why each exists</h2>
+        <ul>
+            <li><strong>activeTab</strong> &mdash; read the conversation on the page you are on, at the moment you click.</li>
+            <li><strong>scripting</strong> &mdash; run the code that reads it. With no host permissions, this is the only way in.</li>
+            <li><strong>downloads</strong> &mdash; write the exported file to your Downloads folder.</li>
+            <li><strong>storage</strong> &mdash; remember your own options between uses.</li>
+            <li><strong>contextMenus</strong> &mdash; add the right-click menu item.</li>
+        </ul>
+
+        <h2>Third parties</h2>
+        <p>
+            There are none. No servers, no SDKs, no remote code. Every line the
+            extension runs ships inside it, and the source is public at
+            <a href="https://github.com/QueenRose4444/llm-export" rel="noopener">github.com/QueenRose4444/llm-export</a>
+            if you would rather read it than take this page's word for it.
+        </p>
+
+        <h2>Children</h2>
+        <p>
+            LLM Export is not directed at children and collects no data from anyone,
+            regardless of age.
+        </p>
+
+        <h2>Changes</h2>
+        <p>
+            If this policy changes, the date at the top changes with it, and a material
+            change will be noted in the extension's release notes.
+        </p>
+
+        <h2>Contact</h2>
+        <p><a href="mailto:rosestuffs-support@pm.me">rosestuffs-support@pm.me</a></p>
+
+        <footer>
+            <a href="/home/">rosestuffs.org</a>
+        </footer>
+    </main>
+</body>
+
+</html>
