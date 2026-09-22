@@ -1,5 +1,6 @@
 // ================================================
-// ui.js — icons, DOM helpers, modal + toast framework
+// ui.js — icons, DOM helpers, modal + toast framework,
+//         and the small helpers every modal file shares
 // ================================================
 (function () {
     'use strict';
@@ -43,8 +44,20 @@
     // ------------------------------------------------
     // tiny DOM helpers
     // ------------------------------------------------
-    const $ = (sel, root) => (root || document).querySelector(sel);
-    const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+    /**
+     * @param {string} sel
+     * @param {ParentNode} [root]
+     * @returns {HTMLElement} — or null. Every selector used in this app matches an
+     *   HTMLElement; `querySelector` is typed as Element only because a selector
+     *   could in principle match an SVG node, and none here does.
+     */
+    const $ = (sel, root) => /** @type {HTMLElement} */ ((root || document).querySelector(sel));
+    /**
+     * @param {string} sel
+     * @param {ParentNode} [root]
+     * @returns {HTMLElement[]}
+     */
+    const $$ = (sel, root) => /** @type {HTMLElement[]} */ (Array.from((root || document).querySelectorAll(sel)));
 
     const escapeHtml = s => String(s == null ? '' : s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -198,5 +211,49 @@
         setTimeout(() => dismiss(false), opts.duration || 3200);
     }
 
-    window.UI = { Icons, $, $$, escapeHtml, on, openModal, confirmModal, toast };
+    // ------------------------------------------------
+    // Shared small helpers
+    // ------------------------------------------------
+    // These live here rather than in any one modal file because all five need them, and a
+    // helper copied into five files is a helper that will be fixed in one of them.
+
+    const todayYmd = () => window.MedData.ymd(new Date());
+    const nowHm = () => window.MedData.hm(new Date());
+
+    const uid = p => p + '-' + Date.now() + '-' + Math.floor(Math.random() * 9999);
+
+    /** "just now" / "12 minutes ago" / "3 hours ago" / "2 days ago" */
+    function whenAgo(at) {
+        const ms = Date.now() - (Number(at) || 0);
+        if (!isFinite(ms) || ms < 0) return 'just now';
+        const mins = Math.floor(ms / 60000);
+        if (mins < 1) return 'just now';
+        if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+        const days = Math.floor(hours / 24);
+        return `${days} day${days === 1 ? '' : 's'} ago`;
+    }
+
+    // keep default date/time inputs ticking with the real clock until the user
+    // touches them — people open the modal, get distracted, and log later
+    function liveClock(modal, dateSel, timeSel) {
+        const dateEl = modal.querySelector(dateSel);
+        const timeEl = modal.querySelector(timeSel);
+        if (!dateEl || !timeEl) return;
+        let touched = false;
+        [dateEl, timeEl].forEach(el => {
+            el.addEventListener('input', () => { touched = true; });
+            el.addEventListener('change', () => { touched = true; });
+        });
+        const iv = setInterval(() => {
+            if (!document.contains(timeEl)) { clearInterval(iv); return; }
+            if (touched || document.activeElement === timeEl || document.activeElement === dateEl) return;
+            timeEl.value = nowHm();
+            dateEl.value = todayYmd();
+        }, 15000);
+    }
+
+    window.UI = { Icons, $, $$, escapeHtml, on, openModal, confirmModal, toast,
+        todayYmd, nowHm, uid, whenAgo, liveClock };
 })();

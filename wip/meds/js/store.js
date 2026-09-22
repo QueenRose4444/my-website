@@ -41,6 +41,21 @@
     //
     // Not listed: `version` (a constant) and `activeMedId` (per device — normalize()
     // resets it from the device blob anyway). Neither generates an operation.
+    //
+    // ADDING A COLLECTION MEANS SIX EDITS, and five of them fail silently.
+    //   1. emptyState()        a new install has the field at all
+    //   2. normalize()         a state loaded from anywhere older gets the field
+    //   3. SYNC_COLLECTIONS    this list — no `identity` and normaliseCollections
+    //                          DROPS it with only a console.warn, which degrades the
+    //                          client to shipping whole snapshots instead of ops
+    //   4. COLLECTION_LABELS   or the import preview names it by its wire name
+    //   5. canonical()         no longer a risk — it now covers every field — but it
+    //                          is still the place an exclusion would go
+    //   6. mergeIn()           or an import silently drops the collection entirely
+    //
+    // Note the two keying schemes that are easy to conflate: sync identity is `id`,
+    // while import/merge dedupe is CONTENT-based (see mergeIn). A collection needs a
+    // sensible answer for both.
     const SYNC_COLLECTIONS = [
         { name: 'meds', identity: m => m.id },
         { name: 'trashedMeds', identity: m => m.id },
@@ -366,6 +381,163 @@
             return s.shots.length > 0 || s.weights.length > 0 || s.meds.length > 0;
         },
 
+        // ---------- mutations ----------
+        // Every change that DELETES something, or that has to keep two collections
+        // consistent, lives here rather than in whichever click handler happens to
+        // trigger it.
+        //
+        // "Deleting a container must unassign its doses" is a rule about the data, not
+        // about a button — and it used to exist in exactly one event handler, so a
+        // second way to delete a container would have left `penId` pointing at nothing,
+        // silently, with the dose still on the chart.
+        //
+        // Each returns what the caller needs in order to say what happened, so nothing
+        // has to re-query the state it just changed. Confirmation prompts stay with the
+        // caller: these do the thing, they do not ask whether to.
+
+        /** @returns {boolean} false if there was no such dose. */
+        deleteShot(id) {
+            if (!this.state.shots.some(x => x.id === id)) return false;
+            this.update(s => { s.shots = s.shots.filter(x => x.id !== id); });
+            return true;
+        },
+
+        /** @returns {boolean} false if there was no such entry. */
+        deleteWeight(id) {
+            if (!this.state.weights.some(x => x.id === id)) return false;
+            this.update(s => { s.weights = s.weights.filter(x => x.id !== id); });
+            return true;
+        },
+
+        /**
+         * Delete one supply container. Its doses stay logged and become unassigned —
+         * a dose that happened still happened.
+         * @returns {{unassigned:number}|null} null if there was no such container.
+         */
+        deleteContainer(penId) {
+            if (!this.state.pens.some(p => p.id === penId)) return null;
+            const unassigned = this.state.shots.filter(x => x.penId === penId).length;
+            this.update(s => {
+                s.pens = s.pens.filter(p => p.id !== penId);
+                s.shots.forEach(x => { if (x.penId === penId) x.penId = null; });
+            });
+            return { unassigned };
+        },
+
+        /**
+         * Throw away one med's whole supply history, keeping its doses.
+         * @returns {{containers:number, unassigned:number}}
+         */
+        clearSupplyFor(medId) {
+            const ids = new Set(this.state.pens.filter(p => p.medId === medId).map(p => p.id));
+            const unassigned = this.state.shots.filter(x => ids.has(x.penId)).length;
+            if (!ids.size) return { containers: 0, unassigned: 0 };
+            this.update(s => {
+                s.pens = s.pens.filter(p => p.medId !== medId);
+                s.shots.forEach(x => { if (ids.has(x.penId)) x.penId = null; });
+            });
+            return { containers: ids.size, unassigned };
+        },
+
+        /**
+         * Remove every estimated dose and the estimated containers that back them.
+         * Real doses and real containers are untouched.
+         * @returns {{shots:number, containers:number}}
+         */
+        clearEstimated() {
+            const estPenIds = new Set(this.state.pens.filter(p => p.note === 'estimated').map(p => p.id));
+            const shots = this.state.shots.filter(x => x.estimated).length;
+            if (!shots && !estPenIds.size) return { shots: 0, containers: 0 };
+            this.update(s => {
+                s.shots = s.shots.filter(x => !x.estimated);
+                s.pens = s.pens.filter(p => !estPenIds.has(p.id));
+            });
+            return { shots, containers: estPenIds.size };
+        },
+
+        /**
+         * Reconstruct containers for doses that have none, so supply tracking can start
+         * from a history that predates it. Additive: nothing is deleted.
+         * @returns {{containers:number, assigned:number}}
+         */
+        buildContainersFromShots(med) {
+            const orphans = this.state.shots.filter(x => x.medId === med.id && !x.penId);
+            if (!orphans.length) return { containers: 0, assigned: 0 };
+            const { pens, assignment } = D.inferPensFromShots(orphans, med);
+            this.update(s => {
+                s.shots.forEach(x => { if (assignment[x.id]) x.penId = assignment[x.id]; });
+                s.pens = s.pens.concat(pens);
+            });
+            return { containers: pens.length, assigned: Object.keys(assignment).length };
+        },
+
+        /**
+         * Move a med to trash. Nothing is deleted — doses, supply and the med itself are
+         * all kept, which is what makes this reversible and `deleteMedForever` not.
+         * @returns {boolean} false if there was no such active med.
+         */
+        trashMed(medId) {
+            if (!this.state.meds.some(m => m.id === medId)) return false;
+            this.update(s => {
+                const med = s.meds.find(m => m.id === medId);
+                s.meds = s.meds.filter(m => m.id !== medId);
+                s.trashedMeds.unshift(Object.assign({}, med, { trashedAt: Date.now() }));
+                // Never leave the app pointing at a med that is no longer in the list.
+                if (s.activeMedId === medId) s.activeMedId = s.meds[0] ? s.meds[0].id : null;
+            });
+            return true;
+        },
+
+        /** @returns {boolean} false if it was not in the trash. */
+        restoreMed(medId) {
+            if (!(this.state.trashedMeds || []).some(m => m.id === medId)) return false;
+            this.update(s => {
+                const i = s.trashedMeds.findIndex(m => m.id === medId);
+                if (i < 0) return;
+                const med = s.trashedMeds.splice(i, 1)[0];
+                delete med.trashedAt;
+                s.meds.push(med);
+                if (!s.activeMedId) s.activeMedId = med.id;
+            });
+            return true;
+        },
+
+        /**
+         * Delete a trashed med and everything that referred to it. The one operation
+         * here with no way back.
+         * @returns {{shots:number, containers:number}|null} null if it was not in the trash.
+         */
+        deleteMedForever(medId) {
+            if (!(this.state.trashedMeds || []).some(m => m.id === medId)) return null;
+            const shots = this.state.shots.filter(x => x.medId === medId).length;
+            const containers = this.state.pens.filter(p => p.medId === medId).length;
+            this.update(s => {
+                s.trashedMeds = s.trashedMeds.filter(m => m.id !== medId);
+                s.shots = s.shots.filter(x => x.medId !== medId);
+                s.pens = s.pens.filter(p => p.medId !== medId);
+            });
+            return { shots, containers };
+        },
+
+        /**
+         * Wipe one med's history and supply, keeping the med. The WIP-only test button
+         * behind two confirmations — it exists so backfill and import can be re-tested
+         * without deleting the med and losing its settings.
+         * @returns {{shots:number, containers:number}|null} null if there is no such med.
+         */
+        wipeMedHistory(medId) {
+            if (!this.state.meds.some(m => m.id === medId)) return null;
+            const shots = this.state.shots.filter(x => x.medId === medId).length;
+            const containers = this.state.pens.filter(p => p.medId === medId).length;
+            this.update(s => {
+                s.shots = s.shots.filter(x => x.medId !== medId);
+                s.pens = s.pens.filter(p => p.medId !== medId);
+                const med = s.meds.find(x => x.id === medId);
+                if (med) med.preferredNextDose = null;
+            });
+            return { shots, containers };
+        },
+
         // ---------- backend sync ----------
         isLoggedIn() { return this.auth && this.auth.isLoggedIn(); },
 
@@ -451,22 +623,26 @@
         },
 
         // canonical string for conflict detection.
-        // View/appearance preferences are deliberately EXCLUDED — flipping a
-        // graph range on your phone must never trigger the sync-conflict
-        // prompt on your PC. They still sync (last device to write wins);
-        // only real data differences ask the user to pick a side.
+        //
+        // EVERY field counts, because this used to hand-enumerate them and anything
+        // not on the list was invisible — `penId` and `estimated` were already being
+        // missed, and every future field would have been too, with nothing to warn
+        // you. Two states that differ in any recorded way now differ here.
+        //
+        // What is deliberately excluded is listed below and nowhere else:
+        //   VIEW_ONLY_SETTINGS  flipping a graph range on your phone must never
+        //                       raise the conflict prompt on your PC. They still
+        //                       sync; they just never ask a question.
+        //   activeMedId         which med you are looking at, per device.
+        //   version             a schema constant, not something a user changed.
+        //
+        // Note the exclusion is by key NAME AT ANY DEPTH — `stableStringify` does not
+        // distinguish `settings.theme` from a `theme` field on a med. Nothing has one
+        // today; if something gains one, it will be invisible here.
         canonical(s) {
             if (!s) return null;
-            const VIEW_ONLY = VIEW_ONLY_SETTINGS;
-            const shots = (s.shots || []).map(x => [x.timestamp, x.medId, x.dose, x.location || ''].join('|')).sort();
-            const weights = (s.weights || []).map(x => [x.timestamp, Math.round(x.kg * 10) / 10].join('|')).sort();
-            const pens = (s.pens || []).map(x => [x.id, x.dose, x.capacity].join('|')).sort();
-            const meds = (s.meds || []).map(x => [x.id, x.name, (x.doses || []).join(','), x.frequency, x.halfLife, x.preferredNextDose != null ? x.preferredNextDose : ''].join('|')).sort();
-            const set = Object.keys(DEFAULT_SETTINGS).filter(k => !VIEW_ONLY.includes(k)).sort().map(k => {
-                const v = (s.settings || {})[k];
-                return k + '=' + (Array.isArray(v) ? v.join(',') : JSON.stringify(v != null ? v : null));
-            });
-            return JSON.stringify({ shots, weights, pens, meds, set, user: (s.user && s.user.name) || '' });
+            return SyncWip.stableStringify(
+                s, VIEW_ONLY_SETTINGS.concat(['activeMedId', 'version']));
         },
 
         summary(s) {

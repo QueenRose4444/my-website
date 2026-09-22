@@ -667,7 +667,7 @@
         const allPens = (allMeds ? d.s.pens.slice() : d.pens.slice()).sort((a, b) => {
             const order = p => p.exhaustedDate ? 2 : (p.openedDate ? 0 : 1);
             if (order(a) !== order(b)) return order(a) - order(b);
-            if (a.openedDate && b.openedDate) return new Date(b.openedDate) - new Date(a.openedDate);
+            if (a.openedDate && b.openedDate) return +new Date(b.openedDate) - +new Date(a.openedDate);
             return String(a.id).localeCompare(String(b.id));
         });
         const weights = d.weights.slice().sort((a, b) => b.timestamp - a.timestamp);
@@ -899,7 +899,7 @@
                     const active = medPens.filter(p => !p.exhaustedDate)
                         .sort((a, b) => (a.dose - b.dose) || ((a.openedDate ? 0 : 1) - (b.openedDate ? 0 : 1)));
                     const spent = medPens.filter(p => p.exhaustedDate)
-                        .sort((a, b) => new Date(b.exhaustedDate) - new Date(a.exhaustedDate));
+                        .sort((a, b) => +new Date(b.exhaustedDate) - +new Date(a.exhaustedDate));
                     const groupHtml = (key, label, sub, list, defaultOpen) => {
                         const open = local.penGroups[key] != null ? local.penGroups[key] : defaultOpen;
                         return `<div class="pen-group">

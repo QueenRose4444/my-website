@@ -4,7 +4,7 @@
 (function () {
     'use strict';
     const D = window.MedData;
-    const { Icons, $, escapeHtml, confirmModal, toast } = window.UI;
+    const { Icons, $, $$, escapeHtml, confirmModal, toast } = window.UI;
 
     const ACCENTS = {
         teal: { color: '#5fc8c8', soft: 'rgba(95,200,200,0.14)', line: 'rgba(95,200,200,0.35)', ink: '#0c2226' },
@@ -38,7 +38,7 @@
 
         render() {
             // nav active states
-            document.querySelectorAll('[data-page]').forEach(b =>
+            $$('[data-page]').forEach(b =>
                 b.classList.toggle('active', b.dataset.page === this.page));
             const main = $('#appMain');
             const V = window.Views;
@@ -84,7 +84,10 @@
         const M = window.Modals;
 
         document.body.addEventListener('click', async e => {
-            const el = e.target.closest('[data-action]');
+            // `closest` is typed as returning Element; every [data-action] in this app
+            // is a button or a div, and the handler reads `dataset` off it.
+            const el = /** @type {HTMLElement} */ (
+                /** @type {HTMLElement} */ (e.target).closest('[data-action]'));
             if (!el) return;
             const act = el.dataset.action;
             const id = el.dataset.id;
@@ -194,7 +197,7 @@
                 }
                 case 'delete-shot': {
                     if (await confirmModal('Delete this dose?', { danger: true, yesLabel: 'Delete' }))
-                        S().update(s => { s.shots = s.shots.filter(x => x.id !== id); });
+                        S().deleteShot(id);
                     break;
                 }
                 case 'edit-weight': {
@@ -204,7 +207,7 @@
                 }
                 case 'delete-weight': {
                     if (await confirmModal('Delete this weight entry?', { danger: true, yesLabel: 'Delete' }))
-                        S().update(s => { s.weights = s.weights.filter(x => x.id !== id); });
+                        S().deleteWeight(id);
                     break;
                 }
                 case 'edit-pen':
@@ -216,11 +219,7 @@
                     const n = S().state.pens.filter(p => p.medId === id).length;
                     if (!n) break;
                     if (await confirmModal(`Clear ${med.name}'s entire supply history — all ${n} ${D.containerPlural(med, n)}? Logged doses stay, they just lose their ${D.containerName(med)} assignment. Use this to start supply tracking over after a mistake.`, { danger: true, yesLabel: 'Clear supply' })) {
-                        S().update(s => {
-                            const ids = new Set(s.pens.filter(p => p.medId === id).map(p => p.id));
-                            s.pens = s.pens.filter(p => p.medId !== id);
-                            s.shots.forEach(x => { if (ids.has(x.penId)) x.penId = null; });
-                        });
+                        S().clearSupplyFor(id);
                         if (S().flushToServer) S().flushToServer();
                         toast(`${med.name}: supply history cleared`);
                     }
@@ -231,20 +230,13 @@
                     const penMed = pen && S().state.meds.find(m => m.id === pen.medId);
                     const cn = penMed ? D.containerName(penMed) : 'container';
                     if (await confirmModal(`Delete this ${cn}? Doses assigned to it stay logged but become unassigned.`, { danger: true, yesLabel: `Delete ${cn}` }))
-                        S().update(s => {
-                            s.pens = s.pens.filter(p => p.id !== id);
-                            s.shots.forEach(x => { if (x.penId === id) x.penId = null; });
-                        });
+                        S().deleteContainer(id);
                     break;
                 }
                 case 'clear-estimated': {
                     const count = S().state.shots.filter(x => x.estimated).length;
                     if (await confirmModal(`Remove all ${count} estimated doses (and their estimated supply)?`, { danger: true, yesLabel: 'Remove estimated' }))
-                        S().update(s => {
-                            const estPenIds = new Set(s.pens.filter(p => p.note === 'estimated').map(p => p.id));
-                            s.shots = s.shots.filter(x => !x.estimated);
-                            s.pens = s.pens.filter(p => !estPenIds.has(p.id));
-                        });
+                        S().clearEstimated();
                     break;
                 }
                 case 'toggle-pens':
@@ -267,11 +259,7 @@
                     const icn = D.containerName(med);
                     const unitWord = med.type === 'pill' ? 'tablet' : 'dose';
                     if (await confirmModal(`Build ${icn} history from ${orphans.length} dose${orphans.length === 1 ? '' : 's'} without an assigned ${icn}? Each ${icn} holds ${med.penCapacity} ${unitWord}${med.penCapacity === 1 ? '' : 's'}.`, { yesLabel: `Build ${D.containerPlural(med, 2)}` }))
-                        S().update(s => {
-                            const { pens, assignment } = D.inferPensFromShots(orphans, med);
-                            s.shots.forEach(x => { if (assignment[x.id]) x.penId = assignment[x.id]; });
-                            s.pens = s.pens.concat(pens);
-                        });
+                        S().buildContainersFromShots(med);
                     break;
                 }
                 case 'backfill-med': {
@@ -288,12 +276,7 @@
                     const nPens = S().state.pens.filter(p => p.medId === id).length;
                     if (!(await confirmModal(`DEV: wipe ${med.name}'s ${nShots} logged dose${nShots === 1 ? '' : 's'} and ${nPens} supply item${nPens === 1 ? '' : 's'}? The med itself stays. Your server copy updates too.`, { danger: true, yesLabel: 'Wipe history + supply' }))) break;
                     if (!(await confirmModal(`Really sure? ${med.name}'s history is deleted permanently — this is the WIP test button, not for real data.`, { danger: true, yesLabel: 'Yes, wipe it' }))) break;
-                    S().update(s => {
-                        s.shots = s.shots.filter(x => x.medId !== id);
-                        s.pens = s.pens.filter(p => p.medId !== id);
-                        const m2 = s.meds.find(x => x.id === id);
-                        if (m2) m2.preferredNextDose = null;
-                    });
+                    S().wipeMedHistory(id);
                     if (S().flushToServer) S().flushToServer();
                     toast(`${med.name}: history + supply cleared (dev)`);
                     break;
@@ -307,34 +290,18 @@
                     const med = S().state.meds.find(m => m.id === id);
                     if (!med) break;
                     if (await confirmModal(`Move ${med.name} to trash? Its history is kept and it can be restored.`, { yesLabel: 'Move to trash' }))
-                        S().update(s => {
-                            s.meds = s.meds.filter(m => m.id !== id);
-                            s.trashedMeds.unshift(Object.assign({}, med, { trashedAt: Date.now() }));
-                            if (s.activeMedId === id) s.activeMedId = s.meds[0] ? s.meds[0].id : null;
-                        });
+                        S().trashMed(id);
                     break;
                 }
                 case 'restore-med':
-                    S().update(s => {
-                        const i = s.trashedMeds.findIndex(m => m.id === id);
-                        if (i >= 0) {
-                            const med = s.trashedMeds.splice(i, 1)[0];
-                            delete med.trashedAt;
-                            s.meds.push(med);
-                            if (!s.activeMedId) s.activeMedId = med.id;
-                        }
-                    });
+                    S().restoreMed(id);
                     break;
                 case 'delete-med-forever': {
                     const med = S().state.trashedMeds.find(m => m.id === id);
                     if (!med) break;
                     const n = S().state.shots.filter(x => x.medId === id).length;
                     if (await confirmModal(`Permanently delete ${med.name} and its ${n} logged dose${n === 1 ? '' : 's'}? This cannot be undone.`, { danger: true, yesLabel: 'Delete forever' }))
-                        S().update(s => {
-                            s.trashedMeds = s.trashedMeds.filter(m => m.id !== id);
-                            s.shots = s.shots.filter(x => x.medId !== id);
-                            s.pens = s.pens.filter(p => p.medId !== id);
-                        });
+                        S().deleteMedForever(id);
                     break;
                 }
             }
@@ -342,7 +309,8 @@
 
         // exact y-axis step box on the med-level chart
         document.body.addEventListener('change', e => {
-            const inp = e.target.closest('[data-ystep]');
+            const inp = /** @type {HTMLInputElement} */ (
+                /** @type {HTMLElement} */ (e.target).closest('[data-ystep]'));
             if (!inp) return;
             const v = parseFloat(inp.value);
             S().update(s => {
@@ -352,7 +320,7 @@
         });
 
         // page nav
-        document.querySelectorAll('[data-page]').forEach(b =>
+        $$('[data-page]').forEach(b =>
             b.addEventListener('click', () => App.setPage(b.dataset.page)));
 
         // topbar buttons
@@ -388,7 +356,8 @@
 
     window.addEventListener('auth:login', () => { handleAuthed(); });
     window.addEventListener('auth:logout', e => {
-        if (e.detail && e.detail.message) toast(e.detail.message);
+        const detail = /** @type {CustomEvent} */ (e).detail;
+        if (detail && detail.message) toast(detail.message);
         window.Store.syncStatus = 'local';
         App.render();
     });
@@ -408,7 +377,9 @@
         App.applyTheme();
         bindActions();
         // every repo link in static HTML follows the one URL in data.js
-        document.querySelectorAll('[data-repo-link]').forEach(a => { a.href = D.REPO_URL; });
+        $$('[data-repo-link]').forEach(a => {
+            /** @type {HTMLAnchorElement} */ (a).href = D.REPO_URL;
+        });
         App.render();
 
         if (window.Store.auth.isLoggedIn()) {

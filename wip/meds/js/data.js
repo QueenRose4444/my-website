@@ -354,12 +354,12 @@
         return `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
     };
     const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-    const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
+    const daysBetween = (a, b) => Math.round((+new Date(b) - +new Date(a)) / 86400000);
 
     // settings-aware formatting (settings passed in by the store)
     function fmtDate(d, settings) {
         const dt = new Date(d);
-        if (isNaN(dt)) return 'N/A';
+        if (isNaN(dt.getTime())) return 'N/A';
         const dd = String(dt.getDate()).padStart(2, '0');
         const mm = String(dt.getMonth() + 1).padStart(2, '0');
         const yy = dt.getFullYear();
@@ -371,12 +371,12 @@
     }
     function fmtDateShort(d) {
         const dt = new Date(d);
-        if (isNaN(dt)) return '—';
+        if (isNaN(dt.getTime())) return '—';
         return `${dt.getDate()} ${MONTHS[dt.getMonth()]}`;
     }
     function fmtTime(d, settings) {
         const dt = new Date(d);
-        if (isNaN(dt)) return 'N/A';
+        if (isNaN(dt.getTime())) return 'N/A';
         const is24 = settings && settings.timeFormat === '24hr';
         if (is24) return `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
         let h = dt.getHours();
@@ -416,6 +416,13 @@
     };
     const stLbsToKg = (st, lbs) => ((parseFloat(st) || 0) * LBS_PER_STONE + (parseFloat(lbs) || 0)) / LBS_PER_KG;
 
+    /**
+     * @param {number} kg  ALWAYS kilograms — lbs and st-lbs exist only for display
+     * @param {string} unit  'kg' | 'lbs' | 'st-lbs'
+     * @param {boolean} [showUnit]
+     * @returns {string} The sign is applied once, to the whole thing, so a negative
+     *   st-lbs weight reads "-1 st 3 lbs" and not "-1 st -3 lbs" (I-02).
+     */
     function fmtWeight(kg, unit, showUnit) {
         if (kg == null || isNaN(kg)) return '—';
         // Callers pass signed deltas here (an average weekly change can be negative). Format the
@@ -455,6 +462,13 @@
         label: 'WHO — Body mass index',
         url: 'https://www.who.int/data/gho/data/themes/topics/topic-details/GHO/body-mass-index',
     };
+    /**
+     * @param {number} bmi
+     * @returns {{key:string, label:string, tone:string, pct:number, bmi:number}}
+     *   `pct` is the position on the 15-40 scale the explainer modal draws, clamped
+     *   to it; `bmi` is the input echoed back so a caller can render both from one
+     *   result.
+     */
     function bmiBand(bmi) {
         if (bmi == null || isNaN(bmi)) return null;
         const band = BMI_BANDS.find(b => bmi < b.max) || BMI_BANDS[BMI_BANDS.length - 1];
@@ -479,12 +493,26 @@
     // Whether we know enough about this med to model it at all. A med with no half-life used to
     // silently fall back to 5 days, which drew a confident curve out of nothing — the worst kind of
     // wrong in a health app, because an invented number that looks measured is worse than a blank.
+    /**
+     * Do we know enough to draw a level curve for this med at all?
+     * @param {Med} med
+     * @returns {boolean} false for a med with no half-life. Callers MUST branch on
+     *   this rather than defaulting — an invented half-life draws a confident curve
+     *   for a med nobody has data for, which is the bug I-07 was.
+     */
     function hasPharmacokinetics(med) {
         if (!med) return false;
         if (med.dose2halfLife && Object.keys(med.dose2halfLife).length) return true;
         return typeof med.halfLife === 'number' && isFinite(med.halfLife) && med.halfLife > 0;
     }
 
+    /**
+     * How much of one dose is still in the system at a given moment.
+     * @param {Dose} shot
+     * @param {Med} med
+     * @param {number} atTs  ms since epoch
+     * @returns {number|null} null when the med has no known half-life.
+     */
     function shotLevelAt(shot, med, atTs) {
         const days = (atTs - shot.timestamp) / 86400000;
         if (days < 0) return 0;
@@ -495,6 +523,13 @@
         return shot.dose * Math.pow(0.5, (days - ttp) / hl);
     }
 
+    /**
+     * Total level from every dose of one med at a given moment.
+     * @param {Dose[]} shots  this med's doses only — it does NOT filter by medId
+     * @param {Med} med
+     * @param {number} atTs  ms since epoch
+     * @returns {number|null} null when the med has no known half-life.
+     */
     function medLevelAt(shots, med, atTs) {
         if (!hasPharmacokinetics(med)) return null;   // null = "we don't know", distinct from 0
         let total = 0;
@@ -514,11 +549,25 @@
     // For split-dose meds `used` accumulates fractional doses
     // (a 2.5mg shot from a 5mg pen consumes 0.5).
     // ------------------------------------------------
+    /**
+     * How many units a dose of `shotDose` takes out of `pen`.
+     * @param {number} shotDose  the amount taken, in the med's unit
+     * @param {Container} pen    `pen.dose` is the container's STRENGTH, not an amount
+     *                           taken — 2 units of a 5 mg container make a 10 mg dose
+     * @returns {number} units consumed
+     */
     function doseConsumption(shotDose, pen) {
         if (!pen.dose || pen.dose <= 0) return 1;
         return shotDose / pen.dose;
     }
 
+    /**
+     * Rebuild every container's used/opened/exhausted state from the doses that cite
+     * it. Derived, never authored: the doses are the record and this follows them.
+     * @param {Container[]} pens
+     * @param {Dose[]} shots
+     * @returns {Container[]}
+     */
     function recomputePenState(pens, shots) {
         return pens.map(pen => {
             const penShots = shots.filter(s => s.penId === pen.id).sort((a, b) => a.timestamp - b.timestamp);
@@ -553,10 +602,19 @@
     //  2. unopened matching strength
     //  3. (split-dose pens & all non-injection types) another strength with
     //     enough left — pills etc. just take 2×5mg tablets for a 10mg dose
+    /**
+     * Which container a new dose should come out of.
+     * @param {Container[]} pens
+     * @param {Med} med
+     * @param {number} dose  the amount being taken, NOT a container strength
+     * @returns {{pen: Container|null, isNewOpen: boolean, split: boolean}}
+     *   `split` means the dose is being drawn from a container of a different
+     *   strength, which only non-injections and explicit splitDose meds allow.
+     */
     function suggestPenForShot(pens, med, dose) {
         const eligible = pens.filter(p => p.medId === med.id && !p.exhaustedDate);
         const enough = p => (p.capacity - p.used) >= doseConsumption(dose, p) - 0.001;
-        const opened = eligible.filter(p => p.openedDate).sort((a, b) => new Date(a.openedDate) - new Date(b.openedDate));
+        const opened = eligible.filter(p => p.openedDate).sort((a, b) => +new Date(a.openedDate) - +new Date(b.openedDate));
         const unopened = eligible.filter(p => !p.openedDate);
 
         let pen = opened.find(p => p.dose === dose && enough(p));
@@ -578,6 +636,14 @@
     // who never tracked pens). Walks chronologically, fills
     // capacity-sized pens per dose.
     // ------------------------------------------------
+    /**
+     * Reconstruct the containers a run of doses must have come from, for a history
+     * that predates supply tracking.
+     * @param {Dose[]} shots  doses with no penId, for one med
+     * @param {Med} med
+     * @returns {{pens: Container[], assignment: Object<string,string>}}
+     *   `assignment` maps dose id -> container id.
+     */
     function inferPensFromShots(shots, med) {
         if (!med || !shots.length) return { pens: [], assignment: {} };
         const cap = med.penCapacity || 4;
@@ -589,6 +655,7 @@
         const flexible = med.type && med.type !== 'injection';
         const baseDose = flexible ? Math.min(...sorted.map(s => s.dose)) : null;
         const stacks = {}; // container strength -> containers
+        /** @type {Object<string,string>} dose id -> container id */
         const assignment = {};
         let seq = 0;
         for (const s of sorted) {
@@ -609,6 +676,7 @@
             if (cur.used >= cur.capacity - 0.001) cur.exhaustedDate = s.date;
             assignment[s.id] = cur.id;
         }
+        /** @type {Container[]} */
         const pens = [];
         Object.keys(stacks).forEach(d => stacks[d].forEach(p => pens.push(p)));
         return { pens, assignment };
@@ -747,6 +815,11 @@
     // from their recent logs. Estimated doses are skipped — only real logs count.
     const minsToHm = mins => `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(Math.round(mins) % 60).padStart(2, '0')}`;
 
+    /**
+     * Infer the schedule actually being followed, which may not be the one configured.
+     * @param {Dose[]} medShots
+     * @param {Med} med
+     */
     function detectSchedule(medShots, med) {
         const recent = medShots.filter(s => !s.estimated).slice(0, 14);
         if (!recent.length) return { day: null, time: null, times: null };
@@ -791,6 +864,12 @@
     // detected pattern; otherwise simply lastDose + frequency. Weekly meds snap
     // to the usual weekday (respecting the med's minimum gap between doses), so
     // a late Friday dose still predicts "next Tuesday", not "next Friday".
+    /**
+     * When the next dose is due.
+     * @param {Med} med         `med.frequency` is in DAYS — 1 is daily, 7 is weekly
+     * @param {Dose[]} medShots this med's doses only
+     * @param {Settings} settings
+     */
     function predictNextDose(med, medShots, settings) {
         const last = medShots[0]; // newest first
         if (!last || !med) return null;
@@ -882,6 +961,12 @@
     // The tablet strength the user actually STOCKS is the ground truth for
     // the breakdown — presets list many strengths (2.5/5/10…), so "smallest
     // dose" would wrongly split a 5mg tablet into 2× 2.5mg.
+    /**
+     * How a dose is made up from what is in supply — "2 x 5 mg".
+     * @param {Med} med
+     * @param {number} dose  amount taken
+     * @param {Container[]} pens
+     */
     function doseBreakdown(med, dose, pens) {
         const plain = { count: 1, per: dose };
         if (!med || dose == null || !(med.type && med.type !== 'injection')) return plain;
@@ -912,9 +997,19 @@
 
     // what the med comes in — drives supply-tracking wording for every type
     const CONTAINER_NAMES = { injection: 'pen', pill: 'pack', patch: 'box', gel: 'bottle', liquid: 'bottle', cream: 'tube' };
+    /**
+     * What one container is called for this med — "pen", "box", "bottle".
+     * @param {Med} med
+     * @returns {string}
+     */
     function containerName(med) {
         return CONTAINER_NAMES[(med && med.type) || 'injection'] || 'pack';
     }
+    /**
+     * @param {Med} med
+     * @param {number} n  count, for the plural
+     * @returns {string}
+     */
     function containerPlural(med, n) {
         const cn = containerName(med);
         if (n === 1) return cn;
@@ -922,6 +1017,16 @@
     }
 
     // estimated peak and low of the level between now and the next dose
+    /**
+     * The peak and trough the chart should scale to.
+     * @param {Dose[]} shots
+     * @param {Med} med
+     * @param {number} [nextDoseTs]
+     * @returns {{peak:{ts:number,v:number}, low:{ts:number,v:number}}|null}
+     *   null when the med has no known half-life, so the caller hides the curve
+     *   instead of drawing a flat line. Each carries its TIME as well as its value —
+     *   the chart labels when the peak falls, not just how high it is.
+     */
     function levelExtremes(shots, med, nextDoseTs) {
         if (!hasPharmacokinetics(med)) return null;   // no half-life, no peak or trough to report
         const now = Date.now();
@@ -940,6 +1045,14 @@
 
     // normalized schedule slots — entries may be 'HH:MM' strings (older data)
     // or { time, dose } objects with an optional per-slot dose
+    /**
+     * The times of day this med is taken.
+     * @param {Med} med  each entry of `med.doses` is the TOTAL at that slot, not a
+     *   per-tablet amount
+     * @returns {Array<{time:string, dose:number, count?:number, per?:number}>}
+     *   `count`/`per` are present only when the user entered the dose as a count
+     *   times a strength, and exist so the editor can show it back that way.
+     */
     function getScheduleSlots(med) {
         if (!med || !Array.isArray(med.scheduleTimes)) return [];
         return med.scheduleTimes.map(e => {
@@ -959,6 +1072,17 @@
     // Returns null when not meaningfully overdue. For daily/weekly meds the
     // whole due DAY counts as on time — overdue starts the next day; the
     // take-vs-skip decision still uses the precise hours-based window.
+    /**
+     * Is a dose late, and how late.
+     * @param {Med} med
+     * @param {{date: Date|string}} nextDose  a predictNextDose() result — it is the
+     *   whole object, not a timestamp
+     * @returns {{daysLate:number, action:string, info:Object|null}|null} `action` is
+     *   'take' or 'skip'.
+     *   null when not meaningfully overdue. Handles LATE only — a dose taken too
+     *   EARLY is not its problem; that is the minimum-gap warning, which does not
+     *   exist yet (T-26).
+     */
     function lateDoseStatus(med, nextDose) {
         if (!med || !nextDose) return null;
         const due = new Date(nextDose.date);

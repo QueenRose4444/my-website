@@ -317,8 +317,8 @@
             }
             if (payload) {
                 const ws = (payload.weightHistory || []).slice()
-                    .filter(x => !isNaN(new Date(x.dateTime)) && !isNaN(parseFloat(x.weightKg)))
-                    .sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+                    .filter(x => !isNaN(new Date(x.dateTime).getTime()) && !isNaN(parseFloat(x.weightKg)))
+                    .sort((a, b) => +new Date(a.dateTime) - +new Date(b.dateTime));
                 const us = payload.userSettings || {};
                 return {
                     unit: us.weightUnit === 'lb' ? 'lbs' : (us.weightUnit || null),
