@@ -18,6 +18,3 @@
 
 /*.html
   Cache-Control: public, max-age=0, must-revalidate
-
-/wip/*
-  X-Robots-Tag: noindex, nofollow

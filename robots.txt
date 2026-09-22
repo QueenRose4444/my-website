@@ -1,12 +1,13 @@
-# WIP pages are kept out of search results by:
-#   1. a per-page  <meta name="robots" content="noindex, nofollow">  (works on
-#      every host, including the dev site — this is the one that matters), and
-#   2. the  /wip/*  X-Robots-Tag rule in  _headers  (Cloudflare Pages only).
+# This is the production branch, served at rosestuffs.org. Everything here is meant
+# to be indexed, except the handful of pages carrying their own noindex meta.
 #
-# Do NOT add "Disallow: /wip/" back here. Blocking the crawl stops Google from
-# ever fetching the page, so it never reads the noindex — and bare /wip/ URLs
-# can then still show up in a "site:" search. Crawl must be allowed for the
-# noindex to do its job.
+# Work in progress lives on the `wip` branch at wip.rosestuffs.org, which is a
+# separate host with a host-wide X-Robots-Tag: noindex in its own _headers. There is
+# no /wip/ path on this site any more — do not add rules for one.
+#
+# If you ever DO need to hide a path here, use a noindex meta or an X-Robots-Tag, not
+# a Disallow. Blocking the crawl stops Google ever fetching the page, so it never
+# reads the noindex — and the bare URL can still surface in a "site:" search.
 
 User-agent: *
 Allow: /
