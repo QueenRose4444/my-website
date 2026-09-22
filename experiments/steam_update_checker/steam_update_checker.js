@@ -15,7 +15,8 @@ let currentView = 'tracked';
 let currentTop100Type = 'ccu'; 
 let discordCreds = null; 
 let authManager = null;
-let activeGameId = null; 
+let activeGameId = null;
+let activeGameName = ''; // Name of the game in the currently open modal (for site search)
 let activeModalTab = 'info';
 let gamesCache = []; 
 let trackedGamesMap = {}; 
@@ -32,7 +33,16 @@ let userPreferences = {
     sorts: {
         tracked: 'updated',    // Default for tracked: Alphabetical
         all: 'popular'      // Default for catalog: Popularity
-    }
+    },
+    // NEW: Reusable "find this game on my site" search template.
+    // url contains the {GameName} placeholder; spaceMode controls how spaces are encoded.
+    searchTemplate: {
+        url: '',
+        name: '',          // optional friendly label for the button (falls back to hostname)
+        spaceMode: 'plus'  // 'plus' (+) | 'percent' (%20) | 'raw' (literal space)
+    },
+    // NEW: query-param names to strip from custom links when saved (e.g. phpBB's "hilit").
+    stripParams: []
 };
 
 // Pagination State
@@ -65,10 +75,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     handleResize();
     window.addEventListener('resize', handleResize);
 
-    // 3. Setup AuthManager
-    if (typeof AuthManager !== 'undefined') {
+    // 3. Setup AuthManagerWip
+    if (typeof AuthManagerWip !== 'undefined') {
         try {
-            authManager = new AuthManager(CONFIG.APP_NAME, 'live');
+            authManager = new AuthManagerWip(CONFIG.APP_NAME, 'wip');
+            initSync();
             
             window.addEventListener('auth:login', (e) => {
                 updateWebAuthUI();
@@ -92,7 +103,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             authManager.initialize();
 
-        } catch (e) { console.warn("AuthManager failed to setup:", e); }
+        } catch (e) { console.warn("AuthManagerWip failed to setup:", e); }
     }
 
     // 4. Check for Discord OAuth Callback
@@ -142,10 +153,11 @@ function loadLocalPreferences() {
         try {
             const parsed = JSON.parse(storedPrefs);
             // Merge deeply to preserve nested 'sorts' object if missing in stored
-            userPreferences = { 
-                ...userPreferences, 
+            userPreferences = {
+                ...userPreferences,
                 ...parsed,
-                sorts: { ...userPreferences.sorts, ...(parsed.sorts || {}) }
+                sorts: { ...userPreferences.sorts, ...(parsed.sorts || {}) },
+                searchTemplate: { ...userPreferences.searchTemplate, ...(parsed.searchTemplate || {}) }
             };
         } catch (e) { console.error("Error loading prefs", e); }
     }
@@ -280,70 +292,238 @@ async function regenerateToken() {
     }
 }
 
+// ==========================================
+// ACCOUNT SYNC  (via /sync-wip.js)
+// ==========================================
+// The shared module owns the transport, the debounce, the server-assigned
+// version numbers and the merge. This page only describes its own data.
+//
+// This page holds NO records of its own: tracked games live on the tracker
+// backend, keyed by the Discord user id. What syncs here is a preferences map
+// and the tracker credentials — so there is exactly one collection.
+//
+// Note what `canonical` covers: the tracker credentials and the two preferences
+// that are real choices about data (the site-search template, the query
+// parameters to strip). Sidebar state, sort order, default page and mobile
+// padding are VIEW STATE — they still sync, they just never count as a data
+// change. Changing a sort on your phone must not interrupt you on your PC.
+
+let syncClient = null;
+
+// Preferences that are choices about DATA rather than about the view. Only these
+// take part in the conflict fingerprint; everything else in the map is view state.
+const DATA_PREF_KEYS = ['searchTemplate', 'stripParams'];
+
+const SYNC_COLLECTIONS = [
+    // A key/value section, so a preference changed on one device travels as one
+    // operation on that key instead of as a wholesale overwrite of the map.
+    //
+    // `ignore` is empty on purpose: the one genuinely per-device thing this page
+    // keeps (the collapsed/expanded sidebar) already lives outside the synced
+    // blob, in its own `steam_tracker_sidebar_state` localStorage key.
+    { name: 'ui_preferences', kind: 'map', ignore: [] },
+];
+
+const COLLECTION_LABELS = {
+    ui_preferences: 'preferences',
+};
+
+function initSync() {
+    if (!authManager || typeof SyncWip === 'undefined') return;
+    syncClient = new SyncWip.SyncClient({
+        auth: authManager,
+        appName: CONFIG.APP_NAME,
+
+        // `steam_creds` is deliberately NOT a collection. It is a credential blob,
+        // not a set of records: describing it per key would let "unlink this
+        // device" travel as one deletion per field and silently unlink every other
+        // device. Left undeclared, a change to it forces an honest whole-state
+        // save — last write wins, which is what this page has always done with it.
+        getState: () => ({
+            steam_creds: discordCreds,
+            ui_preferences: userPreferences,
+        }),
+        setState: (s) => applySyncedState(s),
+
+        accept: (raw) => !!raw && typeof raw === 'object' && ('steam_creds' in raw || 'ui_preferences' in raw),
+
+        hasData: (s) => !!(s && (s.steam_creds || s.ui_preferences)),
+
+        collections: SYNC_COLLECTIONS,
+        collectionLabels: COLLECTION_LABELS,
+
+        // Older copies of this blob carried a `last_updated` stamp written on every
+        // read. The server assigns versions now, so it is no longer written — but a
+        // stored copy may still have one, and it must not read as a change.
+        ignoreKeys: ['last_updated'],
+
+        // Credentials plus the preferences that are actually data. View state is
+        // excluded, so a sort order can never look like a conflict.
+        canonical: (s) => {
+            if (!s) return null;
+            const prefs = s.ui_preferences || {};
+            const data = {};
+            DATA_PREF_KEYS.forEach((k) => { data[k] = prefs[k] != null ? prefs[k] : null; });
+            return JSON.stringify({ creds: s.steam_creds || null, prefs: data });
+        },
+
+        // preferences deep-merge; credentials prefer whatever this device holds
+        merge: (theirs, mine) => ({
+            steam_creds: mine.steam_creds || theirs.steam_creds,
+            ui_preferences: {
+                ...(theirs.ui_preferences || {}),
+                ...(mine.ui_preferences || {}),
+                sorts: { ...((theirs.ui_preferences || {}).sorts || {}), ...((mine.ui_preferences || {}).sorts || {}) },
+                searchTemplate: {
+                    ...((theirs.ui_preferences || {}).searchTemplate || {}),
+                    ...((mine.ui_preferences || {}).searchTemplate || {}),
+                },
+            },
+        }),
+
+        onStatus: (status) => console.log('[Sync]', status),
+
+        // Both devices changed something? That is no longer a question for the
+        // user: their changes are applied, mine go on top, and the page just says
+        // what happened. A CATCH-UP (info.kind === 'catch-up') arrives the same
+        // way — sync worked out one side was simply behind and moved the data.
+        //
+        // It is a NOTICE, not a question. Ignoring it is confirming it: the action
+        // already happened, so a dismissal must never undo it.
+        onMerged: (info) => {
+            const n = info.changesFromOtherDevice;
+            let msg = info.message || `Merged ${n} change${n === 1 ? '' : 's'} from your other device`;
+            if (info.stats && info.stats.myEditWon) msg += ` — ${info.stats.myEditWon} kept from this device`;
+            if (info.awaitingDecision) msg += ` — ${info.awaitingDecision} need a decision`;
+
+            if (!info.revertable) {
+                if (info.direction !== 'upload') msg += " — can't be undone on this device";
+                showSyncNotice(msg, []);
+                return;
+            }
+            showSyncNotice(msg, [
+                { label: 'Revert', act: () => info.revert() },
+                { label: 'OK', act: () => info.confirm(), primary: true },
+            ], () => info.confirm());   // dismissing IS confirming
+        },
+
+        // The ONE thing sync will not decide by itself: a preference cleared on one
+        // device and edited on the other. Raised AFTER the rest of the merge is
+        // already saved, so nothing waits on the answer — and anything the user
+        // does not explicitly agree to delete is KEPT.
+        onItemConflict: (info) => confirmItemDeletions(info.collisions),
+    });
+}
+
+/**
+ * The silent-merge notice. Same look as showToast — it is the same toast, with
+ * buttons — because this reports something that has ALREADY happened rather than
+ * asking a question. `onDismiss` runs if it times out without a button press.
+ */
+function showSyncNotice(msg, actions, onDismiss) {
+    const toast = document.createElement('div');
+    toast.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: #333; color: white; padding: 12px 20px; border-radius: 4px; border-left: 4px solid #17a2b8; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 3000; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; max-width: 420px;';
+
+    let settled = false;
+    const settle = (fn) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+        if (fn) fn();
+    };
+
+    const text = document.createElement('span');
+    text.textContent = msg;
+    toast.appendChild(text);
+
+    (actions || []).forEach((a) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = a.label;
+        btn.style.cssText = 'background: transparent; color: inherit; border: 1px solid currentColor; border-radius: 4px; padding: 4px 10px; cursor: pointer; font: inherit;';
+        if (a.primary) btn.style.fontWeight = '600';
+        btn.addEventListener('click', () => settle(a.act));
+        toast.appendChild(btn);
+    });
+
+    document.body.appendChild(toast);
+    const timer = setTimeout(() => settle(onDismiss), 9000);
+}
+
+/**
+ * Delete-vs-edit, answered per entry. Opt-IN to deleting: answering no — or
+ * dismissing — KEEPS the entry, because a dismissal must never destroy.
+ * Returns {[key]: 'delete'} for the ones agreed to, or null to keep them all.
+ */
+function confirmItemDeletions(collisions) {
+    const answers = {};
+    (collisions || []).forEach((c) => {
+        const where = c.deletedOnThisDevice
+            ? 'You cleared this here; your other device changed it'
+            : 'Cleared on your other device; you changed it here';
+        if (confirm(`Delete "${c.id}"? (${where}.) Cancel keeps it.`)) answers[c.key] = 'delete';
+    });
+    return Object.keys(answers).length ? answers : null;
+}
+
+/** Apply a copy of the account state to this device. */
+function applySyncedState(cloudData) {
+    if (!cloudData) return;
+
+    if (cloudData.steam_creds) {
+        const localStr = JSON.stringify(discordCreds);
+        const cloudStr = JSON.stringify(cloudData.steam_creds);
+        if (!discordCreds || localStr !== cloudStr) {
+            discordCreds = cloudData.steam_creds;
+            localStorage.setItem('steam_tracker_creds', JSON.stringify(discordCreds));
+            updateDiscordUI();
+            loadTrackedGames();
+            showToast("Restored tracker account", "info");
+        }
+    }
+
+    if (cloudData.ui_preferences) {
+        // Deep merge sorts to ensure we don't lose keys
+        const remoteSorts = cloudData.ui_preferences.sorts || {};
+        userPreferences = {
+            ...userPreferences,
+            ...cloudData.ui_preferences,
+            sorts: { ...userPreferences.sorts, ...remoteSorts },
+            searchTemplate: { ...userPreferences.searchTemplate, ...(cloudData.ui_preferences.searchTemplate || {}) }
+        };
+
+        localStorage.setItem('steam_tracker_user_prefs', JSON.stringify(userPreferences));
+        updateSettingsModalUI();
+        handleResize();
+        applySidebarState();
+
+        // Re-apply sort for current view immediately after sync
+        const sortSelect = document.getElementById('sortSelect');
+        if (sortSelect && userPreferences.sorts && userPreferences.sorts[currentView]) {
+            sortSelect.value = userPreferences.sorts[currentView];
+            if (currentView === 'tracked' || currentView === 'all') {
+                applySortAndRender();
+            }
+        }
+
+        if (currentView === 'tracked' && userPreferences.defaultPage !== 'tracked') {
+            switchView(userPreferences.defaultPage);
+        }
+    }
+}
+
 async function performSync(action = 'download') {
     if (!authManager || !authManager.isLoggedIn()) return;
-    const endpoint = authManager.endpoints.data;
+    if (!syncClient) initSync();
+    if (!syncClient) return;
 
     try {
         if (action === 'upload') {
-            const payload = {
-                steam_creds: discordCreds,
-                ui_preferences: userPreferences,
-                last_updated: Date.now()
-            };
-            
-            await authManager.fetchWithAuth(endpoint, {
-                method: 'POST',
-                body: JSON.stringify(payload)
-            });
-            console.log("Synced data (upload):", payload);
-
-        } else if (action === 'download') {
-            const res = await authManager.fetchWithAuth(endpoint);
-            if (res.ok) {
-                const cloudData = await res.json();
-                
-                if (cloudData && cloudData.steam_creds) {
-                    const localStr = JSON.stringify(discordCreds);
-                    const cloudStr = JSON.stringify(cloudData.steam_creds);
-                    if (!discordCreds || localStr !== cloudStr) {
-                        discordCreds = cloudData.steam_creds;
-                        localStorage.setItem('steam_tracker_creds', JSON.stringify(discordCreds));
-                        updateDiscordUI();
-                        loadTrackedGames();
-                        showToast("Restored tracker account", "info");
-                    }
-                }
-
-                if (cloudData && cloudData.ui_preferences) {
-                    // Deep merge sorts to ensure we don't lose keys
-                    const remoteSorts = cloudData.ui_preferences.sorts || {};
-                    userPreferences = { 
-                        ...userPreferences, 
-                        ...cloudData.ui_preferences,
-                        sorts: { ...userPreferences.sorts, ...remoteSorts }
-                    };
-                    
-                    localStorage.setItem('steam_tracker_user_prefs', JSON.stringify(userPreferences));
-
-                    updateSettingsModalUI();
-                    handleResize(); 
-                    applySidebarState(); 
-                    
-                    // Re-apply sort for current view immediately after sync
-                    const sortSelect = document.getElementById('sortSelect');
-                    if (sortSelect && userPreferences.sorts && userPreferences.sorts[currentView]) {
-                        sortSelect.value = userPreferences.sorts[currentView];
-                        if (currentView === 'tracked' || currentView === 'all') {
-                            applySortAndRender();
-                        }
-                    }
-
-                    if(currentView === 'tracked' && userPreferences.defaultPage !== 'tracked') {
-                        switchView(userPreferences.defaultPage);
-                    }
-                }
-            }
+            await syncClient.flush();
+        } else {
+            await syncClient.performSync();
         }
     } catch (e) { console.error("[Sync] Error:", e); }
 }
@@ -382,6 +562,8 @@ function updateSettingsModalUI() {
     if(document.getElementById('prefSidebarPC')) document.getElementById('prefSidebarPC').value = userPreferences.sidebarPC;
     if(document.getElementById('prefSidebarMobile')) document.getElementById('prefSidebarMobile').value = userPreferences.sidebarMobile;
     if(document.getElementById('prefMobilePadding')) document.getElementById('prefMobilePadding').value = userPreferences.mobilePadding;
+    updateSearchTemplateSettingsUI();
+    updateStripParamsSettingsUI();
 }
 
 function saveInterfacePreferences() {
@@ -459,7 +641,8 @@ async function loadTop100(type) {
             image: `https://cdn.cloudflare.steamstatic.com/steam/apps/${g.app_id}/header.jpg`,
             is_catalog: true,
             ccu: g.ccu,
-            rank: g.rank 
+            rank: g.rank,
+            last_modified: g.last_modified // approx "last update" fallback for untracked games
         }));
 
         renderGames(gamesCache, false);
@@ -493,11 +676,12 @@ async function loadAllGames(query = "", append = false) {
         const data = await res.json();
         
         const newGames = data.results.map(g => ({
-            app_id: g.app_id, 
+            app_id: g.app_id,
             name: g.name,
             image: g.header_image_url || `https://cdn.cloudflare.steamstatic.com/steam/apps/${g.app_id}/header.jpg`,
-            is_catalog: true, 
-            ccu: g.ccu 
+            is_catalog: true,
+            ccu: g.ccu,
+            last_modified: g.last_modified // approx "last update" fallback for untracked games
         }));
         
         if (!append) {
@@ -728,7 +912,7 @@ async function getDomainRules() {
 async function applyUrlRules(baseUrl) {
     if (!baseUrl) return "";
     const rules = await getDomainRules();
-    let finalUrl = baseUrl;
+    let finalUrl = stripUrlParams(baseUrl); // remove unwanted params (e.g. ?hilit=) first
 
     rules.forEach(rule => {
         if (baseUrl.includes(rule.domain)) {
@@ -741,6 +925,161 @@ async function applyUrlRules(baseUrl) {
         }
     });
     return finalUrl;
+}
+
+// ==========================================
+// QUICK SITE SEARCH TEMPLATE
+// Lets the user pre-set their community/site search URL (with a {GameName}
+// placeholder) so each game gets a one-click "Find on <site>" button.
+// ==========================================
+
+/** Encode a game name for a URL value, honouring how the target site treats spaces. */
+function encodeGameName(name, spaceMode) {
+    let enc = encodeURIComponent((name || '').trim());
+    if (spaceMode === 'plus') enc = enc.replace(/%20/g, '+');       // forums / x-www-form-urlencoded
+    else if (spaceMode === 'raw') enc = enc.replace(/%20/g, ' ');   // literal space (rare)
+    return enc; // 'percent' (or anything else) keeps %20
+}
+
+/** Build the final search URL for a game name, or null if no valid template is set. */
+function buildSearchUrl(gameName) {
+    const tmpl = userPreferences.searchTemplate;
+    if (!tmpl || !tmpl.url || !tmpl.url.includes('{GameName}') || !gameName) return null;
+    return tmpl.url.replace(/\{GameName\}/g, encodeGameName(gameName, tmpl.spaceMode));
+}
+
+/** True when a usable search template is configured. */
+function hasSearchTemplate() {
+    const tmpl = userPreferences.searchTemplate;
+    return !!(tmpl && tmpl.url && tmpl.url.includes('{GameName}'));
+}
+
+/** Friendly label for the search button: custom name, else hostname, else "Site". */
+function getSearchSiteLabel() {
+    const tmpl = userPreferences.searchTemplate || {};
+    if (tmpl.name && tmpl.name.trim()) return tmpl.name.trim();
+    try { return new URL(tmpl.url).hostname.replace(/^www\./, ''); } catch (e) { return 'Site'; }
+}
+
+/** Resolve the name of a game by app id, preferring the currently-open modal. */
+function getGameNameById(appId) {
+    if (activeGameName) return activeGameName;
+    if (trackedGamesMap[appId] && trackedGamesMap[appId].name) return trackedGamesMap[appId].name;
+    const g = gamesCache.find(x => String(x.app_id) === String(appId));
+    return g ? g.name : '';
+}
+
+/** Open the user's site search for a game in a new tab; optionally swap modal to the Links tab. */
+window.openSiteSearch = function(appId, swapToLinks) {
+    const url = buildSearchUrl(getGameNameById(appId));
+    if (!url) {
+        showToast("Set up a site search template in Settings first", "info");
+        openGlobalSettings();
+        switchSettingsTab('rules');
+        return;
+    }
+    window.open(url, '_blank', 'noopener');
+    if (swapToLinks) switchModalTab('settings');
+};
+
+function updateSearchTemplateSettingsUI() {
+    const t = userPreferences.searchTemplate || {};
+    const u = document.getElementById('searchTemplateUrl');
+    const n = document.getElementById('searchTemplateName');
+    const s = document.getElementById('searchTemplateSpace');
+    if (u) u.value = t.url || '';
+    if (n) n.value = t.name || '';
+    if (s) s.value = t.spaceMode || 'plus';
+    updateSearchTemplatePreview();
+}
+
+function updateSearchTemplatePreview() {
+    const el = document.getElementById('searchTemplatePreview');
+    if (!el) return;
+    const url = (document.getElementById('searchTemplateUrl').value || '').trim();
+    const mode = document.getElementById('searchTemplateSpace').value || 'plus';
+    if (!url) { el.innerHTML = ''; return; }
+    if (!url.includes('{GameName}')) {
+        el.innerHTML = '<span style="color:#ffb86b;">⚠ Add <code>{GameName}</code> where the game name should go.</span>';
+        return;
+    }
+    const sample = 'Super Battle Golf';
+    const built = url.replace(/\{GameName\}/g, encodeGameName(sample, mode));
+    el.innerHTML = `Preview (<strong>${sample}</strong>):<br><span style="color:#4bc0c0;">${escapeHtml(built)}</span>`;
+}
+
+function saveSearchTemplate() {
+    const url = (document.getElementById('searchTemplateUrl').value || '').trim();
+    const name = (document.getElementById('searchTemplateName').value || '').trim();
+    const mode = document.getElementById('searchTemplateSpace').value || 'plus';
+    if (url && !url.includes('{GameName}')) {
+        showToast("Template must include {GameName}", "error");
+        return;
+    }
+    userPreferences.searchTemplate = { url, name, spaceMode: mode };
+    savePreferencesLocalOrSync();
+    showToast(url ? "Search template saved!" : "Search template cleared", "success");
+    updateSearchTemplatePreview();
+}
+
+function clearSearchTemplate() {
+    userPreferences.searchTemplate = { url: '', name: '', spaceMode: 'plus' };
+    updateSearchTemplateSettingsUI();
+    savePreferencesLocalOrSync();
+    showToast("Search template cleared", "info");
+}
+
+// ==========================================
+// LINK CLEANUP — strip unwanted query params (e.g. phpBB ?hilit=...)
+// Surgical: leaves kept params byte-for-byte (no re-encoding surprises).
+// ==========================================
+function stripUrlParams(rawUrl) {
+    const keys = (userPreferences.stripParams || []).map(k => String(k).trim().toLowerCase()).filter(Boolean);
+    if (!rawUrl || !keys.length) return rawUrl;
+
+    const hashIdx = rawUrl.indexOf('#');
+    const hash = hashIdx >= 0 ? rawUrl.slice(hashIdx) : '';
+    const main = hashIdx >= 0 ? rawUrl.slice(0, hashIdx) : rawUrl;
+
+    const qIdx = main.indexOf('?');
+    if (qIdx < 0) return rawUrl; // no query string to clean
+
+    const base = main.slice(0, qIdx);
+    const kept = main.slice(qIdx + 1).split('&').filter(pair => {
+        if (!pair) return false;
+        const name = pair.split('=')[0];
+        return !keys.includes(name.toLowerCase());
+    });
+    return base + (kept.length ? '?' + kept.join('&') : '') + hash;
+}
+
+function updateStripParamsSettingsUI() {
+    const el = document.getElementById('stripParamsInput');
+    if (el) el.value = (userPreferences.stripParams || []).join(', ');
+    updateStripParamsPreview();
+}
+
+function updateStripParamsPreview() {
+    const el = document.getElementById('stripParamsPreview');
+    if (!el) return;
+    const raw = document.getElementById('stripParamsInput').value || '';
+    const keys = raw.split(',').map(k => k.trim()).filter(Boolean);
+    if (!keys.length) { el.innerHTML = ''; return; }
+    // Preview against the user's own example so the effect is obvious.
+    const sample = '/viewtopic.php?f=10&t=81125&hilit=Trailmakers';
+    const saved = userPreferences.stripParams;
+    userPreferences.stripParams = keys;            // temporarily apply for preview
+    const cleaned = stripUrlParams(sample);
+    userPreferences.stripParams = saved;
+    el.innerHTML = `Example:<br><span style="color:#888;">${escapeHtml(sample)}</span><br>&rarr; <span style="color:#4bc0c0;">${escapeHtml(cleaned)}</span>`;
+}
+
+function saveStripParams() {
+    const raw = document.getElementById('stripParamsInput').value || '';
+    userPreferences.stripParams = raw.split(',').map(k => k.trim()).filter(Boolean);
+    savePreferencesLocalOrSync();
+    showToast(userPreferences.stripParams.length ? "Link cleanup rules saved!" : "Link cleanup cleared", "success");
+    updateStripParamsPreview();
 }
 
 async function openGlobalSettings() {
@@ -927,6 +1266,10 @@ window.updateGuildSettings = async (guildId) => {
 // ==========================================
 async function openGameModal(appId) {
     activeGameId = appId;
+    // Seed the name from caches so site-search works before info finishes loading.
+    activeGameName = (trackedGamesMap[appId] && trackedGamesMap[appId].name)
+        || (gamesCache.find(g => String(g.app_id) === String(appId)) || {}).name
+        || '';
     const modal = document.getElementById('gameModal');
     modal.style.display = 'flex';
     
@@ -980,9 +1323,29 @@ async function renderModalInfo(appId, container) {
     try {
         const res = await fetch(`${CONFIG.API_BASE_URL}/games/info/${appId}`);
         const info = await res.json();
-        
+        if (info && info.name) activeGameName = info.name;
+
         const trackedData = trackedGamesMap[appId];
         let customLinkBtn = '';
+
+        // "Find on <site>" jumps to the user's pre-set search and swaps to the Links tab to paste.
+        // Hidden once a custom link exists — no need to search again (still available on the Links tab).
+        const hasCustomLink = !!(trackedData && trackedData.custom_link);
+        let siteSearchBtn = '';
+        if (hasSearchTemplate() && !hasCustomLink) {
+            siteSearchBtn = `<button class="btn btn-dark" style="flex:1; text-align:center; border:1px solid #f1c40f; color:#f1c40f;" onclick="openSiteSearch('${appId}', true)"><i class="fas fa-search"></i> Find on ${escapeHtml(getSearchSiteLabel())}</button>`;
+        }
+
+        // Last Update: prefer the precise tracked build time; for untracked games fall back to
+        // the catalog's approximate last_modified (already cached from the All Games / Top 100 list).
+        const cachedCatalog = gamesCache.find(g => String(g.app_id) === String(appId));
+        let lastUpdateHtml = 'Unknown';
+        if (info.last_update) {
+            lastUpdateHtml = new Date(info.last_update * 1000).toLocaleString();
+        } else if (cachedCatalog && cachedCatalog.last_modified) {
+            lastUpdateHtml = new Date(cachedCatalog.last_modified * 1000).toLocaleString() +
+                ' <span style="color:#777; cursor:help;" title="Approximate — from Steam store metadata. Exact patch times are tracked only for games you follow.">(approx)</span>';
+        }
         
         if (trackedData && trackedData.custom_link) {
             const processedLink = await applyUrlRules(trackedData.custom_link);
@@ -1000,11 +1363,12 @@ async function renderModalInfo(appId, container) {
                     <div style="background: #1a1a1a; padding: 15px; border-radius: 6px; font-size:0.9em; color:#888;">
                         <p><strong>App ID:</strong> ${appId}</p>
                         <p><strong>Build ID:</strong> ${info.build_id || 'Unknown'}</p>
-                        <p><strong>Last Update:</strong> ${info.last_update ? new Date(info.last_update * 1000).toLocaleString() : 'Unknown'}</p>
+                        <p><strong>Last Update:</strong> ${lastUpdateHtml}</p>
                     </div>
-                    <div style="display:flex; gap:10px; margin-top:20px;">
+                    <div style="display:flex; gap:10px; margin-top:20px; flex-wrap:wrap;">
                         <a href="https://store.steampowered.com/app/${appId}" target="_blank" class="btn btn-primary" style="flex:1; text-align:center;">Store</a>
                         <a href="https://steamdb.info/app/${appId}/patchnotes/" target="_blank" class="btn btn-dark" style="flex:1; text-align:center;">SteamDB</a>
+                        ${siteSearchBtn}
                         ${customLinkBtn}
                     </div>
                 </div>
@@ -1034,13 +1398,26 @@ async function renderModalSettings(appId, container) {
             gameName = gameInCache.name;
         }
     }
+    if (gameName && gameName !== "Game Settings") activeGameName = gameName;
+
+    // Quick-search helper: either a one-click search button, or a tip to set the template up.
+    let searchHelper = '';
+    if (hasSearchTemplate()) {
+        searchHelper = `<button class="btn btn-dark" style="width:100%; margin-bottom:12px; border:1px solid #f1c40f; color:#f1c40f;" onclick="openSiteSearch('${appId}', false)">
+                <i class="fas fa-search"></i> Search ${escapeHtml(getSearchSiteLabel())} for this game
+            </button>`;
+    } else {
+        searchHelper = `<p style="font-size:0.8em; color:#888; margin-bottom:12px;">
+                💡 Tip: set a <a href="#" onclick="openGlobalSettings(); switchSettingsTab('rules'); return false;" style="color:#4bc0c0;">site search template</a> to find links in one click.
+            </p>`;
+    }
 
     // UPDATED: Removed the "Server Notification Settings" block from here.
     // It's now in the Global Settings -> Notifications tab.
-    
+
     container.innerHTML = `
         <div style="text-align:center; margin-bottom: 20px;">
-            <h2 style="color:#4bc0c0; margin:0;">${gameName}</h2>
+            <h2 style="color:#4bc0c0; margin:0;">${escapeHtml(gameName)}</h2>
             <div style="font-size:0.8em; color:#666;">App ID: ${appId}</div>
         </div>
 
@@ -1050,8 +1427,9 @@ async function renderModalSettings(appId, container) {
                 Add a custom link for this game (e.g. <code>games.com/gta5</code>).<br>
                 Global Domain Rules will apply to this link automatically.
             </p>
+            ${searchHelper}
             <div style="display:flex; gap:10px;">
-                <input type="text" id="customLinkInput" value="${currentLink}" placeholder="https://..." class="search-input" style="padding:8px; border-radius:4px;">
+                <input type="text" id="customLinkInput" value="${escapeHtml(currentLink)}" placeholder="https://..." class="search-input" style="padding:8px; border-radius:4px;">
                 <button class="btn btn-primary" onclick="saveCustomLink('${appId}')">Save</button>
             </div>
         </div>
@@ -1066,7 +1444,9 @@ async function renderModalSettings(appId, container) {
 }
 
 async function saveCustomLink(appId) {
-    const link = document.getElementById('customLinkInput').value;
+    const input = document.getElementById('customLinkInput');
+    const link = stripUrlParams(input.value.trim()); // auto-clean unwanted params on save
+    if (input.value.trim() !== link) input.value = link; // reflect the cleaned URL back to the user
     try {
         const res = await fetch(`${CONFIG.API_BASE_URL}/games/user/${discordCreds.user_id}/${appId}/link`, {
             method: 'PATCH',
@@ -1363,6 +1743,11 @@ window.loadMoreGames = loadMoreGames;
 window.switchSettingsTab = switchSettingsTab;
 window.saveInterfacePreferences = saveInterfacePreferences;
 window.regenerateToken = regenerateToken;
+window.saveSearchTemplate = saveSearchTemplate;
+window.clearSearchTemplate = clearSearchTemplate;
+window.updateSearchTemplatePreview = updateSearchTemplatePreview;
+window.saveStripParams = saveStripParams;
+window.updateStripParamsPreview = updateStripParamsPreview;
 
 /**
  * Cascading image fallback for game cards.
