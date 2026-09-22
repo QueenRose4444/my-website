@@ -418,12 +418,19 @@
 
     function fmtWeight(kg, unit, showUnit) {
         if (kg == null || isNaN(kg)) return '—';
-        if (unit === 'lbs') return kgToLbs(kg).toFixed(1) + (showUnit ? ' lbs' : '');
+        // Callers pass signed deltas here (an average weekly change can be negative). Format the
+        // magnitude and put the sign back on the front, or st-lbs renders "-1 st -2.6 lbs" —
+        // Math.floor and % both carry the sign into each part separately.
+        const sign = kg < 0 ? '-' : '';
+        const abs = Math.abs(kg);
+        if (unit === 'lbs') return sign + kgToLbs(abs).toFixed(1) + (showUnit ? ' lbs' : '');
         if (unit === 'st-lbs') {
-            const { st, lbs } = kgToStLbs(kg);
-            return `${st} st ${lbs.toFixed(1)}${showUnit ? ' lbs' : ''}`;
+            const { st, lbs } = kgToStLbs(abs);
+            // a small delta is under a stone, and "0 st 2.6 lbs" reads worse than "2.6 lbs"
+            if (st === 0) return `${sign}${lbs.toFixed(1)}${showUnit ? ' lbs' : ''}`;
+            return `${sign}${st} st ${lbs.toFixed(1)}${showUnit ? ' lbs' : ''}`;
         }
-        return kg.toFixed(1) + (showUnit ? ' kg' : '');
+        return sign + abs.toFixed(1) + (showUnit ? ' kg' : '');
     }
     // short unit label for axis / inline use
     const unitLabel = unit => unit === 'lbs' ? 'lbs' : unit === 'st-lbs' ? 'st' : 'kg';
@@ -432,6 +439,28 @@
         if (unit === 'lbs') return kgToLbs(kg);
         if (unit === 'st-lbs') return kg * LBS_PER_KG / LBS_PER_STONE;
         return kg;
+    }
+
+    // BMI bands for ADULTS, per the WHO classification. Deliberately not applied to under-18s,
+    // athletes, pregnancy or differing body composition — which is exactly why the UI that shows
+    // this must also show the caveat and the source link rather than presenting it as a verdict.
+    // `tone` maps to the existing .pos / .warn / .neg delta colours.
+    const BMI_BANDS = [
+        { max: 18.5, key: 'under', label: 'Underweight', tone: 'warn' },
+        { max: 25, key: 'healthy', label: 'Healthy range', tone: 'pos' },
+        { max: 30, key: 'over', label: 'Overweight', tone: 'warn' },
+        { max: Infinity, key: 'obese', label: 'Obese', tone: 'neg' },
+    ];
+    const BMI_SOURCE = {
+        label: 'WHO — Body mass index',
+        url: 'https://www.who.int/data/gho/data/themes/topics/topic-details/GHO/body-mass-index',
+    };
+    function bmiBand(bmi) {
+        if (bmi == null || isNaN(bmi)) return null;
+        const band = BMI_BANDS.find(b => bmi < b.max) || BMI_BANDS[BMI_BANDS.length - 1];
+        // position within the full 15-40 scale, for drawing a marker on a range bar
+        const pct = Math.min(100, Math.max(0, ((bmi - 15) / 25) * 100));
+        return { ...band, bmi, pct };
     }
 
     // height
@@ -447,16 +476,27 @@
     //   ramp linearly to full dose over timeToPeak days,
     //   then exponential decay with the (per-dose) half-life
     // ------------------------------------------------
+    // Whether we know enough about this med to model it at all. A med with no half-life used to
+    // silently fall back to 5 days, which drew a confident curve out of nothing — the worst kind of
+    // wrong in a health app, because an invented number that looks measured is worse than a blank.
+    function hasPharmacokinetics(med) {
+        if (!med) return false;
+        if (med.dose2halfLife && Object.keys(med.dose2halfLife).length) return true;
+        return typeof med.halfLife === 'number' && isFinite(med.halfLife) && med.halfLife > 0;
+    }
+
     function shotLevelAt(shot, med, atTs) {
         const days = (atTs - shot.timestamp) / 86400000;
         if (days < 0) return 0;
-        const hl = (med.dose2halfLife && med.dose2halfLife[shot.dose]) || med.halfLife || 5;
+        const hl = (med.dose2halfLife && med.dose2halfLife[shot.dose]) || med.halfLife;
+        if (!(hl > 0)) return 0;                 // unknown PK — contribute nothing, never guess
         const ttp = med.timeToPeak || 0;
         if (ttp > 0 && days <= ttp) return shot.dose * (days / ttp);
         return shot.dose * Math.pow(0.5, (days - ttp) / hl);
     }
 
     function medLevelAt(shots, med, atTs) {
+        if (!hasPharmacokinetics(med)) return null;   // null = "we don't know", distinct from 0
         let total = 0;
         for (const s of shots) {
             if (s.timestamp > atTs) continue;
@@ -883,6 +923,7 @@
 
     // estimated peak and low of the level between now and the next dose
     function levelExtremes(shots, med, nextDoseTs) {
+        if (!hasPharmacokinetics(med)) return null;   // no half-life, no peak or trough to report
         const now = Date.now();
         const horizon = Math.max(now + 3600000, nextDoseTs || (now + (med.frequency || 1) * 86400000));
         let peak = { ts: now, v: -1 }, low = { ts: now, v: Infinity };
@@ -986,8 +1027,9 @@
         fmtDate, fmtDateShort, fmtTime, fmtTimeStr, dayLabel,
         kgToLbs, lbsToKg, kgToStLbs, stLbsToKg, fmtWeight, unitLabel, weightValue,
         cmToFtIn, ftInToCm,
+        bmiBand, BMI_BANDS, BMI_SOURCE,
         clicksForDose, doseConsumption,
-        shotLevelAt, medLevelAt,
+        shotLevelAt, medLevelAt, hasPharmacokinetics,
         recomputePenState, supplyByDose, suggestPenForShot,
         inferPensFromShots, estimateBackfillShots, predictNextDose,
         detectSchedule, lateDoseStatus, niceStep, DAY_NAMES,

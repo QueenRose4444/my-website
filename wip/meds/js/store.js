@@ -331,11 +331,14 @@
         // ---------- derived helpers ----------
         // the med whose next dose comes soonest (overdue counts as soonest)
         nextDueMed() {
+            // A med with no prediction yet still has to be selectable, so it sorts last rather than
+            // being unreachable. `Infinity - 1` IS Infinity, so the old comparison against an
+            // Infinity seed was never true for those meds and they could never be picked.
             let best = null, bestTs = Infinity;
             for (const med of this.state.meds) {
                 const nd = D.predictNextDose(med, this.medShots(med.id), this.state.settings);
-                const ts = nd ? new Date(nd.date).getTime() : Infinity - 1;
-                if (ts < bestTs) { best = med; bestTs = ts; }
+                const ts = nd ? new Date(nd.date).getTime() : Number.MAX_SAFE_INTEGER;
+                if (best === null || ts < bestTs) { best = med; bestTs = ts; }
             }
             return best;
         },
