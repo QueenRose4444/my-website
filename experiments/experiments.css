@@ -108,6 +108,42 @@ body {
     transform: scale(1.05);
 }
 
+/* No preview image for this experiment.
+   NOT an <img> to a missing file: a missing path on this site answers HTTP 200 with
+   the home page, so a broken preview quietly delivers 4 KB of HTML into an <img> and
+   renders as the browser's broken-image glyph. This is a real element instead, so
+   "no screenshot yet" looks deliberate rather than broken. */
+.experiment-image.is-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        radial-gradient(120% 120% at 30% 20%, rgba(75, 192, 192, 0.18), transparent 60%),
+        linear-gradient(140deg, #232323, #1a1a1a);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* At >=768px the height rule becomes `height: auto`, which works for an <img> because
+   an image carries its own aspect ratio. A placeholder carries none, so without this
+   the card collapses to the height of two letters while its neighbours stay ~240px. */
+.experiment-image.is-placeholder {
+    aspect-ratio: 16 / 9;
+}
+
+.experiment-image.is-placeholder span {
+    font-size: 4rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: rgba(75, 192, 192, 0.55);
+    user-select: none;
+    transition: transform 0.4s, color 0.3s;
+}
+
+.experiment:hover .experiment-image.is-placeholder span {
+    transform: scale(1.06);
+    color: rgba(75, 192, 192, 0.8);
+}
+
 .experiment-info {
     padding: 20px;
 }
