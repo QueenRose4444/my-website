@@ -18,5 +18,8 @@ experiments/BBCode_editor/test-data
 wip/experiments/BBCode_editor/conversion/test-data
 .syncignore
 BBCodetmp.txt
-# Progress board: dev host only, never the public site (med-page D-20)
+# Progress boards: dev host only. Never committed, never on the public site.
+# Their generators write here and web-sync still carries them to the dev host.
 experiments/med-board/
+experiments/house-bot-board/
+experiments/mandelbrot-zoom/
