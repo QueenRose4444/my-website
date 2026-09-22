@@ -178,6 +178,14 @@
     });
   }
 
+  /** A server timestamp (ISO string or ms) as ms, or null. */
+  function parseWhen(v) {
+    if (isSafeInt(v) && v > 0) return v;
+    if (typeof v !== 'string' || !v) return null;
+    var ms = Date.parse(v);
+    return isFinite(ms) ? ms : null;
+  }
+
   /** Deep copy through JSON. Returns null if the value will not round-trip. */
   function cloneState(value) {
     if (value == null) return value;
@@ -701,6 +709,14 @@
    *        reached on the no-base fallback path; with collections declared, the
    *        operation log merges properly and this is not used.
    * @param {(s:any)=>string}    [options.summary]    one-line description per side
+   * @param {Record<string, string|{label:string, values?:Record<string,string>}>} [options.fieldLabels]
+   *        What the built-in conflict dialog calls a setting, keyed by its dotted
+   *        path — {'ui_preferences.sorts.tracked': {label:'Tracked games sort order',
+   *        values:{added:'Date added'}}}. A label on a parent path covers its
+   *        children. Anything unlisted is named from its key.
+   * @param {boolean} [options.previewMerge] default true: the conflict dialog runs
+   *        `merge` on COPIES to show what merging would give. Set false if your
+   *        merge changes page state in place rather than returning a value.
    * @param {number}             [options.debounceMs] default 1200
    * @param {(status:string)=>void} [options.onStatus]
    * @param {(info:object)=>Promise<'mine'|'theirs'|'merge'>} [options.onConflict]
@@ -749,6 +765,9 @@
     this._versionKey = 'syncwip_' + environment + '_' + this.appName + '_version';
     this._stateKey = 'syncwip_' + environment + '_' + this.appName + '_state';
     this._baseKey = 'syncwip_' + environment + '_' + this.appName + '_base';
+    // When this device last changed its own data — shown in the conflict dialog as
+    // "this device, changed 3 min ago". Only ever written by a page's own edits.
+    this._localAtKey = 'syncwip_' + environment + '_' + this.appName + '_localAt';
     this._resolvedKey = 'syncwip_' + environment + '_' + this.appName + '_resolved';
     this._undoKey = 'syncwip_' + environment + '_' + this.appName + '_undo';
     this._deviceKey = 'syncwip_' + environment + '_device';
@@ -774,6 +793,8 @@
     this.merge = options.merge || null;
     this.summary = options.summary || null;
     this.ignoreKeys = options.ignoreKeys || [];
+    this.fieldLabels = (options.fieldLabels && typeof options.fieldLabels === 'object') ? options.fieldLabels : null;
+    this.previewMerge = options.previewMerge !== false;
     this.debounceMs = typeof options.debounceMs === 'number' ? options.debounceMs : 1200;
     this.onStatus = options.onStatus || null;
     this.onConflict = options.onConflict || null;
@@ -812,6 +833,8 @@
     this._saveTimer = null;
     this._pendingServerState = null;
     this._pendingServerVersion = 0;
+    /** When the account copy in a pending conflict was last saved (ms), if known. */
+    this._pendingServerAt = null;
     this._resolving = false;
     /** Set by replaceAll(): the next save is a whole-state replacement, not edits. */
     this._replaceMarker = null;
@@ -945,8 +968,9 @@
       if (!res.ok) throw new Error('fetch failed with ' + res.status);
       var body = await res.json();
 
-      var raw, ops = [], snapshotVersion = 0, replace = null;
+      var raw, ops = [], snapshotVersion = 0, replace = null, updatedAt = null;
       if (body && typeof body === 'object' && typeof body.version === 'number' && 'data' in body) {
+        updatedAt = parseWhen(body.updatedAt);
         this.versioned = true;
         this._setVersion(body.version);
         raw = body.data;
@@ -968,6 +992,7 @@
         snapshotVersion: snapshotVersion,
         replace: replace,
         version: this.version,
+        updatedAt: updatedAt,
       };
     } catch (e) {
       console.error('[SYNC_WIP] server fetch failed:', e);
@@ -991,9 +1016,23 @@
 
   /* ─────────────────────────────── writing ─────────────────────────────── */
 
+  SyncClient.prototype._touchLocal = function () {
+    try { localStorage.setItem(this._localAtKey, String(Date.now())); } catch (e) { /* private mode */ }
+  };
+
+  /** When this device last changed its data (ms), or null if it never said. */
+  SyncClient.prototype._localChangedAt = function () {
+    var at = null;
+    try { at = parseInt(localStorage.getItem(this._localAtKey), 10); } catch (e) { /* private mode */ }
+    return isSafeInt(at) && at > 0 ? at : null;
+  };
+
   SyncClient.prototype.markDirty = function () { this.scheduleSave(); };
 
   SyncClient.prototype.scheduleSave = function () {
+    // Before the login check: an edit made while logged out is still this
+    // device's change, and the dialog should date it truthfully later.
+    this._touchLocal();
     if (!this.isLoggedIn()) return;
     this._dirty = true;
     clearTimeout(this._saveTimer);
@@ -1003,6 +1042,7 @@
 
   /** Immediate write. Use after destructive operations (reset, import-replace). */
   SyncClient.prototype.flush = async function () {
+    this._touchLocal();
     if (!this.isLoggedIn()) return false;
     clearTimeout(this._saveTimer);
     this._dirty = true;
@@ -1581,6 +1621,7 @@
 
     this._pendingServerState = theirs;
     this._pendingServerVersion = Number(conflict.version) || 0;
+    this._pendingServerAt = parseWhen(conflict.updatedAt);
     this._noteReplace(readReplaceMarker(conflict.replace), theirs);
     this._dirty = true;             // still unsaved until the conflict is resolved
     this._setStatus('conflict');
@@ -1667,6 +1708,7 @@
 
       this._pendingServerState = server.state;
       this._pendingServerVersion = server.version;
+      this._pendingServerAt = server.updatedAt || null;
       this._noteReplace(server.replace, server.state);
       this._setStatus('conflict');
       await this._raiseConflict();
@@ -2115,6 +2157,7 @@
    */
   SyncClient.prototype.replaceAll = async function (state, meta) {
     if (state == null) return false;
+    this._touchLocal();
     this.setState(state);
     this._replaceMarker = {
       at: Date.now(),
@@ -2210,137 +2253,403 @@
   };
 
   /* ─────────────────────────────── built-in prompt ───────────────────────────────
-   * For pages without their own modal. Self-contained: no page CSS required, and it
-   * inherits the page's colours through currentColor / color-scheme so it does not
-   * look pasted in. */
+   * The shared "two versions" dialog, for every page without a modal of its own.
+   *
+   * It shows people the SETTINGS that differ, in words, instead of two JSON dumps —
+   * and when the page can merge, what merging would actually leave them with,
+   * worked out by running the page's own merge on copies. That preview is the
+   * promise: the wording never claims more than it shows. (The old dialog said
+   * "Merge keeps everything from both" on a page whose merge let this device win
+   * every setting.)
+   *
+   * Looks: it uses the shared design tokens (shared/tokens.css) when the page has
+   * them, and otherwise picks a light or dark palette from the page's own
+   * background, so it never looks pasted in.
+   *
+   * Secrets — tokens, keys, passwords — are never displayed, not even under
+   * "technical details". */
+
+  var SECRET_KEY = /token|secret|passw|pepper|api[_-]?key|private[_-]?key|credential/i;
+
+  function isPlainObject(v) {
+    return v !== null && typeof v === 'object' && !Array.isArray(v);
+  }
+
+  function pathIsSecret(path) {
+    for (var i = 0; i < path.length; i++) if (SECRET_KEY.test(String(path[i]))) return true;
+    return false;
+  }
+
+  function getPath(obj, path) {
+    var v = obj;
+    for (var i = 0; i < path.length; i++) {
+      if (!isPlainObject(v)) return undefined;
+      v = v[path[i]];
+    }
+    return v;
+  }
+
+  function sameValue(a, b) {
+    return stableStringify(a === undefined ? null : a) === stableStringify(b === undefined ? null : b);
+  }
+
+  /**
+   * Every place the two copies disagree, as key paths. Objects are walked; a list
+   * or a plain value is compared whole, because to a person a list is one setting.
+   * Also counts the settings that match, so the dialog can say "everything else is
+   * the same" and mean a number.
+   */
+  function settingDiffs(a, b, ignoreTop) {
+    var diffs = [], same = 0;
+    function walk(x, y, path) {
+      var xo = isPlainObject(x), yo = isPlainObject(y);
+      if ((xo || yo) && (xo || x == null) && (yo || y == null) && path.length < 8) {
+        var keys = Object.keys(x || {});
+        Object.keys(y || {}).forEach(function (k) { if (keys.indexOf(k) === -1) keys.push(k); });
+        keys.forEach(function (k) {
+          if (!path.length && ignoreTop.indexOf(k) !== -1) return;
+          walk(xo ? x[k] : undefined, yo ? y[k] : undefined, path.concat(k));
+        });
+        return;
+      }
+      if (x === undefined && y === undefined) return;
+      if (sameValue(x, y)) same++;
+      else diffs.push(path);
+    }
+    walk(a, b, []);
+    return { diffs: diffs, same: same };
+  }
+
+  function humanise(key) {
+    var s = String(key).replace(/[_-]+/g, ' ').replace(/([a-z0-9])([A-Z])/g, '$1 $2').trim().toLowerCase();
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : String(key);
+  }
+
+  /** "Preferences › Sorts › Tracked", or whatever the page called it. */
+  SyncClient.prototype._fieldLabel = function (path) {
+    var labels = this.fieldLabels || {};
+    for (var i = path.length; i > 0; i--) {
+      var spec = labels[path.slice(0, i).join('.')];
+      var base = typeof spec === 'string' ? spec : (spec && typeof spec.label === 'string' ? spec.label : null);
+      if (base) return [base].concat(path.slice(i).map(humanise)).join(' › ');
+    }
+    var coll = this.collectionLabels;
+    return path.map(function (seg, n) {
+      if (n === 0 && coll && coll[seg] != null) {
+        var l = typeof coll[seg] === 'string' ? coll[seg] : (coll[seg].other || String(seg));
+        return l.charAt(0).toUpperCase() + l.slice(1);
+      }
+      return humanise(seg);
+    }).join(' › ');
+  };
+
+  SyncClient.prototype._fieldValue = function (path, v) {
+    if (pathIsSecret(path)) return (v == null || v === '') ? 'Not set' : 'Hidden';
+    var spec = this.fieldLabels && this.fieldLabels[path.join('.')];
+    if (spec && spec.values && v != null && typeof v !== 'object'
+        && Object.prototype.hasOwnProperty.call(spec.values, String(v))) {
+      return String(spec.values[String(v)]);
+    }
+    return describeValue(v);
+  };
+
+  function describeValue(v) {
+    if (v === undefined || v === null) return 'Not set';
+    if (typeof v === 'boolean') return v ? 'On' : 'Off';
+    if (typeof v === 'number') return String(v);
+    if (typeof v === 'string') return v === '' ? 'Empty' : v;
+    if (Array.isArray(v)) {
+      if (!v.length) return 'None';
+      var names = v.map(function (item) {
+        if (item == null) return null;
+        if (typeof item !== 'object') return String(item);
+        var n = item.label || item.name || item.title || item.username || item.id;
+        return (typeof n === 'string' || typeof n === 'number') && String(n) ? String(n) : null;
+      });
+      if (names.every(function (n) { return n !== null; })) {
+        return names.length <= 4 ? names.join(', ')
+          : names.slice(0, 3).join(', ') + ' and ' + (names.length - 3) + ' more';
+      }
+      return v.length + (v.length === 1 ? ' item' : ' items');
+    }
+    var count = Object.keys(v).length;
+    return count + (count === 1 ? ' setting' : ' settings');
+  }
+
+  /** JSON for the technical-details view, with every secret-looking value hidden. */
+  function maskedJson(value) {
+    try {
+      return JSON.stringify(value, function (k, v) {
+        return (k && SECRET_KEY.test(k) && v != null && typeof v !== 'object') ? '•••••• (hidden)' : v;
+      }, 2);
+    } catch (e) { return String(value); }
+  }
+
+  /** Fallback colours, chosen from the page's actual background. */
+  function conflictPalette() {
+    var dark = null;
+    try {
+      [document.body, document.documentElement].some(function (node) {
+        if (!node) return false;
+        var m = /rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+))?/.exec(getComputedStyle(node).backgroundColor || '');
+        if (!m || (m[4] !== undefined && parseFloat(m[4]) === 0)) return false;
+        dark = (0.2126 * m[1] + 0.7152 * m[2] + 0.0722 * m[3]) / 255 < 0.5;
+        return true;
+      });
+    } catch (e) { /* no computed style: fall through to the system preference */ }
+    if (dark === null) {
+      dark = !!(global.matchMedia && global.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    return dark ? {
+      card: '#1c1e25', surface: '#252831', ink: '#ececf1', dim: '#a6a9b4', line: 'rgba(255,255,255,.10)',
+      pill: 'rgba(255,255,255,.07)', device: '#60a5fa', account: '#c084fc', merge: '#4ade80',
+      primary: '#4ade80', primaryInk: '#0c1d12', scheme: 'dark',
+    } : {
+      card: '#ffffff', surface: '#f5f6f8', ink: '#1b1d23', dim: '#5b606b', line: 'rgba(0,0,0,.10)',
+      pill: 'rgba(0,0,0,.05)', device: '#2563eb', account: '#9333ea', merge: '#15803d',
+      primary: '#15803d', primaryInk: '#ffffff', scheme: 'light',
+    };
+  }
+
+  /** "3 min ago", "yesterday", "12 days ago". */
+  function agoText(ms) {
+    var min = Math.round((Date.now() - ms) / 60000);
+    if (min < 1) return 'just now';
+    if (min < 60) return min + ' min ago';
+    var h = Math.round(min / 60);
+    if (h < 24) return h + (h === 1 ? ' hour ago' : ' hours ago');
+    var d = Math.round(h / 24);
+    if (d === 1) return 'yesterday';
+    if (d < 45) return d + ' days ago';
+    var mo = Math.round(d / 30);
+    return mo < 12 ? mo + ' months ago' : 'over a year ago';
+  }
+
+  function clockText(ms) {
+    try {
+      return new Date(ms).toLocaleString(undefined, {
+        weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit',
+      });
+    } catch (e) { return new Date(ms).toString(); }
+  }
 
   SyncClient.prototype.promptConflict = function () {
     var self = this;
     var mine = this.getState();
     var theirs = this._pendingServerState;
+    var found = settingDiffs(mine, theirs, this.ignoreKeys || []);
+
+    // Nothing a person would recognise differs — only this device's own bookkeeping
+    // (ignoreKeys). There is no question to ask: take the account copy. That uploads
+    // nothing, and loses nothing, because no synced value is different.
+    if (!found.diffs.length) return Promise.resolve('theirs');
+
+    // What merging would give, from the page's own merge run on COPIES. A page whose
+    // merge changes its state in place must set previewMerge:false, or this preview
+    // would apply the merge before anyone chose it.
+    var merged = null;
+    if (this.merge && this.previewMerge) {
+      try {
+        var result = this.merge(cloneState(theirs), cloneState(mine));
+        if (result !== undefined && result !== null) merged = result;
+      } catch (e) { merged = null; }
+    }
+
+    var P = conflictPalette();
+    var SHOWN = 5;
+    var uid = 'sync-conflict-' + Date.now().toString(36);
 
     return new Promise(function (resolve) {
-      var wrap = document.createElement('div');
-      wrap.setAttribute('role', 'dialog');
-      wrap.setAttribute('aria-modal', 'true');
-      wrap.setAttribute('aria-label', 'Data sync conflict');
-      wrap.style.cssText = [
+      var returnFocus = document.activeElement;
+
+      function el(tag, css, text) {
+        var node = document.createElement(tag);
+        if (css) node.style.cssText = css;
+        if (text != null) node.textContent = text;
+        return node;
+      }
+
+      var wrap = el('div', [
         'position:fixed', 'inset:0', 'z-index:99999',
         'display:flex', 'align-items:center', 'justify-content:center',
-        'background:rgba(0,0,0,.6)', 'padding:16px',
-        'font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif',
-      ].join(';');
+        'background:rgba(0,0,0,.55)', 'padding:16px',
+        'font:15px/1.5 var(--font-sans, system-ui, -apple-system, "Segoe UI", sans-serif)',
+      ].join(';'));
+      wrap.setAttribute('role', 'dialog');
+      wrap.setAttribute('aria-modal', 'true');
+      wrap.setAttribute('aria-labelledby', uid + '-title');
+      wrap.setAttribute('aria-describedby', uid + '-sub');
 
-      var card = document.createElement('div');
-      card.style.cssText = [
-        'max-width:640px', 'width:100%', 'max-height:86vh', 'overflow:auto',
-        'background:Canvas', 'color:CanvasText', 'color-scheme:light dark',
-        'border-radius:12px', 'padding:20px',
-        'box-shadow:0 12px 40px rgba(0,0,0,.45)',
-      ].join(';');
+      var card = el('div', [
+        'box-sizing:border-box', 'max-width:560px', 'width:100%', 'max-height:90vh', 'overflow:auto',
+        'background:var(--surface-hi, ' + P.card + ')', 'color:var(--ink, ' + P.ink + ')',
+        'color-scheme:' + P.scheme,
+        'border:1px solid var(--line, ' + P.line + ')', 'border-radius:var(--radius-lg, 14px)',
+        'padding:20px', 'box-shadow:var(--shadow-2, 0 16px 48px rgba(0,0,0,.4))',
+      ].join(';'));
 
-      var mineSummary = self.summary ? self.summary(mine) : describe(mine);
-      var theirsSummary = self.summary ? self.summary(theirs) : describe(theirs);
+      var title = el('h2', 'margin:0 0 4px;font-size:19px;line-height:1.3', 'Two versions of your data');
+      title.id = uid + '-title';
+      var sub = el('p', 'margin:0 0 16px;color:var(--ink-dim, ' + P.dim + ')', merged
+        ? 'Something changed on this device and something changed in your account, separately. Here is what is different, and what you get if you merge.'
+        : 'Something changed on this device and something changed in your account, separately. Here is what is different, so you can choose which to keep.');
+      sub.id = uid + '-sub';
 
-      var title = document.createElement('h2');
-      title.textContent = 'Data sync conflict';
-      title.style.cssText = 'margin:0 0 6px;font-size:18px';
+      // ── when each side last changed ──
+      var deviceAt = self._localChangedAt();
+      var accountAt = self._pendingServerAt;
+      var when = el('div', 'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0 0 14px');
+      when.appendChild(whenCard(P.device, 'This device', 'Changed here', deviceAt,
+        deviceAt && accountAt && deviceAt > accountAt));
+      when.appendChild(whenCard(P.account, 'Your account', 'Last saved', accountAt,
+        deviceAt && accountAt && accountAt > deviceAt));
 
-      var sub = document.createElement('p');
-      sub.textContent = self.merge
-        ? 'This device and your account have both changed. Merge keeps everything from both.'
-        : 'This device and your account have both changed. Choose which copy to keep.';
-      sub.style.cssText = 'margin:0 0 14px;opacity:.8';
-
-      var grid = document.createElement('div');
-      grid.style.cssText = 'display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-bottom:14px';
-      grid.appendChild(column('This device', mineSummary));
-      grid.appendChild(column('Your account', theirsSummary));
-
-      var both = document.createElement('details');
-      both.style.cssText = 'margin-bottom:14px';
-      var bothSummaryEl = document.createElement('summary');
-      bothSummaryEl.textContent = 'Show both in full';
-      bothSummaryEl.style.cssText = 'cursor:pointer;opacity:.85';
-      var pre = document.createElement('pre');
-      pre.style.cssText = 'max-height:240px;overflow:auto;font-size:12px;white-space:pre-wrap;word-break:break-word;opacity:.85';
-      pre.textContent =
-        '── this device ──\n' + safeJson(mine) + '\n\n── your account ──\n' + safeJson(theirs);
-      both.appendChild(bothSummaryEl);
-      both.appendChild(pre);
-
-      var foot = document.createElement('div');
-      foot.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end';
-
-      function button(label, value, primary) {
-        var b = document.createElement('button');
-        b.type = 'button';
-        b.textContent = label;
-        b.style.cssText = [
-          'padding:8px 14px', 'border-radius:8px', 'cursor:pointer',
-          'border:1px solid currentColor',
-          primary ? 'background:currentColor;filter:none' : 'background:transparent',
-          'color:inherit', 'font:inherit',
-        ].join(';');
-        if (primary) {
-          b.style.background = 'rgba(127,127,127,.25)';
-          b.style.fontWeight = '600';
+      function whenCard(colour, who, verb, at, newer) {
+        var box = el('div', [
+          'border:1px solid var(--line, ' + P.line + ')', 'border-radius:var(--radius, 10px)',
+          'padding:9px 11px', 'background:var(--surface, ' + P.surface + ')', 'min-width:0',
+        ].join(';'));
+        var head = el('div', 'display:flex;align-items:center;gap:7px;font-weight:600;flex-wrap:wrap');
+        head.appendChild(el('span', 'width:9px;height:9px;border-radius:50%;flex:none;background:' + colour));
+        head.appendChild(document.createTextNode(who));
+        if (newer) {
+          head.appendChild(el('span', [
+            'font-size:11px', 'font-weight:600', 'padding:0 7px', 'border-radius:999px',
+            'border:1px solid ' + colour, 'color:' + colour,
+          ].join(';'), 'Newer'));
         }
+        box.appendChild(head);
+        box.appendChild(el('div', 'font-size:13px;margin-top:3px',
+          at ? verb + ' ' + agoText(at) : verb + ': not recorded'));
+        if (at) box.appendChild(el('div', 'font-size:12px;color:var(--ink-dim, ' + P.dim + ')', clockText(at)));
+        return box;
+      }
+
+      // ── the differences ──
+      var list = el('div', 'display:flex;flex-direction:column;gap:10px;margin:0 0 12px');
+      var hidden = [];
+      found.diffs.forEach(function (path, i) {
+        var row = diffRow(path);
+        if (i >= SHOWN) { row.style.display = 'none'; hidden.push(row); }
+        list.appendChild(row);
+      });
+
+      function diffRow(path) {
+        var box = el('div', [
+          'border:1px solid var(--line, ' + P.line + ')', 'border-radius:var(--radius, 10px)',
+          'padding:10px 12px', 'background:var(--surface, ' + P.surface + ')',
+        ].join(';'));
+        box.appendChild(el('div', 'font-weight:600;margin:0 0 6px', self._fieldLabel(path)));
+        var grid = el('div', 'display:grid;grid-template-columns:auto minmax(0,1fr);gap:5px 12px;align-items:baseline');
+        var a = getPath(mine, path), b = getPath(theirs, path);
+        line(grid, P.device, 'This device', a, path);
+        line(grid, P.account, 'Your account', b, path);
+        if (merged) {
+          var m = getPath(merged, path);
+          var from = sameValue(m, a) ? 'from this device' : sameValue(m, b) ? 'from your account' : 'both combined';
+          line(grid, P.merge, 'If you merge', m, path, from);
+        }
+        box.appendChild(grid);
+        return box;
+      }
+
+      function line(grid, colour, who, value, path, note) {
+        var key = el('span', 'display:inline-flex;align-items:center;gap:7px;white-space:nowrap;font-size:13px;color:var(--ink-dim, ' + P.dim + ')');
+        key.appendChild(el('span', 'width:9px;height:9px;border-radius:50%;flex:none;background:' + colour));
+        key.appendChild(document.createTextNode(who));
+        var text = self._fieldValue(path, value);
+        var cell = el('span', 'min-width:0');
+        var pill = el('span', [
+          'display:inline-block', 'max-width:100%', 'padding:1px 8px', 'border-radius:6px',
+          'font-size:13px', 'overflow-wrap:anywhere', 'background:' + P.pill,
+        ].join(';'), text.length > 80 ? text.slice(0, 77) + '…' : text);
+        if (text.length > 80) pill.title = text;
+        cell.appendChild(pill);
+        if (note) cell.appendChild(el('span', 'margin-left:6px;font-size:12px;color:var(--ink-dim, ' + P.dim + ')', note));
+        grid.appendChild(key);
+        grid.appendChild(cell);
+      }
+
+      var moreBtn = null;
+      if (hidden.length) {
+        moreBtn = linkButton('Show ' + hidden.length + ' more difference' + (hidden.length === 1 ? '' : 's'));
+        moreBtn.addEventListener('click', function () {
+          hidden.forEach(function (row) { row.style.display = ''; });
+          moreBtn.parentNode.removeChild(moreBtn);
+        });
+      }
+
+      var sameNote = found.same
+        ? el('p', 'margin:0 0 14px;font-size:13px;color:var(--ink-dim, ' + P.dim + ')',
+          'Everything else (' + found.same + ' setting' + (found.same === 1 ? '' : 's') + ') is the same on both.')
+        : null;
+
+      // ── technical details, for whoever wants them ──
+      var details = el('details', 'margin:0 0 16px;font-size:13px');
+      var detailsSummary = el('summary', 'cursor:pointer;color:var(--ink-dim, ' + P.dim + ')', 'Technical details');
+      var pre = el('pre', [
+        'max-height:220px', 'overflow:auto', 'margin:8px 0 0', 'padding:10px',
+        'border-radius:8px', 'background:' + P.pill, 'font:12px/1.45 var(--font-mono, ui-monospace, Consolas, monospace)',
+        'white-space:pre-wrap', 'word-break:break-word',
+      ].join(';'),
+      '── this device ──\n' + maskedJson(mine) + '\n\n── your account ──\n' + maskedJson(theirs));
+      details.appendChild(detailsSummary);
+      details.appendChild(pre);
+
+      // ── the choice ──
+      var foot = el('div', 'display:flex;flex-wrap:wrap;gap:8px');
+      function button(label, value, primary) {
+        var b = el('button', [
+          'flex:1 1 150px', 'min-height:42px', 'padding:9px 14px', 'cursor:pointer',
+          'border-radius:var(--radius, 10px)', 'font:inherit', 'font-weight:' + (primary ? '600' : '500'),
+          primary
+            ? 'background:var(--accent, ' + P.primary + ');color:var(--accent-ink, ' + P.primaryInk + ');border:1px solid transparent'
+            : 'background:transparent;color:inherit;border:1px solid var(--line-strong, ' + P.line + ')',
+        ].join(';'), label);
+        b.type = 'button';
         b.addEventListener('click', function () { close(value); });
         return b;
       }
-
-      foot.appendChild(button('Keep this device', 'mine', !self.merge));
-      foot.appendChild(button('Keep account copy', 'theirs', false));
+      function linkButton(label) {
+        var b = el('button', 'margin:0 0 12px;padding:0;border:0;background:none;cursor:pointer;font:inherit;font-size:13px;text-decoration:underline;color:inherit', label);
+        b.type = 'button';
+        return b;
+      }
       if (self.merge) foot.appendChild(button('Merge both', 'merge', true));
+      foot.appendChild(button('Keep this device’s', 'mine', !self.merge));
+      foot.appendChild(button('Keep my account’s', 'theirs', false));
 
       card.appendChild(title);
       card.appendChild(sub);
-      card.appendChild(grid);
-      card.appendChild(both);
+      card.appendChild(when);
+      card.appendChild(list);
+      if (moreBtn) card.appendChild(moreBtn);
+      if (sameNote) card.appendChild(sameNote);
+      card.appendChild(details);
       card.appendChild(foot);
       wrap.appendChild(card);
       document.body.appendChild(wrap);
 
-      // No backdrop-close and no Escape: dismissing this without choosing would
-      // leave the save pending and the two copies silently divergent.
+      // No backdrop-close and no Escape: dismissing this without choosing would leave
+      // the save pending and the two copies silently divergent. Tab stays inside.
+      wrap.addEventListener('keydown', function (e) {
+        if (e.key !== 'Tab') return;
+        var focusable = card.querySelectorAll('button, summary, [href], [tabindex]:not([tabindex="-1"])');
+        if (!focusable.length) return;
+        var first = focusable[0], last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      });
       var firstButton = foot.querySelector('button');
       if (firstButton) firstButton.focus();
 
       function close(value) {
         if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+        try { if (returnFocus && returnFocus.focus) returnFocus.focus(); } catch (e) { /* gone */ }
         resolve(value);
-      }
-
-      function column(heading, text) {
-        var col = document.createElement('div');
-        col.style.cssText = 'border:1px solid rgba(127,127,127,.4);border-radius:8px;padding:10px';
-        var h = document.createElement('h3');
-        h.textContent = heading;
-        h.style.cssText = 'margin:0 0 6px;font-size:14px';
-        var p = document.createElement('p');
-        p.textContent = text;
-        p.style.cssText = 'margin:0;opacity:.85';
-        col.appendChild(h);
-        col.appendChild(p);
-        return col;
       }
     });
   };
-
-  function describe(state) {
-    if (state == null || typeof state !== 'object') return 'No data';
-    var parts = [];
-    Object.keys(state).forEach(function (k) {
-      var v = state[k];
-      if (Array.isArray(v) && v.length) parts.push(v.length + ' ' + k);
-    });
-    return parts.length ? parts.join(', ') : Object.keys(state).length + ' fields';
-  }
-
-  function safeJson(value) {
-    try { return JSON.stringify(value, null, 2); } catch (e) { return String(value); }
-  }
 
   global.SyncWip = {
     SyncClient: SyncClient,

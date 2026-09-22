@@ -1916,8 +1916,10 @@
         // band widths across the 15–40 scale the bar draws
         const w = (lo, hi) => `flex:${(hi - lo) / 25}`;
         openModal({
+            // openModal takes `bodyHtml` and `footHtml`. It had been given `body` and
+            // `actions`, which it silently ignores — so the box opened empty.
             title: 'About BMI',
-            body: `
+            bodyHtml: `
                 ${bmi != null ? `
                 <div class="stat-value lg">${bmi.toFixed(1)}<span class="unit">BMI</span></div>
                 <div class="stat-delta ${band.tone}">${escapeHtml(band.label)}</div>
@@ -1950,7 +1952,10 @@
                     <a href="${escapeHtml(D.BMI_SOURCE.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(D.BMI_SOURCE.label)}</a>.
                     They apply to adults.
                 </div>`,
-            actions: [{ label: 'Close', primary: true }],
+            footHtml: `<button class="btn primary" data-act="close">Close</button>`,
+            onMount(modal, close) {
+                modal.querySelector('[data-act="close"]').addEventListener('click', close);
+            },
         });
     }
 

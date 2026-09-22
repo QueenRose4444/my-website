@@ -850,7 +850,9 @@
         }
         if (!usualTimes) {
             const [th, tm] = time.split(':').map(Number);
-            nextDate.setHours(th || 9, tm || 0, 0, 0);
+            // Hour 0 is midnight, not "missing": `th || 9` moved every dose due between
+            // 00:00 and 00:59 to nine in the morning.
+            nextDate.setHours(Number.isFinite(th) ? th : 9, Number.isFinite(tm) ? tm : 0, 0, 0);
             // landing on an earlier clock time can undercut the minimum gap by
             // a few hours (Sat 10:30 dose → Tue 09:00 = 70.5h < 72h) — skip
             // to the following usual weekday instead

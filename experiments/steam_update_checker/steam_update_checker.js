@@ -78,7 +78,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 3. Setup AuthManagerWip
     if (typeof AuthManagerWip !== 'undefined') {
         try {
-            authManager = new AuthManagerWip(CONFIG.APP_NAME, 'wip');
+            authManager = new AuthManagerWip(CONFIG.APP_NAME, 'live');
             initSync();
             
             window.addEventListener('auth:login', (e) => {
@@ -328,6 +328,13 @@ const COLLECTION_LABELS = {
     ui_preferences: 'preferences',
 };
 
+// The words the settings screen uses, so the conflict dialog says "Date Added"
+// rather than `added`. One map serves every option list — the values don't collide.
+const SORT_AND_VIEW_NAMES = {
+    popular: 'Popularity', name: 'Name (A-Z)', added: 'Date added', updated: 'Last update',
+    tracked: 'Tracked games', all: 'All games', open: 'Open', closed: 'Closed',
+};
+
 function initSync() {
     if (!authManager || typeof SyncWip === 'undefined') return;
     syncClient = new SyncWip.SyncClient({
@@ -367,19 +374,49 @@ function initSync() {
             return JSON.stringify({ creds: s.steam_creds || null, prefs: data });
         },
 
-        // preferences deep-merge; credentials prefer whatever this device holds
-        merge: (theirs, mine) => ({
-            steam_creds: mine.steam_creds || theirs.steam_creds,
-            ui_preferences: {
-                ...(theirs.ui_preferences || {}),
-                ...(mine.ui_preferences || {}),
-                sorts: { ...((theirs.ui_preferences || {}).sorts || {}), ...((mine.ui_preferences || {}).sorts || {}) },
-                searchTemplate: {
-                    ...((theirs.ui_preferences || {}).searchTemplate || {}),
-                    ...((mine.ui_preferences || {}).searchTemplate || {}),
+        // Preferences deep-merge, and where one setting differs this device's choice
+        // wins. The one LIST — link parameters to strip — is unioned instead: a rule
+        // added on either device is a rule you wanted, and dropping it is a loss the
+        // merge preview would otherwise have to show you. Credentials prefer whatever
+        // this device holds.
+        merge: (theirs, mine) => {
+            const t = theirs.ui_preferences || {};
+            const m = mine.ui_preferences || {};
+            const strip = [...(Array.isArray(t.stripParams) ? t.stripParams : []),
+                ...(Array.isArray(m.stripParams) ? m.stripParams : [])];
+            return {
+                steam_creds: mine.steam_creds || theirs.steam_creds,
+                ui_preferences: {
+                    ...t,
+                    ...m,
+                    sorts: { ...(t.sorts || {}), ...(m.sorts || {}) },
+                    searchTemplate: { ...(t.searchTemplate || {}), ...(m.searchTemplate || {}) },
+                    stripParams: [...new Set(strip)],
                 },
+            };
+        },
+
+        // What the conflict dialog calls each setting.
+        fieldLabels: {
+            steam_creds: 'Steam tracker link',
+            'steam_creds.username': 'Linked account',
+            'steam_creds.tracker_token': 'Tracker access key',
+            ui_preferences: 'Preferences',
+            'ui_preferences.defaultPage': { label: 'Page to open on', values: SORT_AND_VIEW_NAMES },
+            'ui_preferences.sidebarPC': { label: 'Sidebar on a computer', values: SORT_AND_VIEW_NAMES },
+            'ui_preferences.sidebarMobile': { label: 'Sidebar on a phone', values: SORT_AND_VIEW_NAMES },
+            'ui_preferences.mobilePadding': 'Phone bottom padding',
+            'ui_preferences.sorts.tracked': { label: 'Sort order: tracked games', values: SORT_AND_VIEW_NAMES },
+            'ui_preferences.sorts.all': { label: 'Sort order: all games', values: SORT_AND_VIEW_NAMES },
+            'ui_preferences.sortMethod': { label: 'Sort order', values: SORT_AND_VIEW_NAMES },
+            'ui_preferences.searchTemplate.url': 'Site search link',
+            'ui_preferences.searchTemplate.name': 'Site search name',
+            'ui_preferences.searchTemplate.spaceMode': {
+                label: 'Spaces in searches',
+                values: { plus: 'Become +', percent: 'Become %20', raw: 'Kept as spaces' },
             },
-        }),
+            'ui_preferences.stripParams': 'Link parameters removed',
+        },
 
         onStatus: (status) => console.log('[Sync]', status),
 

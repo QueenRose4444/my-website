@@ -5,7 +5,7 @@
  * APPLICATION & ENVIRONMENT CONFIGURATION
  *************************************/
 const APP_NAME = 'site_notifier';
-const ENVIRONMENT = 'wip'; // 'live' or 'wip'
+const ENVIRONMENT = 'live'; // 'live' or 'wip'
 
 const envConfigs = {
     live: {
@@ -412,6 +412,8 @@ function initSync() {
                 .map((u) => [u.id, u.label || ''].join('|'))
                 .sort());
         },
+
+        fieldLabels: { discordUsers: 'People to notify' },
 
         // Union both copies, dropping duplicates by id. Only reached on the no-base
         // fallback path (a first sync, cleared storage), and it cannot lose an entry.

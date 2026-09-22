@@ -6,6 +6,12 @@
 (function () {
     'use strict';
     const D = window.MedData;
+    const escapeHtml = s => window.UI.escapeHtml(s);
+    // A med's name, unit and colour are the user's own text — and an imported backup can
+    // carry anything at all — so none of them reaches markup unescaped. A colour goes
+    // into SVG attributes and inline styles, where escaping is not enough, so only a
+    // hex colour is used as given; anything else becomes the accent.
+    const safeColor = c => (typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c)) ? c : 'var(--accent)';
 
     function clearChart(wrap) {
         if (wrap._ro) { wrap._ro.disconnect(); wrap._ro = null; }
@@ -37,7 +43,7 @@
     }
 
     function emptyState(wrap, title, sub) {
-        wrap.innerHTML = `<div class="empty"><div class="em-title">${title}</div>${sub ? `<div class="em-sub">${sub}</div>` : ''}</div>`;
+        wrap.innerHTML = `<div class="empty"><div class="em-title">${escapeHtml(title)}</div>${sub ? `<div class="em-sub">${escapeHtml(sub)}</div>` : ''}</div>`;
     }
 
     function tooltipEl(wrap) {
@@ -127,7 +133,7 @@
                 }
                 samples.sort((a, b) => a.ts - b.ts);
                 sr.samples = samples;
-                sr.color = series.length === 1 ? 'var(--accent)' : (sr.med.color || 'var(--accent)');
+                sr.color = series.length === 1 ? 'var(--accent)' : safeColor(sr.med.color);
             });
 
             // y axis: round steps (1/2/2.5/5×10ⁿ). Density chips pick how many
@@ -188,7 +194,7 @@
 
             // legend only when comparing meds
             const legendHtml = series.length > 1
-                ? `<div class="ml-legend">${series.map(sr => `<span><span class="ml-dot" style="background:${sr.color}"></span>${sr.med.name}</span>`).join('')}</div>`
+                ? `<div class="ml-legend">${series.map(sr => `<span><span class="ml-dot" style="background:${sr.color}"></span>${escapeHtml(sr.med.name)}</span>`).join('')}</div>`
                 : '';
 
             wrap.innerHTML = `
@@ -224,8 +230,8 @@
                     hvDots[si].setAttribute('cx', x(s.ts)); hvDots[si].setAttribute('cy', y(s.level));
                     if (s.level > topLevel) topLevel = s.level;
                     return series.length === 1
-                        ? `<div class="t-val">${s.level.toFixed(3)} ${sr.med.unit}</div>`
-                        : `<div class="t-val"><span class="ml-dot" style="background:${sr.color}"></span>${sr.med.name}: ${s.level.toFixed(3)} ${sr.med.unit}</div>`;
+                        ? `<div class="t-val">${s.level.toFixed(3)} ${escapeHtml(sr.med.unit)}</div>`
+                        : `<div class="t-val"><span class="ml-dot" style="background:${sr.color}"></span>${escapeHtml(sr.med.name)}: ${s.level.toFixed(3)} ${escapeHtml(sr.med.unit)}</div>`;
                 });
                 tip.style.display = '';
                 tip.innerHTML = `<div class="t-label">${D.fmtDate(ts, settings)} · ${D.fmtTime(ts, settings)}</div>${rows.join('')}`;

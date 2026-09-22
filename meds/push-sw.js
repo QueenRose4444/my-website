@@ -13,9 +13,20 @@ self.addEventListener('push', event => {
     }));
 });
 
+// Tapping a notification may only ever open a page on this site. The URL arrives inside
+// the push, so it is checked here as well as on the server that sent it.
+function sameSiteUrl(url) {
+    try {
+        const u = new URL(url || './', self.registration.scope);
+        return u.origin === self.location.origin ? u.href : './';
+    } catch (e) {
+        return './';
+    }
+}
+
 self.addEventListener('notificationclick', event => {
     event.notification.close();
-    const url = (event.notification.data && event.notification.data.url) || './';
+    const url = sameSiteUrl(event.notification.data && event.notification.data.url);
     event.waitUntil((async () => {
         const wins = await clients.matchAll({ type: 'window', includeUncontrolled: true });
         for (const w of wins) {
