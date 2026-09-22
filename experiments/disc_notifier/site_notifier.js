@@ -5,7 +5,7 @@
  * APPLICATION & ENVIRONMENT CONFIGURATION
  *************************************/
 const APP_NAME = 'site_notifier';
-const ENVIRONMENT = 'live'; // 'live' or 'wip'
+const ENVIRONMENT = (window.SiteEnv && window.SiteEnv.current()) || 'wip'; // decided by the host
 
 const envConfigs = {
     live: {

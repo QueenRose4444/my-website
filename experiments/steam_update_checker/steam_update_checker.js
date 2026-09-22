@@ -78,7 +78,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 3. Setup AuthManagerWip
     if (typeof AuthManagerWip !== 'undefined') {
         try {
-            authManager = new AuthManagerWip(CONFIG.APP_NAME, 'live');
+            authManager = new AuthManagerWip(CONFIG.APP_NAME);   // environment from the host
             initSync();
             
             window.addEventListener('auth:login', (e) => {

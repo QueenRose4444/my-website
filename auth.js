@@ -212,9 +212,32 @@
 
   var AUDIENCE_SITE = 'rosestuffs-site';
 
+  /*
+   * Which environment this page is running in, read from the address it was loaded
+   * from. The public site (and the Pages production alias, which serves the same
+   * build) is live; every other host — the wip subdomain, the dev host, a LAN
+   * address, localhost, a test harness — is wip.
+   *
+   * Pages used to hard-code this, so promoting one meant remembering to flip a
+   * constant by hand, and forgetting it once left two live pages signed in to the
+   * wip backend. Reading it from the host means the same file is right on both
+   * branches.
+   */
+  var LIVE_HOSTS = ['rosestuffs.org', 'www.rosestuffs.org', 'rosiesite.pages.dev'];
+
+  function siteEnvironment() {
+    try {
+      var host = String((global.location && global.location.hostname) || '').toLowerCase();
+      return LIVE_HOSTS.indexOf(host) !== -1 ? 'live' : 'wip';
+    } catch (e) {
+      return 'wip';
+    }
+  }
+
   function AuthManagerWip(appName, environment) {
     if (!appName) throw new Error("AuthManagerWip requires an 'appName' to be provided.");
-    environment = environment || 'wip';
+    // A page may still pin an environment explicitly; otherwise the host decides.
+    environment = environment || siteEnvironment();
 
     this.appName = appName;
     this.environment = environment;
@@ -597,6 +620,11 @@
   global.AuthManagerWip = AuthManagerWip;
   // The name every existing live page constructs. Same class, both names.
   global.AuthManager = AuthManagerWip;
+  global.SiteEnv = {
+    current: siteEnvironment,
+    isLive: function () { return siteEnvironment() === 'live'; },
+    LIVE_HOSTS: LIVE_HOSTS.slice(),
+  };
   global.AuthWip = {
     AuthManagerWip: AuthManagerWip,
     registerKdf: registerKdf,

@@ -1,13 +1,12 @@
-# This is the production branch, served at rosestuffs.org. Everything here is meant
-# to be indexed, except the handful of pages carrying their own noindex meta.
+# The same file on every branch.
 #
-# Work in progress lives on the `wip` branch at wip.rosestuffs.org, which is a
-# separate host with a host-wide X-Robots-Tag: noindex in its own _headers. There is
-# no /wip/ path on this site any more — do not add rules for one.
+# Which hosts may be indexed is decided by the build, not here: the live site
+# (rosestuffs.org) is indexable, and build.js sends X-Robots-Tag: noindex on every
+# response from any other branch.
 #
-# If you ever DO need to hide a path here, use a noindex meta or an X-Robots-Tag, not
-# a Disallow. Blocking the crawl stops Google ever fetching the page, so it never
-# reads the noindex — and the bare URL can still surface in a "site:" search.
+# Never hide a page with Disallow. Blocking the crawl stops a search engine ever
+# fetching the page, so it never reads the noindex, and the bare URL can still
+# surface in a "site:" search. Use a noindex meta or an X-Robots-Tag instead.
 
 User-agent: *
 Allow: /
