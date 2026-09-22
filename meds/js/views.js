@@ -44,33 +44,51 @@
         const latest = weights[weights.length - 1] || null;
         const startKg = s.settings.startKg != null ? s.settings.startKg : (weights[0] ? weights[0].kg : null);
         const goalKg = s.settings.goalKg;
-        const totalLost = latest && startKg != null ? startKg - latest.kg : 0;
-        const toGo = latest && goalKg != null ? latest.kg - goalKg : null;
+        // Which way the user is trying to move. A goal ABOVE the start weight is a gain goal, and
+        // every "is this good?" decision below reads this instead of assuming down is good.
+        // 0 = no goal, or start === goal (maintaining) — then a change is neither good nor bad.
+        const goalDir = (goalKg != null && startKg != null && startKg !== goalKg)
+            ? (goalKg > startKg ? 1 : -1) : 0;
+        // Signed the natural way round: positive means gained.
+        const totalChange = latest && startKg != null ? latest.kg - startKg : 0;
+        // Distance still to cover, never negative — overshooting is not "-2 kg to go".
+        const toGo = latest && goalKg != null ? Math.abs(latest.kg - goalKg) : null;
+        const goalReached = !!(goalDir !== 0 && latest && goalKg != null
+            && (goalDir > 0 ? latest.kg >= goalKg : latest.kg <= goalKg));
+        // Already direction-agnostic: with a gain goal both differences are negative and the
+        // ratio still comes out right. Left exactly as it was.
         const progress = (startKg != null && goalKg != null && latest && startKg !== goalKg)
             ? Math.min(100, Math.max(0, ((startKg - latest.kg) / (startKg - goalKg)) * 100)) : 0;
 
-        let lostThisWeek = 0;
+        // +1 moved toward the goal · -1 away from it · 0 flat, or no goal to judge against.
+        const changeDir = (delta) => {
+            if (!(Math.abs(delta) > 0.04) || goalDir === 0) return 0;
+            return Math.sign(delta) === goalDir ? 1 : -1;
+        };
+
+        let changeThisWeek = 0;
         if (weights.length > 1 && latest) {
             const target = latest.timestamp - 7 * 86400000;
             const prev = weights.slice(0, -1).reduce((best, cur) =>
                 Math.abs(cur.timestamp - target) < Math.abs(best.timestamp - target) ? cur : best);
-            lostThisWeek = prev.kg - latest.kg;
+            changeThisWeek = latest.kg - prev.kg;
         }
         let avgWeekly = 0;
         if (weights.length > 1 && latest) {
             const first = weights[0];
             const wks = Math.max(1, (latest.timestamp - first.timestamp) / (7 * 86400000));
-            avgWeekly = (first.kg - latest.kg) / wks;
+            avgWeekly = (latest.kg - first.kg) / wks;
         }
-        let bmi = null;
+        let bmi = null, bmiBand = null;
         if (s.settings.showBmi && s.settings.userHeight && latest) {
             const hm = s.settings.userHeight / 100;
-            if (hm > 0) bmi = latest.kg / (hm * hm);
+            if (hm > 0) { bmi = latest.kg / (hm * hm); bmiBand = D.bmiBand(bmi); }
         }
 
         return {
             s, med, shots, pens, isInjection, supplyMap, totalSupply, lastShot, nextDose, targetDose,
-            inProgressPen, weights, latest, startKg, goalKg, totalLost, toGo, progress, lostThisWeek, avgWeekly, bmi,
+            inProgressPen, weights, latest, startKg, goalKg, totalChange, toGo, progress, changeThisWeek, avgWeekly,
+            bmi, bmiBand, goalDir, goalReached, changeDir,
         };
     }
 
@@ -112,7 +130,7 @@
                 : `${D.fmtTimeStr(nd.time, set)} <span class="dim-sm">${D.dayLabel(nd.date).toLowerCase()}</span> · ${escapeHtml(D.fmtDoseCount(m, nd.dose, pens))}`;
             return `<div class="ov-row">
                 <div class="ov-med"><span class="ml-dot" style="background:${escapeHtml(m.color || '#5fc8c8')}"></span>${escapeHtml(m.name)}</div>
-                <div class="ov-cell"><span class="k">In system</span><span class="v tabular-mono">${level.toFixed(level >= 100 ? 0 : 2)} ${escapeHtml(m.unit)}</span></div>
+                <div class="ov-cell"><span class="k">In system</span><span class="v tabular-mono">${level == null ? '<span class="dim">no half-life</span>' : level.toFixed(level >= 100 ? 0 : 2) + ' ' + escapeHtml(m.unit)}</span></div>
                 <div class="ov-cell"><span class="k">Next dose</span><span class="v">${nextTxt}</span></div>
                 <div class="ov-cell"><span class="k">Peak / low</span><span class="v">${ext
                     ? `${ext.peak.v.toFixed(ext.peak.v >= 100 ? 0 : 1)} @ ${D.fmtTime(ext.peak.ts, set)} · ${ext.low.v.toFixed(ext.low.v >= 100 ? 0 : 1)} @ ${D.fmtTime(ext.low.ts, set)}`
@@ -239,7 +257,7 @@
                 </div>
                 <div class="meta-cell">
                     <div class="k">Est. med level</div>
-                    <div class="v tabular-mono">${currentLevel.toFixed(3)} <span class="dim-sm">${escapeHtml(d.med.unit)}</span></div>
+                    <div class="v tabular-mono">${currentLevel == null ? '<span class="dim">—</span>' : currentLevel.toFixed(3) + ' <span class="dim-sm">' + escapeHtml(d.med.unit) + '</span>'}</div>
                     <div class="vsub">half-life ${D.fmtDur(d.med.halfLife)}${d.med.dose2halfLife ? ' · per-dose' : ''}</div>
                 </div>
                 <div class="meta-cell">
@@ -280,11 +298,22 @@
                 ${d.goalKg != null ? `<span class="pill"><span class="pill-dot" style="background:var(--success)"></span>${d.progress.toFixed(0)}%</span>` : ''}
             </div>
             <div class="stat-value lg">${d.latest ? D.fmtWeight(d.latest.kg, unit) : '—'}<span class="unit">${D.unitLabel(unit)}</span></div>
-            ${d.latest && d.startKg != null && Math.abs(d.totalLost) > 0.04 ? `
-                <div class="stat-delta ${d.totalLost > 0 ? 'pos' : 'neg'}" style="margin-top:8px">
-                    ${d.totalLost > 0 ? Icons.arrowDn : Icons.arrowUp} ${D.fmtWeight(Math.abs(d.totalLost), unit, true)} lost${d.toGo != null && d.toGo > 0.04 ? ` <span class="dim-sm">· ${D.fmtWeight(d.toGo, unit, true)} to go</span>` : ''}
-                </div>` : ''}
-            ${d.bmi != null ? `<div class="stat-delta neutral" style="margin-top:4px">BMI ${d.bmi.toFixed(1)}</div>` : ''}
+            ${d.latest && d.startKg != null && Math.abs(d.totalChange) > 0.04 ? (() => {
+                const dir = d.changeDir(d.totalChange);
+                const gained = d.totalChange > 0;
+                // colour by whether it moved TOWARD the goal, not by which way it moved;
+                // with no goal set there is nothing to be good or bad about, so stay neutral
+                const tone = dir > 0 ? 'pos' : dir < 0 ? 'neg' : 'neutral';
+                return `<div class="stat-delta ${tone}" style="margin-top:8px">
+                    ${gained ? Icons.arrowUp : Icons.arrowDn} ${D.fmtWeight(Math.abs(d.totalChange), unit, true)} ${gained ? 'gained' : 'lost'}${
+                    d.goalReached ? ' <span class="dim-sm">· goal reached</span>'
+                        : d.toGo != null && d.toGo > 0.04 ? ` <span class="dim-sm">· ${D.fmtWeight(d.toGo, unit, true)} to go</span>` : ''}
+                </div>`;
+            })() : ''}
+            ${d.bmi != null ? `<div class="stat-delta ${d.bmiBand ? d.bmiBand.tone : 'neutral'}" style="margin-top:4px">
+                BMI ${d.bmi.toFixed(1)}${d.bmiBand ? ` <span class="dim-sm">· ${escapeHtml(d.bmiBand.label)}</span>` : ''}
+                <button class="link bmi-info" data-action="bmi-info" title="What BMI does and does not tell you">?</button>
+            </div>` : ''}
             ${d.goalKg != null && d.startKg != null ? `
                 <div class="progress-track"><div class="progress-fill" style="width:${d.progress}%"></div></div>
                 <div class="progress-ends"><span>${D.fmtWeight(d.startKg, unit, true)}</span><span>goal ${D.fmtWeight(d.goalKg, unit, true)}</span></div>` : ''}
@@ -355,13 +384,16 @@
     function statsGridHtml(d) {
         const unit = d.s.settings.weightUnit;
         const f = kg => kg == null ? '—' : D.fmtWeight(kg, unit);
+        const tone = delta => { const dir = d.changeDir(delta); return dir > 0 ? 'pos' : dir < 0 ? 'neg' : 'neutral'; };
         const cards = [
             { label: 'Start', value: f(d.startKg) },
             { label: 'Current', value: d.latest ? f(d.latest.kg) : '—' },
             { label: 'Goal', value: f(d.goalKg) },
-            { label: 'To go', value: d.toGo != null ? f(Math.max(0, d.toGo)) : '—', hint: d.goalKg != null ? `${d.progress.toFixed(0)}% of goal` : null },
-            { label: 'Total lost', value: f(Math.abs(d.totalLost)), delta: d.totalLost > 0 ? 'pos' : 'neutral', deltaText: d.totalLost > 0 ? 'down' : '' },
-            { label: 'This week', value: f(Math.abs(d.lostThisWeek)), delta: d.lostThisWeek > 0.04 ? 'pos' : d.lostThisWeek < -0.04 ? 'neg' : 'neutral', deltaText: d.lostThisWeek > 0.04 ? 'down' : d.lostThisWeek < -0.04 ? 'up' : 'flat' },
+            { label: 'To go', value: d.goalReached ? 'reached' : d.toGo != null ? f(d.toGo) : '—', hint: d.goalKg != null ? `${d.progress.toFixed(0)}% of goal` : null },
+            // `totalChange` is signed with positive = gained, so the label follows the movement and
+            // the colour follows whether that movement was toward the goal.
+            { label: d.totalChange > 0 ? 'Total gained' : 'Total lost', value: f(Math.abs(d.totalChange)), moved: d.totalChange, delta: tone(d.totalChange), deltaText: Math.abs(d.totalChange) > 0.04 ? (d.totalChange > 0 ? 'up' : 'down') : '' },
+            { label: 'This week', value: f(Math.abs(d.changeThisWeek)), moved: d.changeThisWeek, delta: tone(d.changeThisWeek), deltaText: Math.abs(d.changeThisWeek) > 0.04 ? (d.changeThisWeek > 0 ? 'up' : 'down') : 'flat' },
             { label: 'Avg weekly', value: f(d.avgWeekly), hint: 'rolling' },
             { label: 'Doses logged', value: String(d.shots.length), unitTxt: d.med ? d.med.name.toLowerCase() : '' },
         ];
@@ -369,7 +401,11 @@
             ${cards.map(c => `<div class="card stat">
                 <div class="stat-label">${c.label}</div>
                 <div class="stat-value">${c.value}${c.unitTxt ? `<span class="unit">${escapeHtml(c.unitTxt)}</span>` : ''}</div>
-                ${c.delta && c.deltaText ? `<div class="stat-delta ${c.delta}">${c.delta === 'pos' ? Icons.arrowDn : c.delta === 'neg' ? Icons.arrowUp : ''}${c.deltaText}</div>` : ''}
+                ${c.delta && c.deltaText ? `<div class="stat-delta ${c.delta}">${
+                    // the arrow shows which way the weight actually moved; the colour class
+                    // separately shows whether that was toward the goal
+                    c.moved == null || Math.abs(c.moved) <= 0.04 ? '' : c.moved > 0 ? Icons.arrowUp : Icons.arrowDn
+                }${c.deltaText}</div>` : ''}
                 ${c.hint ? `<div class="stat-delta neutral">${c.hint}</div>` : ''}
             </div>`).join('')}
         </div>`;
@@ -495,12 +531,31 @@
                 <div class="card-head wrap">
                     <div>
                         <div class="card-title">Estimated medication level</div>
-                        <div class="chart-sub">
-                            <span class="tabular-mono big-num">${D.medLevelAt(d.shots, d.med, Date.now()).toFixed(3)}</span>
-                            <span class="dim-sm">${escapeHtml(d.med.unit)} now${multiMed ? ' (' + escapeHtml(d.med.name) + ')' : ''}</span>
-                            <span class="pill">half-life ${D.fmtDur(d.med.halfLife)}${d.med.dose2halfLife ? ' · per-dose' : ''}</span>
-                            ${projDays > 0 ? `<span class="pill" title="Change in Settings → Dashboard layout">+${projDays}d ahead</span>` : ''}
-                        </div>
+                        <div class="chart-sub">${(() => {
+                            // The headline has to describe what the LINES show — that is `scopedMeds`,
+                            // set by this chart's own scope chips — not the dashboard's active med.
+                            // Reading d.med here put Vyvanse's number, unit and half-life above a
+                            // Concerta curve whenever the two selections disagreed.
+                            const modelled = scopedMeds.filter(m => D.hasPharmacokinetics(m));
+                            if (!modelled.length) {
+                                return `<span class="dim-sm">No half-life recorded${
+                                    scopedSingle ? ' for ' + escapeHtml(scopedSingle.name) : ''} — level can't be estimated</span>`;
+                            }
+                            // one med in scope: its own number, unit and half-life
+                            if (modelled.length === 1) {
+                                const m = modelled[0];
+                                const lvl = D.medLevelAt(window.Store.medShots(m.id), m, Date.now());
+                                return `<span class="tabular-mono big-num">${lvl.toFixed(3)}</span>
+                                    <span class="dim-sm">${escapeHtml(m.unit)} now${multiMed ? ' (' + escapeHtml(m.name) + ')' : ''}</span>
+                                    <span class="pill">half-life ${D.fmtDur(m.halfLife)}${m.dose2halfLife ? ' · per-dose' : ''}</span>
+                                    ${projDays > 0 ? `<span class="pill" title="Change in Settings → Dashboard layout">+${projDays}d ahead</span>` : ''}`;
+                            }
+                            // several in scope: units may differ, so summing them would be meaningless
+                            const hidden = scopedMeds.length - modelled.length;
+                            return `<span class="dim-sm">${modelled.length} meds shown${
+                                hidden > 0 ? ` · ${hidden} without a half-life hidden` : ''}</span>
+                                ${projDays > 0 ? `<span class="pill" title="Change in Settings → Dashboard layout">+${projDays}d ahead</span>` : ''}`;
+                        })()}</div>
                     </div>
                     <div class="range-tabs">
                         ${[['w', '7d'], ['14', '14d'], ['m', '1M'], ['3m', '3M'], ['6m', '6M'], ['y', '1Y'], ['all', 'All']].map(([k, l]) =>
@@ -520,7 +575,7 @@
                             <div class="chart-sub">
                                 <span class="tabular-mono big-num">${d.latest ? D.fmtWeight(d.latest.kg, set.weightUnit) : '—'}</span>
                                 <span class="dim-sm">${D.unitLabel(set.weightUnit)}</span>
-                                ${d.lostThisWeek > 0.05 ? `<span class="pill success">${Icons.arrowDn} ${D.fmtWeight(d.lostThisWeek, set.weightUnit, true)} this week</span>` : ''}
+                                ${Math.abs(d.changeThisWeek) > 0.05 && d.changeDir(d.changeThisWeek) > 0 ? `<span class="pill success">${d.changeThisWeek > 0 ? Icons.arrowUp : Icons.arrowDn} ${D.fmtWeight(Math.abs(d.changeThisWeek), set.weightUnit, true)} this week</span>` : ''}
                             </div>
                         </div>
                         <div class="range-tabs">
@@ -678,7 +733,7 @@
                         <td>${D.fmtTimeStr(x.time, set)}</td>
                         <td>${D.fmtWeight(x.kg, set.weightUnit, true)}</td>
                         <td>${delta != null && Math.abs(delta) > 0.04
-                            ? `<span class="${delta < 0 ? 'txt-success' : 'txt-danger'}">${delta < 0 ? '−' : '+'}${D.fmtWeight(Math.abs(delta), set.weightUnit, true)}</span>`
+                            ? `<span class="${(() => { const dir = d.changeDir(delta); return dir > 0 ? 'txt-success' : dir < 0 ? 'txt-danger' : 'dim'; })()}">${delta < 0 ? '−' : '+'}${D.fmtWeight(Math.abs(delta), set.weightUnit, true)}</span>`
                             : '<span class="dim">—</span>'}</td>
                         <td><div class="tbl-actions">
                             <button data-action="edit-weight" data-id="${escapeHtml(x.id)}" title="Edit">${Icons.edit}</button>
@@ -809,7 +864,7 @@
                     const lvl = D.medLevelAt(medShots, m, Date.now());
                     const ext2 = medShots.length ? D.levelExtremes(medShots, m, nd2 ? new Date(nd2.date).getTime() : null) : null;
                     return `<div class="mc-facts mc-live">
-                        <div><div class="k">In system now</div><div class="txt-accent">${lvl.toFixed(lvl >= 100 ? 0 : 2)} ${escapeHtml(m.unit)}</div></div>
+                        <div><div class="k">In system now</div><div class="txt-accent">${lvl == null ? '<span class="dim">no half-life</span>' : lvl.toFixed(lvl >= 100 ? 0 : 2) + ' ' + escapeHtml(m.unit)}</div></div>
                         <div><div class="k">Next dose</div><div>${nd2 ? `${D.fmtTimeStr(nd2.time, set2)} ${D.dayLabel(nd2.date).toLowerCase()} · ${escapeHtml(D.fmtDoseCount(m, nd2.dose, medPens))}` : '—'}</div></div>
                         <div><div class="k">Est. peak</div><div>${ext2 ? `${ext2.peak.v.toFixed(ext2.peak.v >= 100 ? 0 : 1)} @ ${D.fmtTime(ext2.peak.ts, set2)}` : '—'}</div></div>
                         <div><div class="k">Est. low</div><div>${ext2 ? `${ext2.low.v.toFixed(ext2.low.v >= 100 ? 0 : 1)} @ ${D.fmtTime(ext2.low.ts, set2)}` : '—'}</div></div>

@@ -61,10 +61,21 @@
         const render = () => {
             clearChart(wrap);
             const settings = opts.settings;
-            const series = (opts.series || (opts.med ? [{ med: opts.med, shots: opts.shots || [] }] : []))
+            const candidates = (opts.series || (opts.med ? [{ med: opts.med, shots: opts.shots || [] }] : []))
                 .filter(sr => sr.med && sr.shots && sr.shots.length);
+            // A med with no half-life cannot be modelled, so it is left off the chart entirely
+            // rather than drawn from a guessed constant. Say how many, so the gap is explained.
+            const series = candidates.filter(sr => D.hasPharmacokinetics(sr.med));
+            const unmodelled = candidates.filter(sr => !D.hasPharmacokinetics(sr.med));
             if (!series.length) {
-                emptyState(wrap, 'No doses yet', 'Log a dose to see your estimated level');
+                if (unmodelled.length) {
+                    emptyState(wrap, 'No half-life recorded',
+                        unmodelled.length === 1
+                            ? `Add a half-life for ${unmodelled[0].med.name} to estimate its level`
+                            : 'These meds have no half-life recorded, so their levels cannot be estimated');
+                } else {
+                    emptyState(wrap, 'No doses yet', 'Log a dose to see your estimated level');
+                }
                 watchResize(wrap, render);
                 return;
             }

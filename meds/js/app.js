@@ -125,6 +125,7 @@
                     break;
                 case 'log-shot': M.logShot(); break;
                 case 'log-weight': M.logWeight(); break;
+                case 'bmi-info': M.bmiInfo(); break;
                 case 'toggle-next-dose-pick':
                     V.local.pickingNextDose = !V.local.pickingNextDose;
                     App.render();
@@ -436,20 +437,12 @@
     }
 
     // flush pending server writes when leaving the page
-    window.addEventListener('beforeunload', () => {
-        const S = window.Store;
-        if (S._serverDirty && S.isLoggedIn()) {
-            try {
-                navigator.sendBeacon && S.auth.authToken &&
-                    fetch(S.auth.endpoints.data, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${S.auth.authToken}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify(S.state),
-                        keepalive: true,
-                    });
-            } catch (e) { /* best effort */ }
-        }
-    });
+    // A beforeunload flush used to live here. It was already dead — it guarded on `S._serverDirty`,
+    // which no longer exists — and reviving it as written would have been worse than leaving it out:
+    // it POSTed the whole state straight to the data endpoint, bypassing the operation log entirely.
+    // That is the wholesale overwrite the op log exists to prevent, and on a shared account it would
+    // have resurrected another device's deleted rows. If unload-time flushing is ever wanted, it has
+    // to go through the sync client so it ships operations, not a snapshot.
 
     window.App = App;
 })();

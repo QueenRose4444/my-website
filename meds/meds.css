@@ -401,7 +401,33 @@ button.link.no-ml { margin-left: 0; }
 .stat-delta { margin-top: 6px; font-family: var(--font-mono); font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
 .stat-delta.pos { color: var(--success); }
 .stat-delta.neg { color: var(--danger); }
+.stat-delta.warn { color: var(--warn); }
 .stat-delta.neutral { color: var(--text-3); }
+
+/* the "?" beside BMI — BMI is a rough population guide, so the way to read it is never
+   more than one tap away from the number itself */
+.bmi-info {
+    margin-left: 6px; padding: 0 6px; min-width: 18px; line-height: 1.35;
+    border: 1px solid var(--border); border-radius: 50%;
+    font-size: 11px; color: var(--text-3); background: none; cursor: pointer;
+}
+.bmi-info:hover { color: var(--text-1); border-color: var(--text-3); }
+
+/* BMI range bar — bands drawn to scale across 15–40 with a marker at the user's value */
+.bmi-scale { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 10px 0 4px; }
+.bmi-scale span { display: block; }
+.bmi-scale .b-under { background: var(--warn); opacity: .55; }
+.bmi-scale .b-healthy { background: var(--success); }
+.bmi-scale .b-over { background: var(--warn); }
+.bmi-scale .b-obese { background: var(--danger); }
+.bmi-marker { position: relative; height: 0; }
+.bmi-marker i {
+    position: absolute; top: -13px; width: 2px; height: 14px;
+    background: var(--text-1); transform: translateX(-1px);
+}
+.bmi-ticks { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-3); }
+.bmi-band-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
+.bmi-band-row.is-current { font-weight: 600; color: var(--text-1); }
 .stat-delta svg { width: 12px; height: 12px; }
 
 .progress-track { margin-top: 16px; height: 6px; background: var(--surface-3); border-radius: 99px; overflow: hidden; }
