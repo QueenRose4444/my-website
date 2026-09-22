@@ -18,3 +18,5 @@ experiments/BBCode_editor/test-data
 wip/experiments/BBCode_editor/conversion/test-data
 .syncignore
 BBCodetmp.txt
+# Progress board: dev host only, never the public site (med-page D-20)
+experiments/med-board/
