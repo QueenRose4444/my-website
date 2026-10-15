@@ -18,8 +18,9 @@ let authManager = null;
 let activeGameId = null;
 let activeGameName = ''; // Name of the game in the currently open modal (for site search)
 let activeModalTab = 'info';
-let gamesCache = []; 
-let trackedGamesMap = {}; 
+let gamesCache = [];
+let trackedGamesMap = {};
+let customLinksMap = {}; // app_id -> saved link, for EVERY game with one (tracked or not)
 let domainRulesCache = null;
 let lastSearchQuery = ''; // Track last search query
 
@@ -54,13 +55,30 @@ let isFetching = false;
 // ==========================================
 /**
  * Escapes HTML entities to prevent XSS attacks.
- * Converts <, >, &, ", and ' to their HTML entity equivalents.
+ * Converts <, >, &, ", and ' to their HTML entity equivalents, so the result is safe
+ * both as element text and inside a quoted attribute.
  */
 function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/** A JS string literal for an inline handler, e.g. onclick="fn(${jsArg(x)})". */
+function jsArg(value) {
+    return escapeHtml(JSON.stringify(String(value)));
+}
+
+/** The URL if it is http(s), else '' — keeps javascript:/data: links out of hrefs. */
+function safeUrl(url) {
+    try {
+        const u = new URL(url, window.location.href);
+        return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : '';
+    } catch (e) { return ''; }
 }
 
 // ==========================================
@@ -231,7 +249,7 @@ async function handleDiscordCallback(code) {
         if (!response.ok) throw new Error("Login verification failed.");
         
         const data = await response.json();
-        discordCreds = data;
+        discordCreds = { ...data, issued_at: Date.now() };
         localStorage.setItem('steam_tracker_creds', JSON.stringify(discordCreds));
         
         showToast(`Connected as ${discordCreds.username}`, "success");
@@ -280,10 +298,12 @@ async function regenerateToken() {
         
         const data = await res.json();
         
-        // Update stored credentials with new token
-        discordCreds.tracker_token = data.tracker_token;
+        // Update stored credentials with new token, and send it to the other devices now —
+        // until they have it they are holding a dead token.
+        discordCreds = { ...discordCreds, tracker_token: data.tracker_token, issued_at: Date.now() };
         localStorage.setItem('steam_tracker_creds', JSON.stringify(discordCreds));
-        
+        performSync('upload');
+
         showToast("Token regenerated successfully! Your old token is now invalid.", "success");
         
     } catch (e) {
@@ -377,15 +397,16 @@ function initSync() {
         // Preferences deep-merge, and where one setting differs this device's choice
         // wins. The one LIST — link parameters to strip — is unioned instead: a rule
         // added on either device is a rule you wanted, and dropping it is a loss the
-        // merge preview would otherwise have to show you. Credentials prefer whatever
-        // this device holds.
+        // merge preview would otherwise have to show you. Credentials go to whichever
+        // was issued LAST: after a token regenerate, a device still holding the old
+        // token must not win and push the dead token back.
         merge: (theirs, mine) => {
             const t = theirs.ui_preferences || {};
             const m = mine.ui_preferences || {};
             const strip = [...(Array.isArray(t.stripParams) ? t.stripParams : []),
                 ...(Array.isArray(m.stripParams) ? m.stripParams : [])];
             return {
-                steam_creds: mine.steam_creds || theirs.steam_creds,
+                steam_creds: newerCreds(mine.steam_creds, theirs.steam_creds),
                 ui_preferences: {
                     ...t,
                     ...m,
@@ -505,6 +526,13 @@ function confirmItemDeletions(collisions) {
     return Object.keys(answers).length ? answers : null;
 }
 
+/** The credentials issued last (ties keep `mine`). Creds from before issued_at existed count as 0. */
+function newerCreds(mine, theirs) {
+    if (!mine) return theirs;
+    if (!theirs) return mine;
+    return (theirs.issued_at || 0) > (mine.issued_at || 0) ? theirs : mine;
+}
+
 /** Apply a copy of the account state to this device. */
 function applySyncedState(cloudData) {
     if (!cloudData) return;
@@ -512,7 +540,10 @@ function applySyncedState(cloudData) {
     if (cloudData.steam_creds) {
         const localStr = JSON.stringify(discordCreds);
         const cloudStr = JSON.stringify(cloudData.steam_creds);
-        if (!discordCreds || localStr !== cloudStr) {
+        // Never trade a token issued later on this device for an older one from the account
+        // copy; otherwise (including ties, e.g. creds from before issued_at) the account copy wins.
+        const localIsNewer = !!discordCreds && (discordCreds.issued_at || 0) > (cloudData.steam_creds.issued_at || 0);
+        if (!discordCreds || (localStr !== cloudStr && !localIsNewer)) {
             discordCreds = cloudData.steam_creds;
             localStorage.setItem('steam_tracker_creds', JSON.stringify(discordCreds));
             updateDiscordUI();
@@ -641,10 +672,24 @@ async function loadTrackedGames() {
         const res = await fetch(`${CONFIG.API_BASE_URL}/games/user/${discordCreds.user_id}`, {
             headers: { 'x-tracker-token': discordCreds.tracker_token }
         });
+        if (res.status === 401 || res.status === 403) {
+            // The token was regenerated elsewhere (or revoked): this is a login problem, not an outage.
+            if (currentView === 'tracked') {
+                grid.innerHTML = `<div class="empty-state"><i class="fab fa-discord"></i>
+                    <p>Your tracker login has expired on this device.</p>
+                    <button class="btn btn-discord" onclick="loginDiscord()">Reconnect Discord</button></div>`;
+            }
+            return;
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const games = await res.json();
-        
+
         trackedGamesMap = {};
-        games.forEach(g => { trackedGamesMap[g.app_id] = g; });
+        games.forEach(g => {
+            trackedGamesMap[g.app_id] = g;
+            if (g.custom_link) customLinksMap[g.app_id] = g.custom_link;
+        });
+        loadUserLinks(); // links on untracked games too
 
         if (currentView === 'tracked') {
             gamesCache = games.map(g => ({
@@ -658,6 +703,19 @@ async function loadTrackedGames() {
     }
 }
 
+/** Every saved link, tracked or not (links no longer need the game to be tracked). */
+async function loadUserLinks() {
+    if (!discordCreds) return;
+    try {
+        const res = await fetch(`${CONFIG.API_BASE_URL}/user/${discordCreds.user_id}/links`, {
+            headers: { 'x-tracker-token': discordCreds.tracker_token }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        customLinksMap = { ...(data.links || {}) };
+    } catch (e) { console.warn('Failed to load saved links', e); }
+}
+
 async function loadTop100(type) {
     if (type) currentTop100Type = type;
     
@@ -665,7 +723,8 @@ async function loadTop100(type) {
     document.getElementById('btn-rank-daily').className = currentTop100Type === 'daily' ? 'btn btn-primary' : 'btn btn-dark';
 
     const grid = document.getElementById('gameGrid');
-    document.getElementById('loadMoreContainer').style.display = 'none'; 
+    document.getElementById('loadMoreContainer').style.display = 'none';
+    currentPage = 0; // a page count left over from All Games would stop renderGames clearing this
     grid.innerHTML = '<div style="padding:20px; text-align:center; grid-column: 1/-1;">Fetching Top 100...</div>';
 
     try {
@@ -675,7 +734,7 @@ async function loadTop100(type) {
         gamesCache = games.map(g => ({
             app_id: g.app_id,
             name: g.name,
-            image: `https://cdn.cloudflare.steamstatic.com/steam/apps/${g.app_id}/header.jpg`,
+            image: g.header_image_url || `https://cdn.cloudflare.steamstatic.com/steam/apps/${g.app_id}/header.jpg`,
             is_catalog: true,
             ccu: g.ccu,
             rank: g.rank,
@@ -788,65 +847,37 @@ function applySortAndRender() {
     renderGames(sorted, currentView === 'tracked');
 }
 
+function renderEmptyState(grid, isTrackedView) {
+    if (isTrackedView && lastSearchQuery) {
+        grid.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-search"></i>
+                <p>No tracked games match "${escapeHtml(lastSearchQuery)}"</p>
+                <button class="btn btn-primary" onclick="searchInAllGames(${jsArg(lastSearchQuery)})">
+                    <i class="fas fa-globe"></i> Search in All Games
+                </button>
+            </div>`;
+    } else {
+        grid.innerHTML = '<div class="empty-state"><i class="fas fa-ghost"></i>No games found.</div>';
+    }
+}
+
 function renderGames(games, isTrackedView) {
     const grid = document.getElementById('gameGrid');
-    
-    // Don't wipe grid if appending (handled in loadAllGames but good safety)
-    if (!grid.innerHTML.includes('game-card') && games.length === 0) {
-        // Check if we're in tracked view with a search query
-        if (isTrackedView && lastSearchQuery) {
-            const safeQuery = escapeHtml(lastSearchQuery);
-            grid.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-search"></i>
-                    <p>No tracked games match "${safeQuery}"</p>
-                    <button class="btn btn-primary" onclick="searchInAllGames('${safeQuery.replace(/'/g, "\\'")}')"> 
-                        <i class="fas fa-globe"></i> Search in All Games
-                    </button>
-                </div>`;
-        } else {
-            grid.innerHTML = '<div class="empty-state"><i class="fas fa-ghost"></i>No games found.</div>';
+
+    // An empty page: show the empty state unless we're appending to cards already shown.
+    if (games.length === 0) {
+        if (isTrackedView || currentPage === 0 || !grid.innerHTML.includes('game-card')) {
+            renderEmptyState(grid, isTrackedView);
         }
         return;
-    } else if (games.length === 0 && !grid.innerHTML) {
-         if (isTrackedView && lastSearchQuery) {
-            const safeQuery = escapeHtml(lastSearchQuery);
-            grid.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-search"></i>
-                    <p>No tracked games match "${safeQuery}"</p>
-                    <button class="btn btn-primary" onclick="searchInAllGames('${safeQuery.replace(/'/g, "\\'")}')"> 
-                        <i class="fas fa-globe"></i> Search in All Games
-                    </button>
-                </div>`;
-         } else {
-            grid.innerHTML = '<div class="empty-state"><i class="fas fa-ghost"></i>No games found.</div>';
-         }
-         return;
     }
-    
+
     // Clear grid if NOT appending logic (handled by caller passing fresh array)
     // If caller passed full array, we wipe.
     // For 'all' view we rely on loadAllGames managing the cache/append.
     if(isTrackedView || currentPage === 0) {
         grid.innerHTML = '';
-    }
-
-    if (games.length === 0) {
-        if (isTrackedView && lastSearchQuery) {
-            const safeQuery = escapeHtml(lastSearchQuery);
-            grid.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-search"></i>
-                    <p>No tracked games match "${safeQuery}"</p>
-                    <button class="btn btn-primary" onclick="searchInAllGames('${safeQuery.replace(/'/g, "\\'")}')"> 
-                        <i class="fas fa-globe"></i> Search in All Games
-                    </button>
-                </div>`;
-        } else {
-            grid.innerHTML = '<div class="empty-state"><i class="fas fa-ghost"></i>No games found.</div>';
-        }
-        return;
     }
 
     games.forEach(game => {
@@ -880,11 +911,11 @@ function renderGames(games, isTrackedView) {
 
         card.innerHTML = `
             <div style="position:relative;" onclick="openGameModal('${game.app_id}')">
-                <img src="${game.image}" class="game-image" data-appid="${game.app_id}" onerror="handleImgError(this)">
+                <img src="${escapeHtml(safeUrl(game.image))}" class="game-image" data-appid="${game.app_id}" onerror="handleImgError(this)">
                 ${actionBtn}
             </div>
             <div class="game-info" onclick="openGameModal('${game.app_id}')">
-                <div class="game-title">${game.name}</div>
+                <div class="game-title">${escapeHtml(game.name)}</div>
                 <div class="game-meta">${metaInfo}</div>
             </div>
         `;
@@ -1148,10 +1179,10 @@ async function loadDomainRules() {
         div.className = 'checkbox-row';
         div.innerHTML = `
             <div style="flex:1;">
-                <div style="color:#4bc0c0; font-weight:bold;">${rule.domain}</div>
-                <div style="color:#888; font-size:0.9em;">Appends: <code>${rule.params}</code></div>
+                <div style="color:#4bc0c0; font-weight:bold;">${escapeHtml(rule.domain)}</div>
+                <div style="color:#888; font-size:0.9em;">Appends: <code>${escapeHtml(rule.params)}</code></div>
             </div>
-            <button class="btn btn-danger" style="padding: 5px 10px;" onclick="deleteDomainRule('${rule.domain}')"><i class="fas fa-trash"></i></button>
+            <button class="btn btn-danger" style="padding: 5px 10px;" onclick="deleteDomainRule(${jsArg(rule.domain)})"><i class="fas fa-trash"></i></button>
         `;
         list.appendChild(div);
     });
@@ -1163,11 +1194,13 @@ async function addDomainRule() {
     const params = document.getElementById('ruleParams').value.trim();
     if(!domain || !params) return alert("Please fill in both fields.");
     try {
-        await fetch(`${CONFIG.API_BASE_URL}/user/${discordCreds.user_id}/rules`, {
+        const res = await fetch(`${CONFIG.API_BASE_URL}/user/${discordCreds.user_id}/rules`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-tracker-token': discordCreds.tracker_token },
             body: JSON.stringify({ domain, params })
         });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        domainRulesCache = null; // links in open modals pick the new rule up
         document.getElementById('ruleDomain').value = '';
         document.getElementById('ruleParams').value = '';
         showToast("Rule added!", "success");
@@ -1178,11 +1211,13 @@ async function addDomainRule() {
 async function deleteDomainRule(domain) {
     if(!confirm(`Delete rule for ${domain}?`)) return;
     try {
-        await fetch(`${CONFIG.API_BASE_URL}/user/${discordCreds.user_id}/rules`, {
+        const res = await fetch(`${CONFIG.API_BASE_URL}/user/${discordCreds.user_id}/rules`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json', 'x-tracker-token': discordCreds.tracker_token },
             body: JSON.stringify({ domain, params: "" })
         });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        domainRulesCache = null;
         showToast("Rule deleted", "info");
         loadDomainRules(); 
     } catch(e) { showToast("Failed to delete", "error"); }
@@ -1208,6 +1243,7 @@ async function loadNotificationSettings() {
         const res = await fetch(`${CONFIG.API_BASE_URL}/user/${discordCreds.user_id}/settings`, {
             headers: { 'x-tracker-token': discordCreds.tracker_token }
         });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         
         if(data.settings.length === 0) {
@@ -1239,14 +1275,14 @@ async function loadNotificationSettings() {
                 html += `
                     <div class="checkbox-row">
                         <div style="flex:1;">
-                            <span style="font-weight:bold; color:#ccc; font-size:1em;">${displayName}</span>
-                            <div style="font-size:0.8em; color:#666;">ID: ${setting.guild_id}</div>
+                            <span style="font-weight:bold; color:#ccc; font-size:1em;">${escapeHtml(displayName)}</span>
+                            <div style="font-size:0.8em; color:#666;">ID: ${escapeHtml(setting.guild_id)}</div>
                         </div>
-                        
+
                         <label class="switch">
-                            <input type="checkbox" data-guild="${setting.guild_id}" 
-                                ${setting.notify_server ? 'checked' : ''} 
-                                onchange="updateGuildSettings('${setting.guild_id}')">
+                            <input type="checkbox" data-guild="${escapeHtml(setting.guild_id)}"
+                                ${setting.notify_server ? 'checked' : ''}
+                                onchange="updateGuildSettings(${jsArg(setting.guild_id)})">
                             <span class="slider"></span>
                         </label>
                     </div>
@@ -1263,11 +1299,12 @@ async function loadNotificationSettings() {
 
 window.updateGlobalDm = async (checkbox) => {
     try {
-        await fetch(`${CONFIG.API_BASE_URL}/user/${discordCreds.user_id}/settings/dm`, {
+        const res = await fetch(`${CONFIG.API_BASE_URL}/user/${discordCreds.user_id}/settings/dm`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-tracker-token': discordCreds.tracker_token },
             body: JSON.stringify({ notify_dm: checkbox.checked })
         });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         showToast(`DMs ${checkbox.checked ? 'Enabled' : 'Disabled'}`, "success");
     } catch(e) { 
         showToast("Update failed", "error"); 
@@ -1288,13 +1325,17 @@ window.updateGuildSettings = async (guildId) => {
     const dmState = globalDmInput ? globalDmInput.checked : false;
 
     try {
-        await fetch(`${CONFIG.API_BASE_URL}/user/${discordCreds.user_id}/settings/${guildId}`, {
+        const res = await fetch(`${CONFIG.API_BASE_URL}/user/${discordCreds.user_id}/settings/${encodeURIComponent(guildId)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-tracker-token': discordCreds.tracker_token },
             body: JSON.stringify({ notify_dm: dmState, notify_server: serverInput.checked })
         });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         showToast("Server settings updated", "success");
-    } catch(e) { showToast("Update failed", "error"); }
+    } catch(e) {
+        showToast("Update failed", "error");
+        serverInput.checked = !serverInput.checked; // Revert UI
+    }
 };
 
 
@@ -1358,49 +1399,86 @@ async function switchModalTab(tab) {
 
 async function renderModalInfo(appId, container) {
     try {
-        const res = await fetch(`${CONFIG.API_BASE_URL}/games/info/${appId}`);
-        const info = await res.json();
-        if (info && info.name) activeGameName = info.name;
+        const cachedCatalog = gamesCache.find(g => String(g.app_id) === String(appId));
+        const knownName = activeGameName || (cachedCatalog && cachedCatalog.name) || '';
 
-        const trackedData = trackedGamesMap[appId];
+        const res = await fetch(`${CONFIG.API_BASE_URL}/games/info/${appId}`);
+        let info = {};
+        let detailsNote = '';
+        if (res.ok) {
+            info = await res.json();
+        } else if (res.status === 503 || res.status === 429) {
+            detailsNote = 'Steam is busy right now — details will be back in a few minutes.';
+        } else if (res.status === 404) {
+            detailsNote = 'Steam has no store page for this app.';
+        } else {
+            detailsNote = 'Could not load details from Steam.';
+        }
+        if (info.details_available === false && !detailsNote) {
+            detailsNote = info.details_source === 'unavailable'
+                ? 'Steam has no store page for this app in our region.'
+                : 'Steam is busy right now — showing what we have.';
+        }
+        if (activeGameId !== appId) return; // the user moved on to another game meanwhile
+
+        const name = info.name || knownName || `App ${appId}`;
+        activeGameName = name;
+
+        const savedLink = customLinksMap[appId] || '';
         let customLinkBtn = '';
 
         // "Find on <site>" jumps to the user's pre-set search and swaps to the Links tab to paste.
         // Hidden once a custom link exists — no need to search again (still available on the Links tab).
-        const hasCustomLink = !!(trackedData && trackedData.custom_link);
         let siteSearchBtn = '';
-        if (hasSearchTemplate() && !hasCustomLink) {
+        if (hasSearchTemplate() && !savedLink) {
             siteSearchBtn = `<button class="btn btn-dark" style="flex:1; text-align:center; border:1px solid #f1c40f; color:#f1c40f;" onclick="openSiteSearch('${appId}', true)"><i class="fas fa-search"></i> Find on ${escapeHtml(getSearchSiteLabel())}</button>`;
         }
 
-        // Last Update: prefer the precise tracked build time; for untracked games fall back to
-        // the catalog's approximate last_modified (already cached from the All Games / Top 100 list).
-        const cachedCatalog = gamesCache.find(g => String(g.app_id) === String(appId));
+        // Last Update, best source first:
+        //  tracked   — the 30-minute checker (exact)
+        //  untracked — the checker's slow lane, refreshed every few hours (exact, maybe a little late)
+        //  otherwise — only the store page's last-change time, which is NOT a patch time
+        const fmt = (secs) => new Date(secs * 1000).toLocaleString();
         let lastUpdateHtml = 'Unknown';
         if (info.last_update) {
-            lastUpdateHtml = new Date(info.last_update * 1000).toLocaleString();
-        } else if (cachedCatalog && cachedCatalog.last_modified) {
-            lastUpdateHtml = new Date(cachedCatalog.last_modified * 1000).toLocaleString() +
-                ' <span style="color:#777; cursor:help;" title="Approximate — from Steam store metadata. Exact patch times are tracked only for games you follow.">(approx)</span>';
+            lastUpdateHtml = fmt(info.last_update);
+            if (info.update_source === 'untracked') {
+                const checked = info.update_checked_at ? ` Last checked ${fmt(info.update_checked_at)}.` : '';
+                lastUpdateHtml += ` <span style="color:#777; cursor:help;" title="You don't track this game, so it is checked every few hours instead of every 30 minutes.${escapeHtml(checked)}">(checked every few hours)</span>`;
+            }
+        } else if (info.update_source === 'none' || !res.ok) {
+            lastUpdateHtml = 'Not checked yet <span style="color:#777; cursor:help;" title="Untracked games are checked within about 30 minutes of first being opened here, then every few hours.">(soon)</span>';
         }
-        
-        if (trackedData && trackedData.custom_link) {
-            const processedLink = await applyUrlRules(trackedData.custom_link);
+        const storeChanged = info.store_last_modified || (cachedCatalog && cachedCatalog.last_modified);
+        const storeChangedHtml = (!info.last_update && storeChanged)
+            ? `<p><strong>Store page changed:</strong> ${fmt(storeChanged)} <span style="color:#777; cursor:help;" title="When Steam last changed this game's store data (page, price, tags). Often near a patch, but not the same thing.">(not a patch time)</span></p>`
+            : '';
+
+        if (savedLink) {
+            const processedLink = safeUrl(await applyUrlRules(savedLink));
             let label = "Your Link";
-            try { label = new URL(trackedData.custom_link).hostname; } catch(e) {}
-            customLinkBtn = `<a href="${processedLink}" target="_blank" class="btn btn-dark" style="flex:1; text-align:center; border:1px solid #4bc0c0; color:#4bc0c0;"><i class="fas fa-link"></i> ${label}</a>`;
+            try { label = new URL(savedLink).hostname; } catch(e) {}
+            if (processedLink) {
+                customLinkBtn = `<a href="${escapeHtml(processedLink)}" target="_blank" rel="noopener" class="btn btn-dark" style="flex:1; text-align:center; border:1px solid #4bc0c0; color:#4bc0c0;"><i class="fas fa-link"></i> ${escapeHtml(label)}</a>`;
+            }
         }
+
+        const image = safeUrl(info.header_image || (cachedCatalog && cachedCatalog.image) || '');
+        const descriptionHtml = info.short_description ? escapeHtml(info.short_description)
+            : detailsNote ? `<span style="color:#ffb86b;">${escapeHtml(detailsNote)}</span>`
+            : 'No description available.';
 
         container.innerHTML = `
             <div style="display:flex; gap:20px; flex-wrap:wrap;">
-                <img src="${info.header_image}" style="width:100%; border-radius:8px; margin-bottom:15px; max-height:250px; object-fit:contain; background:#1a1a1a;">
+                ${image ? `<img src="${escapeHtml(image)}" data-appid="${appId}" onerror="handleImgError(this)" style="width:100%; border-radius:8px; margin-bottom:15px; max-height:250px; object-fit:contain; background:#1a1a1a;">` : ''}
                 <div style="flex: 1; min-width: 250px;">
-                    <h2 style="color:#4bc0c0; margin-bottom: 10px;">${info.name}</h2>
-                    <p style="margin-bottom: 15px; font-size:0.9em; color:#ccc;">${info.short_description || "No description available."}</p>
+                    <h2 style="color:#4bc0c0; margin-bottom: 10px;">${escapeHtml(name)}</h2>
+                    <p style="margin-bottom: 15px; font-size:0.9em; color:#ccc;">${descriptionHtml}</p>
                     <div style="background: #1a1a1a; padding: 15px; border-radius: 6px; font-size:0.9em; color:#888;">
                         <p><strong>App ID:</strong> ${appId}</p>
-                        <p><strong>Build ID:</strong> ${info.build_id || 'Unknown'}</p>
+                        <p><strong>Build ID:</strong> ${escapeHtml(info.build_id || 'Unknown')}</p>
                         <p><strong>Last Update:</strong> ${lastUpdateHtml}</p>
+                        ${storeChangedHtml}
                     </div>
                     <div style="display:flex; gap:10px; margin-top:20px; flex-wrap:wrap;">
                         <a href="https://store.steampowered.com/app/${appId}" target="_blank" class="btn btn-primary" style="flex:1; text-align:center;">Store</a>
@@ -1423,15 +1501,15 @@ async function renderModalSettings(appId, container) {
         return;
     }
 
-    let currentLink = "";
-    let gameName = "Game Settings"; 
+    // Links are saved per game whether or not it is tracked.
+    const currentLink = customLinksMap[appId] || "";
+    let gameName = activeGameName || "Game Settings";
 
-    if (trackedGamesMap[appId]) {
-        currentLink = trackedGamesMap[appId].custom_link || "";
+    if (trackedGamesMap[appId] && trackedGamesMap[appId].name) {
         gameName = trackedGamesMap[appId].name;
     } else {
         const gameInCache = gamesCache.find(g => String(g.app_id) === String(appId));
-        if (gameInCache) {
+        if (gameInCache && gameInCache.name) {
             gameName = gameInCache.name;
         }
     }
@@ -1490,15 +1568,18 @@ async function saveCustomLink(appId) {
             headers: { 'Content-Type': 'application/json', 'x-tracker-token': discordCreds.tracker_token },
             body: JSON.stringify({ custom_link: link })
         });
-        if(res.ok) {
-            showToast("Link saved!", "success");
-            if(trackedGamesMap[appId]) {
-                trackedGamesMap[appId].custom_link = link;
-            } else {
-                loadTrackedGames(); 
-            }
-        } else throw new Error();
-    } catch(e) { showToast("Failed to save link", "error"); }
+        if (!res.ok) {
+            let detail = '';
+            try { detail = (await res.json()).detail || ''; } catch (e) {}
+            throw new Error(typeof detail === 'string' && detail ? detail : `HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        const saved = data.link || ''; // the server may tidy it (e.g. add https://)
+        input.value = saved;
+        if (saved) customLinksMap[appId] = saved; else delete customLinksMap[appId];
+        if (trackedGamesMap[appId]) trackedGamesMap[appId].custom_link = saved;
+        showToast(saved ? "Link saved!" : "Link removed", "success");
+    } catch(e) { showToast(`Failed to save link: ${e.message}`, "error"); }
 }
 
 // ==========================================
@@ -1786,6 +1867,27 @@ window.updateSearchTemplatePreview = updateSearchTemplatePreview;
 window.saveStripParams = saveStripParams;
 window.updateStripParamsPreview = updateStripParamsPreview;
 
+// At most a few image-fallback lookups at once: a grid of new games (whose images
+// aren't at the old CDN path) used to fire ~50 at the same moment, and every one of
+// them is a Steam appdetails call on a cold cache.
+const IMG_LOOKUP_LIMIT = 3;
+let imgLookupsActive = 0;
+const imgLookupQueue = [];
+function withImgLookupSlot(fn) {
+    return new Promise((resolve) => {
+        const run = async () => {
+            imgLookupsActive++;
+            try { resolve(await fn()); }
+            finally {
+                imgLookupsActive--;
+                const next = imgLookupQueue.shift();
+                if (next) next();
+            }
+        };
+        if (imgLookupsActive < IMG_LOOKUP_LIMIT) run(); else imgLookupQueue.push(run);
+    });
+}
+
 /**
  * Cascading image fallback for game cards.
  * Tries: header.jpg -> capsule_616x353.jpg -> Steam Store API header_image -> placeholder
@@ -1809,13 +1911,18 @@ async function handleImgError(img) {
     if (!img.dataset.triedApi) {
         img.dataset.triedApi = 'true';
         try {
-            const res = await fetch(`${CONFIG.API_BASE_URL}/games/info/${appId}`);
-            if (res.ok) {
-                const info = await res.json();
-                if (info.header_image) {
-                    img.src = info.header_image;
-                    return;
-                }
+            const headerImage = await withImgLookupSlot(async () => {
+                if (!img.isConnected) return null; // card was replaced while queued
+                // purpose=image: a broken thumbnail isn't "someone looked at this game",
+                // so it doesn't enter the untracked slow lane.
+                const res = await fetch(`${CONFIG.API_BASE_URL}/games/info/${appId}?purpose=image`);
+                if (!res.ok) return null;
+                return (await res.json()).header_image || null;
+            });
+            const src = headerImage && safeUrl(headerImage);
+            if (src) {
+                img.src = src;
+                return;
             }
         } catch(e) {
             console.warn(`Failed to fetch image for app ${appId}`, e);
