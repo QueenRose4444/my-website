@@ -303,6 +303,51 @@
             out.shots = (out.shots || []).filter(x => x && x.timestamp);
             out.weights = (out.weights || []).filter(x => x && x.timestamp && !isNaN(parseFloat(x.kg)));
             out.pens = out.pens || [];
+
+            // TYPES, checked once here, because every renderer trusts them. Whatever
+            // arrives from storage, a sync or an imported file passes through this, and a
+            // "dose" that is a string of HTML would otherwise be written straight into
+            // the page. Copies, so the caller's object is never changed.
+            const num = (v) => { if (v === null || v === undefined || v === '') return null; const n = Number(v); return Number.isFinite(n) ? n : null; };
+            const ymdRe = /^\d{4}-\d{2}-\d{2}$/, hmRe = /^\d{1,2}:\d{2}$/;
+            const when = (x) => {
+                x.timestamp = num(x.timestamp);
+                if (!x.timestamp) return false;
+                const dt = new Date(x.timestamp);
+                if (!ymdRe.test(x.date)) x.date = D.ymd(dt);
+                if (!hmRe.test(x.time)) x.time = D.hm(dt);
+                return true;
+            };
+            const http = (u) => typeof u === 'string' && /^https?:\/\//i.test(u.trim());
+            out.shots = out.shots.map(x => Object.assign({}, x)).filter(x => {
+                if (!when(x)) return false;
+                // A bad dose is neutralised, never dropped: dropping a record here would
+                // make the next sync send its deletion, and delete a real dose upstream.
+                x.dose = num(x.dose);
+                if (x.location != null && typeof x.location !== 'string') x.location = String(x.location);
+                return true;
+            });
+            out.weights = out.weights.map(x => Object.assign({}, x)).filter(x => when(x) && (x.kg = num(x.kg)) !== null);
+            out.pens = (Array.isArray(out.pens) ? out.pens : []).filter(p => p && p.id).map(p => Object.assign({}, p, {
+                dose: num(p.dose), capacity: num(p.capacity) || 0, used: num(p.used) || 0,
+            }));
+            const cleanMed = (m) => {
+                const c = Object.assign({}, m);
+                c.name = String(c.name == null ? '' : c.name);
+                c.doses = Array.isArray(c.doses) ? c.doses.map(num).filter(v => v !== null) : [];
+                ['halfLife', 'timeToPeak', 'penCapacity', 'pensPerPackage', 'graphStep', 'preferredNextDose']
+                    .forEach(k => { if (k in c) c[k] = num(c[k]); });
+                if (c.frequency != null) c.frequency = num(c.frequency);
+                if (typeof c.color !== 'string' || !/^#[0-9a-fA-F]{3,8}$/.test(c.color)) c.color = '#5fc8c8';
+                if (c.missedDose && typeof c.missedDose === 'object') {
+                    c.missedDose = Object.assign({}, c.missedDose);
+                    if (!http(c.missedDose.sourceUrl)) delete c.missedDose.sourceUrl;
+                }
+                return c;
+            };
+            out.meds = out.meds.map(cleanMed);
+            out.trashedMeds = out.trashedMeds.map(cleanMed);
+
             // device-specific keys never come from synced data: reset to defaults,
             // then overlay whatever THIS device last used
             DEVICE_KEYS.forEach(k => { out.settings[k] = DEFAULT_SETTINGS[k]; });

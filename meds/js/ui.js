@@ -198,5 +198,12 @@
         setTimeout(() => dismiss(false), opts.duration || 3200);
     }
 
-    window.UI = { Icons, $, $$, escapeHtml, on, openModal, confirmModal, toast };
+    /**
+     * A link target from DATA (a med's source), or '#'. Only http(s): a `javascript:`
+     * URL in an imported backup would otherwise run when tapped, and escaping the
+     * attribute does not stop that.
+     */
+    const safeUrl = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u.trim())) ? u.trim() : '#';
+
+    window.UI = { Icons, $, $$, escapeHtml, on, openModal, confirmModal, toast, safeUrl };
 })();

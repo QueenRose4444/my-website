@@ -229,7 +229,7 @@
                         : (info ? info.note : 'This late, it\'s usually best to skip to your next scheduled dose.');
                     lateHtml = `<div class="pen-hint warn late-hint">
                         <div><strong>${days} overdue.</strong> ${escapeHtml(advice)}
-                        ${info && info.sourceUrl ? ` <a class="src-link" href="${escapeHtml(info.sourceUrl)}" target="_blank" rel="noopener">Source: ${escapeHtml(info.sourceLabel || 'official guidance')} ↗</a>` : ''}
+                        ${info && info.sourceUrl ? ` <a class="src-link" href="${escapeHtml(window.UI.safeUrl(info.sourceUrl))}" target="_blank" rel="noopener">Source: ${escapeHtml(info.sourceLabel || 'official guidance')} ↗</a>` : ''}
                         <span class="disclaimer">We're not doctors — check the source or ask your pharmacist.</span></div>
                     </div>`;
                 }
