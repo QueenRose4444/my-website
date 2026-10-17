@@ -2,7 +2,7 @@
 // (✿^‿^) CONFIGURATION
 // ==========================================
 const CONFIG = {
-    API_BASE_URL: "https://rosie_steam_game_tracker_backend.rosestuffs.org", 
+    API_BASE_URL: "https://steam-tracker-api.rosestuffs.org", 
     DISCORD_CLIENT_ID: "1436121447884918925", 
     REDIRECT_URI: window.location.origin + window.location.pathname,
     APP_NAME: 'steam-tracker-auth-v1' 
