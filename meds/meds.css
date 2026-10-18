@@ -222,7 +222,7 @@ body.modal-open { overflow: hidden; }
     .tbl td { font-size: 13.5px; }
     .tbl th { font-size: 11.5px; }
     .mc-facts { font-size: 13.5px; }
-    .mc-facts .k { font-size: 11.5px; }
+    .mc-facts .k, .mc-help .k { font-size: 11.5px; }
     .mc-generic { font-size: 12.5px; }
     .preset .p-meta { font-size: 12.5px; }
     .cal-day { font-size: 12.5px; }
@@ -677,6 +677,30 @@ button.link.no-ml { margin-left: 0; }
 @media (max-width: 480px) { .meds-grid { grid-template-columns: 1fr; } }
 
 .med-card { display: flex; flex-direction: column; }
+
+/* Stopped meds. Receded, not disabled — the card is still fully
+   interactive, because its history, chart and supply are exactly what you
+   came to look at. Opacity alone would make the text fail contrast, so the
+   signal is a muted header and an explicit badge instead. */
+.med-card.is-stopped { border-style: dashed; }
+.med-card.is-stopped .mc-swatch { filter: saturate(0.35); }
+.med-card.is-stopped .mc-name { color: var(--text-2); }
+.pill.stopped {
+    background: var(--surface-3);
+    color: var(--text-3);
+    border-color: var(--border);
+    font-style: italic;
+}
+/* …and in the switcher, where space is tight enough to need a shorter tell. */
+.med-pill.is-stopped { border-style: dashed; color: var(--text-3); }
+.med-pill.is-stopped .pill-swatch { filter: saturate(0.35); }
+.med-pill .pill-tag {
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+    font-family: var(--font-mono);
+}
 .mc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 8px; }
 .mc-id { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .mc-swatch { width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
@@ -688,7 +712,142 @@ button.link.no-ml { margin-left: 0; }
     padding-top: 12px; border-top: 1px solid var(--border);
     font-family: var(--font-mono); font-size: 12px;
 }
-.mc-facts .k { color: var(--text-3); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+.mc-facts .k, .mc-help .k { color: var(--text-3); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+/* What a product actually delivers. The ONLY place base mass is shown, and
+   it is always shown beside the label amount, because "5 mg" and "3.67 mg of base"
+   are different numbers and both are true. */
+/* The corrected-preset prompt, and the side-by-side behind it. Both sides
+   are buttons of equal weight on purpose: neither answer is the recommended one,
+   and styling one as primary would be the app taking a position on a value
+   somebody typed about their own medication. */
+.recon-prompt {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    margin-top: 12px; padding: 9px 12px; text-align: left;
+    background: var(--warn-soft); border: 1px solid rgba(240, 185, 85, 0.3);
+    border-radius: 9px; color: var(--text-1); font-size: 12.5px; cursor: pointer;
+}
+.recon-prompt:hover { border-color: var(--warn); }
+.recon-prompt > span:nth-child(2) { flex: 1; }
+.rp-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); flex: none; }
+
+.recon-row { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.recon-row:last-child { border-bottom: 0; }
+.recon-row.is-done { opacity: 0.55; }
+.recon-label {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-3); margin-bottom: 7px; font-family: var(--font-mono);
+}
+.recon-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.recon-side {
+    display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; text-align: left;
+    background: var(--surface-3); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text-1); cursor: pointer;
+}
+.recon-side:hover:not(:disabled) { border-color: var(--accent-line); }
+.recon-side:disabled { cursor: default; }
+.recon-side.chosen { border-color: var(--accent); background: var(--accent-soft); }
+.recon-side .k {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3);
+}
+.recon-side .v { font-family: var(--font-mono); font-size: 13px; }
+@media (max-width: 480px) { .recon-sides { grid-template-columns: 1fr; } }
+
+/* The 24-hour ingredient warning, in the log-dose modal body.
+   Deliberately NOT a confirmation dialog: it warns, it never blocks, and it
+   sits where the dose is still being chosen. */
+.ceil-panel {
+    margin: 14px 0; padding: 12px 14px; border-radius: 10px;
+    background: var(--warn-soft); border: 1px solid rgba(240, 185, 85, 0.35);
+    font-size: 12.5px; line-height: 1.5;
+}
+.ceil-panel.is-over { background: var(--danger-soft); border-color: rgba(237, 107, 94, 0.45); }
+.ceil-row + .ceil-row { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.ceil-row.over > div:first-child { color: var(--danger); }
+.ceil-when { margin-top: 6px; }
+.ceil-foot { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+
+/* "Remind me when I can have another". The one reminder a PRN med can
+   honestly send: not "take this", which it cannot know. */
+.prn-remind {
+    display: block; width: 100%; margin-top: 10px; padding: 8px 12px;
+    background: var(--surface-3); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text-2); font-size: 12px; font-family: var(--font-mono); cursor: pointer;
+}
+.prn-remind:hover { border-color: var(--accent-line); color: var(--text-1); }
+.prn-remind.is-set { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.prn-remind svg { width: 12px; height: 12px; vertical-align: -2px; }
+.txt-warn { color: var(--warn); }
+
+/* A limit, with who says so and what goes wrong past it. */
+.limit-box {
+    margin-top: 16px; padding: 12px 14px; border-radius: 10px;
+    background: var(--surface-3); border: 1px solid var(--border);
+}
+.limit-box .k {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-3); font-family: var(--font-mono); margin-bottom: 8px;
+}
+.limit-figs { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13.5px; margin-bottom: 6px; }
+.limit-harm, .ceil-harm {
+    margin-top: 8px; padding-left: 10px; border-left: 2px solid var(--warn);
+    color: var(--text-2); font-size: 12px; line-height: 1.55;
+}
+.ceil-acts {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    flex-wrap: wrap; margin-top: 10px;
+}
+
+/* Brand names, behind a disclosure rather than strung beside the drug. */
+.aka-disclosure { margin-top: 4px; font-size: 12px; }
+.aka-disclosure summary { color: var(--text-3); cursor: pointer; }
+.aka-disclosure summary:hover { color: var(--text-2); }
+.aka-disclosure > div { padding: 6px 0 0 14px; }
+.preset .p-aka { margin-top: 3px; font-size: 10.5px; }
+
+/* A substance that is deliberately NOT drawn by default. Visibly different
+   from an ordinary toggle, because turning it on is a choice about a number the app
+   does not stand behind (codeine -> morphine). */
+.chip.sub-scope.opt-in { border-style: dotted; color: var(--text-3); }
+.chip.sub-scope.opt-in.active { border-style: solid; border-color: var(--warn); color: var(--warn); }
+
+/* The two fills the med-level chart uses when a therapeutic threshold is
+   known, and the legend that says which is which IN WORDS. Never hue alone. */
+.ml-legend-band { flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+.ml-swatch {
+    display: inline-block; width: 16px; height: 10px; border-radius: 2px;
+    margin-right: 6px; vertical-align: -1px; border: 1px solid var(--border);
+}
+.ml-swatch.solid { background: var(--accent); opacity: 0.55; }
+.ml-swatch.hatch {
+    background-image: repeating-linear-gradient(45deg,
+        var(--accent) 0 1.4px, transparent 1.4px 5px);
+    opacity: 0.7;
+}
+
+/* A substance scope on the level chart, and the per-product breakdown
+   inside its tooltip. */
+.chip.sub-scope { border-style: dashed; }
+.chip.sub-scope.active { border-style: solid; }
+.t-sub {
+    display: flex; justify-content: space-between; gap: 12px;
+    font-size: 10.5px; color: var(--text-3); padding-left: 2px;
+}
+
+.mc-substances { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.mc-substances .k {
+    color: var(--text-3); font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: 0.08em; margin-bottom: 7px; font-family: var(--font-mono);
+}
+.sub-chip {
+    display: inline-flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+    margin: 0 6px 6px 0; padding: 6px 11px;
+    background: var(--surface-3); border: 1px solid var(--border); border-radius: 999px;
+    color: var(--text-2); font-family: var(--font-mono); font-size: 11.5px;
+    cursor: pointer; text-align: left;
+}
+.sub-chip:hover { border-color: var(--accent-line); color: var(--text-1); }
+.sub-chip .sub-name { color: var(--text-1); font-weight: 500; }
+
 .mc-pens { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 .mc-pens-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .mc-pens-head .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); }
@@ -829,6 +988,33 @@ button.link.no-ml { margin-left: 0; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
 .field-row.nomb { margin-bottom: 0; }
 .field label, .field-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); font-weight: 500; }
+
+/* A checkbox whose label is a sentence, not a field name (the PRN toggle).
+   `.field label` above uppercases and shrinks every label, which is right for
+   "UNIT" and wrong for "Take only when needed" — so this opts back out. */
+.field .check-line {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 13.5px; text-transform: none; letter-spacing: 0;
+    color: var(--text); font-weight: 400; cursor: pointer;
+}
+.field .check-line input[type="checkbox"] {
+    width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer;
+    flex: none;
+}
+/* The note sits under its own checkbox, aligned to the label text. It needs real
+   flow height: the first version used `.field.nomb`, whose zero bottom margin let
+   this text overlap the label of the field below it. */
+.prn-note { margin-top: 5px; padding-left: 25px; line-height: 1.45; text-align: left; }
+.prn-field { margin-bottom: 14px; }
+
+/* A field switched off because another control contradicts it (PRN vs "how often").
+   Greyed and inert, but still readable — hiding it entirely would make the interval
+   look lost rather than inapplicable. */
+.field.is-disabled label, .field.is-disabled .field-label { opacity: 0.45; }
+.field.is-disabled input:disabled,
+.field.is-disabled select:disabled {
+    opacity: 0.45; cursor: not-allowed; background: var(--surface-2);
+}
 .field input, .field select, .field textarea, .freq-row input, .freq-row select, .bf-step input, .loc-add input {
     background: var(--surface-3);
     border: 1px solid var(--border);
@@ -1228,6 +1414,14 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 .bf-plan-row input:focus { border-color: var(--accent); }
 .time-item input[data-scheddose] { width: 70px !important; }
 .time-item input[data-schedcount] { width: 50px !important; }
+/* The anchor picker sits inline with the time, and must stay visibly
+   secondary to it — the time is the thing that fires, the name is the label. */
+.time-item select[data-schedanchor] {
+    border: none !important; background: transparent !important;
+    padding: 4px 2px !important; min-height: 28px !important;
+    max-width: 118px; font-size: 12.5px; color: var(--text-2);
+}
+.time-item select[data-schedanchor]:hover { color: var(--text); }
 
 /* ================================================
    All-meds overview card
@@ -1333,3 +1527,103 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 /* live stats strip on med cards */
 .mc-live { margin-bottom: 10px; }
 .mc-live > div > div:last-child { font-size: 12px; }
+
+/* ------------------------------------------------
+   Missed-slot catch-up
+   ------------------------------------------------ */
+.cu-list { margin-top: 12px; max-height: 46vh; overflow-y: auto; }
+.cu-day { margin-bottom: 14px; }
+.cu-day-head {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 0 0 6px; border-bottom: 1px solid var(--border);
+    font-size: 12.5px; color: var(--text-2);
+}
+.cu-day-head .link { margin-left: auto; font-size: 11.5px; }
+.cu-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 2px; border-bottom: 1px solid var(--border);
+    cursor: pointer; font-size: 13.5px;
+}
+.cu-row:last-child { border-bottom: none; }
+.cu-row:hover { background: var(--surface-2); }
+.cu-row input[type="checkbox"] {
+    width: 16px; height: 16px; margin: 0; accent-color: var(--accent);
+    cursor: pointer; flex: none;
+}
+.cu-time { color: var(--text); }
+/* the dose sits right, so a column of them is scannable */
+.cu-dose { margin-left: auto; font-family: var(--font-mono); font-size: 12.5px; color: var(--text-2); }
+
+/* ── Pain tracking ─────────────────────────────────────────────────────────
+   The DVPRS bands use the card's own colours (mild green 1-4, moderate yellow
+   5-6, severe red 7-10). The card itself is shown as an unaltered image. */
+.dvprs-card { width: 100%; max-width: 560px; height: auto; display: block; margin: 4px 0 10px; border-radius: 8px; background: #fff; }
+.pain-levels { display: grid; gap: 6px; }
+.pain-levels.nrs { grid-template-columns: repeat(11, minmax(0, 1fr)); }
+.pain-levels.dvprs { grid-template-columns: 1fr; }
+.pain-level {
+    display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 6px 10px;
+    background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 8px;
+    color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.pain-levels.nrs .pain-level { justify-content: center; padding: 6px 0; }
+.pain-level .pl-num { font-weight: 700; min-width: 1.6em; text-align: center; }
+.pain-level .pl-words { font-size: 13px; color: var(--text-2); }
+.pain-level.band-mild { border-left: 4px solid #3aa655; }
+.pain-level.band-moderate { border-left: 4px solid #f2cc0c; }
+.pain-level.band-severe { border-left: 4px solid #d93a2b; }
+.pain-level.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.pain-level.active .pl-words { color: var(--accent-ink); }
+.pain-anchors { display: flex; justify-content: space-between; gap: 12px; margin-top: 4px; font-size: 12px; color: var(--text-3); }
+.pain-src { margin-top: 6px; }
+.pain-src a { color: var(--accent); }
+.pain-pick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pain-pick select { flex: 1 1 140px; }
+.pain-more { margin-top: 6px; }
+.pain-more > summary { cursor: pointer; color: var(--text-2); padding: 6px 0; }
+.pain-score { font-weight: 700; }
+.pain-score.band-mild { color: #3aa655; }
+.pain-score.band-moderate { color: #c9a800; }
+.pain-score.band-severe { color: #d93a2b; }
+.order-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.order-row { display: flex; align-items: center; gap: 8px; }
+.order-row .order-name { flex: 1; }
+@media (max-width: 420px) {
+    .pain-levels.nrs { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+.pain-followup .pf-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border); }
+.pain-followup .pf-row:first-of-type { border-top: 0; }
+.pain-followup .pf-text { flex: 1; min-width: 0; }
+.mc-help { margin: 8px 0; display: flex; flex-direction: column; gap: 4px; }
+.mc-help .mh-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; font-size: 13px; }
+
+/* The dialog takes focus so screen readers announce it; no ring around the whole sheet. */
+.modal:focus { outline: none; }
+
+/* The add/edit med form, in four groups. */
+.form-group { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
+.form-group:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.fg-title { font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); margin-bottom: 10px; }
+details.fg-advanced > summary { cursor: pointer; list-style: revert; }
+details.fg-advanced > summary .dim-sm { text-transform: none; letter-spacing: 0; }
+
+/* Pain over time */
+.pain-chart { width: 100%; height: auto; display: block; margin-top: 8px; }
+.pain-chart .pc-band { opacity: 0.12; }
+.pain-chart .pc-mild { fill: #3aa655; }
+.pain-chart .pc-moderate { fill: #f2cc0c; }
+.pain-chart .pc-severe { fill: #d93a2b; }
+.pain-chart .pc-grid { stroke: var(--border); stroke-width: 1; }
+.pain-chart .pc-axis { fill: var(--text-3); font-size: 10px; }
+.pain-chart .pc-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.pain-chart .pc-dot { fill: var(--bg); stroke: var(--accent); stroke-width: 2; }
+.pain-chart .pc-dose { stroke: var(--text-2); stroke-width: 2.5; }
+
+/* Touch screens: nothing tappable smaller than about a fingertip. A mouse keeps the
+   compact sizes. */
+@media (pointer: coarse) {
+    .chip { min-height: 36px; }
+    .chip.sm { min-height: 32px; }
+    .range-tabs button { min-height: 32px; min-width: 36px; }
+    .icon-btn, .tbl-actions button { min-width: 36px; min-height: 36px; }
+}

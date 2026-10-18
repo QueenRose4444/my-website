@@ -4,7 +4,7 @@
 (function () {
     'use strict';
     const D = window.MedData;
-    const { Icons, $, escapeHtml, confirmModal, toast } = window.UI;
+    const { Icons, $, $$, escapeHtml, confirmModal, toast } = window.UI;
 
     const ACCENTS = {
         teal: { color: '#5fc8c8', soft: 'rgba(95,200,200,0.14)', line: 'rgba(95,200,200,0.35)', ink: '#0c2226' },
@@ -37,8 +37,12 @@
         },
 
         render() {
+            // With medications switched off, their pages leave the nav and cannot be shown.
+            const medsOn = !window.Store || window.Store.state.settings.medsTrackingEnabled !== false;
+            $$('[data-page="meds"], [data-page="calendar"]').forEach(b => { b.style.display = medsOn ? '' : 'none'; });
+            if (!medsOn && (this.page === 'meds' || this.page === 'calendar')) this.page = 'dashboard';
             // nav active states
-            document.querySelectorAll('[data-page]').forEach(b =>
+            $$('[data-page]').forEach(b =>
                 b.classList.toggle('active', b.dataset.page === this.page));
             const main = $('#appMain');
             const V = window.Views;
@@ -84,7 +88,10 @@
         const M = window.Modals;
 
         document.body.addEventListener('click', async e => {
-            const el = e.target.closest('[data-action]');
+            // `closest` is typed as returning Element; every [data-action] in this app
+            // is a button or a div, and the handler reads `dataset` off it.
+            const el = /** @type {HTMLElement} */ (
+                /** @type {HTMLElement} */ (e.target).closest('[data-action]'));
             if (!el) return;
             const act = el.dataset.action;
             const id = el.dataset.id;
@@ -108,24 +115,47 @@
                 case 'dash-all':
                     S().update(s => { s.settings.dashAll = true; });
                     break;
-                case 'log-shot-for':
+                case 'log-entry-for':
                     S().update(s => { s.activeMedId = id; }, { silent: true });
-                    M.logShot();
+                    M.logDose();
                     break;
                 case 'add-med': M.addMed(); break;
-                case 'add-pens': M.addPens(); break;
-                case 'add-pens-for': {
+                case 'add-containers': M.addContainers(); break;
+                case 'add-containers-for': {
                     const med = S().state.meds.find(m => m.id === id);
-                    if (med) M.addPens(med);
+                    if (med) M.addContainers(med);
                     break;
                 }
                 case 'dismiss-banner':
                     V.local.bannerDismissed = true;
                     App.render();
                     break;
-                case 'log-shot': M.logShot(); break;
+                case 'log-entry': M.logDose(); break;
                 case 'log-weight': M.logWeight(); break;
                 case 'bmi-info': M.bmiInfo(); break;
+                case 'substance-info': M.substanceInfo(el.dataset.sub, id); break;
+                case 'reconcile-med': M.reconcileMed(id); break;
+                case 'remind-allowed': {
+                    const st = S().state;
+                    const med = st.meds.find(m => m.id === id);
+                    if (!med) break;
+                    if (med.remindAt > Date.now()) {
+                        S().remindWhenAllowed(id, null);
+                        window.UI.toast('Reminder cancelled');
+                        break;
+                    }
+                    const allowed = window.MedData.nextAllowedDose(
+                        med, S().medDoses(id), st.meds, st.shots);
+                    if (!allowed) { window.UI.toast('You can take one now'); break; }
+                    S().remindWhenAllowed(id, allowed.at);
+                    // The schedule is pushed from local state, so it has to be
+                    // RE-SENT — otherwise the reminder exists on this device and
+                    // nowhere the server could ever fire it from.
+                    if (window.Push && window.Push.reschedule) window.Push.reschedule();
+                    window.UI.toast('You will be reminded at '
+                        + window.MedData.fmtTime(allowed.at, st.settings));
+                    break;
+                }
                 case 'toggle-next-dose-pick':
                     V.local.pickingNextDose = !V.local.pickingNextDose;
                     App.render();
@@ -146,7 +176,20 @@
                     S().update(s => { s.settings.medRange = el.dataset.range; });
                     break;
                 case 'med-scope':
-                    S().update(s => { s.settings.medLevelScope = id; });
+                    // ONE rule, so there is no mode to get stuck in: a substance
+                    // chip TOGGLES that substance; any other scope chip clears the
+                    // substance selection and puts the chart back on products.
+                    if (String(id).startsWith('sub:')) {
+                        const sid = String(id).slice(4);
+                        S().update(s => {
+                            const cur = (s.settings.medSubstances || []).slice();
+                            const i = cur.indexOf(sid);
+                            if (i >= 0) cur.splice(i, 1); else cur.push(sid);
+                            s.settings.medSubstances = cur;
+                        });
+                        break;
+                    }
+                    S().update(s => { s.settings.medSubstances = []; s.settings.medLevelScope = id; });
                     break;
                 case 'med-height':
                     S().update(s => { s.settings.medChartHeight = el.dataset.val; });
@@ -168,7 +211,7 @@
                     });
                     break;
                 case 'cal-day':
-                    M.logShot(null, { date: el.dataset.date });
+                    M.logDose(null, { date: el.dataset.date });
                     break;
                 case 'goto-calendar':
                     App.setPage('calendar');
@@ -187,14 +230,45 @@
                     V.local.historyPage = 0;
                     App.render();
                     break;
-                case 'edit-shot': {
-                    const shot = S().state.shots.find(x => x.id === id);
-                    if (shot) M.logShot(shot);
+                case 'edit-entry': {
+                    const entry = S().state.shots.find(x => x.id === id);
+                    if (entry) M.logDose(entry);
                     break;
                 }
-                case 'delete-shot': {
+                case 'delete-entry': {
                     if (await confirmModal('Delete this dose?', { danger: true, yesLabel: 'Delete' }))
-                        S().update(s => { s.shots = s.shots.filter(x => x.id !== id); });
+                        S().deleteDose(id);
+                    break;
+                }
+                case 'pain-followup': {
+                    const f = window.Pain.followUps(S().state, Date.now(), window.MedData.medPeakHours, [])
+                        .find(x => x.dose.id === id);
+                    if (f) M.logPain(null, f);
+                    break;
+                }
+                case 'pain-followup-skip':
+                    window.Pain.dismissFollowUp(id);
+                    App.render();
+                    break;
+                case 'pain-range':
+                    V.local.painRange = Number(el.dataset.range) || 30;
+                    App.render();
+                    break;
+                case 'pain-area':
+                    V.local.painArea = el.dataset.id || null;
+                    App.render();
+                    break;
+                case 'log-pain':
+                    M.logPain();
+                    break;
+                case 'edit-pain': {
+                    const p = (S().state.pains || []).find(x => x.id === id);
+                    if (p) (p.kind === 'checkin' ? M.painCheckin : M.logPain)(p);
+                    break;
+                }
+                case 'delete-pain': {
+                    if (await confirmModal('Delete this pain entry?', { danger: true, yesLabel: 'Delete' }))
+                        S().deletePain(id);
                     break;
                 }
                 case 'edit-weight': {
@@ -204,54 +278,43 @@
                 }
                 case 'delete-weight': {
                     if (await confirmModal('Delete this weight entry?', { danger: true, yesLabel: 'Delete' }))
-                        S().update(s => { s.weights = s.weights.filter(x => x.id !== id); });
+                        S().deleteWeight(id);
                     break;
                 }
-                case 'edit-pen':
+                case 'edit-container':
                     M.editPen(id);
                     break;
-                case 'clear-pens': {
+                case 'clear-containers': {
                     const med = S().state.meds.find(m => m.id === id);
                     if (!med) break;
                     const n = S().state.pens.filter(p => p.medId === id).length;
                     if (!n) break;
                     if (await confirmModal(`Clear ${med.name}'s entire supply history — all ${n} ${D.containerPlural(med, n)}? Logged doses stay, they just lose their ${D.containerName(med)} assignment. Use this to start supply tracking over after a mistake.`, { danger: true, yesLabel: 'Clear supply' })) {
-                        S().update(s => {
-                            const ids = new Set(s.pens.filter(p => p.medId === id).map(p => p.id));
-                            s.pens = s.pens.filter(p => p.medId !== id);
-                            s.shots.forEach(x => { if (ids.has(x.penId)) x.penId = null; });
-                        });
+                        S().clearSupplyFor(id);
                         if (S().flushToServer) S().flushToServer();
                         toast(`${med.name}: supply history cleared`);
                     }
                     break;
                 }
-                case 'delete-pen': {
-                    const pen = S().state.pens.find(p => p.id === id);
-                    const penMed = pen && S().state.meds.find(m => m.id === pen.medId);
+                case 'delete-container': {
+                    const container = S().state.pens.find(p => p.id === id);
+                    const penMed = container && S().state.meds.find(m => m.id === container.medId);
                     const cn = penMed ? D.containerName(penMed) : 'container';
                     if (await confirmModal(`Delete this ${cn}? Doses assigned to it stay logged but become unassigned.`, { danger: true, yesLabel: `Delete ${cn}` }))
-                        S().update(s => {
-                            s.pens = s.pens.filter(p => p.id !== id);
-                            s.shots.forEach(x => { if (x.penId === id) x.penId = null; });
-                        });
+                        S().deleteContainer(id);
                     break;
                 }
                 case 'clear-estimated': {
                     const count = S().state.shots.filter(x => x.estimated).length;
                     if (await confirmModal(`Remove all ${count} estimated doses (and their estimated supply)?`, { danger: true, yesLabel: 'Remove estimated' }))
-                        S().update(s => {
-                            const estPenIds = new Set(s.pens.filter(p => p.note === 'estimated').map(p => p.id));
-                            s.shots = s.shots.filter(x => !x.estimated);
-                            s.pens = s.pens.filter(p => !estPenIds.has(p.id));
-                        });
+                        S().clearEstimated();
                     break;
                 }
-                case 'toggle-pens':
+                case 'toggle-containers':
                     V.local.expandedMedId = V.local.expandedMedId === id ? null : id;
                     App.render();
                     break;
-                case 'toggle-pen-group': {
+                case 'toggle-container-group': {
                     const key = el.dataset.key;
                     const cur = V.local.penGroups[key] != null
                         ? V.local.penGroups[key] : el.dataset.open === 'true';
@@ -259,7 +322,7 @@
                     App.render();
                     break;
                 }
-                case 'infer-pens': {
+                case 'infer-containers': {
                     const med = S().state.meds.find(m => m.id === id);
                     if (!med) break;
                     const orphans = S().state.shots.filter(x => x.medId === id && !x.penId);
@@ -267,16 +330,17 @@
                     const icn = D.containerName(med);
                     const unitWord = med.type === 'pill' ? 'tablet' : 'dose';
                     if (await confirmModal(`Build ${icn} history from ${orphans.length} dose${orphans.length === 1 ? '' : 's'} without an assigned ${icn}? Each ${icn} holds ${med.penCapacity} ${unitWord}${med.penCapacity === 1 ? '' : 's'}.`, { yesLabel: `Build ${D.containerPlural(med, 2)}` }))
-                        S().update(s => {
-                            const { pens, assignment } = D.inferPensFromShots(orphans, med);
-                            s.shots.forEach(x => { if (assignment[x.id]) x.penId = assignment[x.id]; });
-                            s.pens = s.pens.concat(pens);
-                        });
+                        S().buildContainersFromDoses(med);
                     break;
                 }
                 case 'backfill-med': {
                     const med = S().state.meds.find(m => m.id === id);
                     if (med) M.backfill(med);
+                    break;
+                }
+                case 'catch-up': {
+                    const med = S().state.meds.find(m => m.id === id);
+                    if (med) M.catchUp(med);
                     break;
                 }
                 case 'dev-clear-med': {
@@ -288,12 +352,7 @@
                     const nPens = S().state.pens.filter(p => p.medId === id).length;
                     if (!(await confirmModal(`DEV: wipe ${med.name}'s ${nShots} logged dose${nShots === 1 ? '' : 's'} and ${nPens} supply item${nPens === 1 ? '' : 's'}? The med itself stays. Your server copy updates too.`, { danger: true, yesLabel: 'Wipe history + supply' }))) break;
                     if (!(await confirmModal(`Really sure? ${med.name}'s history is deleted permanently — this is the WIP test button, not for real data.`, { danger: true, yesLabel: 'Yes, wipe it' }))) break;
-                    S().update(s => {
-                        s.shots = s.shots.filter(x => x.medId !== id);
-                        s.pens = s.pens.filter(p => p.medId !== id);
-                        const m2 = s.meds.find(x => x.id === id);
-                        if (m2) m2.preferredNextDose = null;
-                    });
+                    S().wipeMedHistory(id);
                     if (S().flushToServer) S().flushToServer();
                     toast(`${med.name}: history + supply cleared (dev)`);
                     break;
@@ -303,38 +362,52 @@
                     if (med) M.addMed(med);
                     break;
                 }
+                case 'stop-med': {
+                    const med = S().state.meds.find(m => m.id === id);
+                    if (!med) break;
+                    if (await confirmModal(`Stop taking ${med.name}? It stays on your charts — including the tail as it clears your system — and keeps every logged dose. You just stop getting reminders and a next dose.`, { yesLabel: 'Stop taking it' })) {
+                        S().stopMed(id);
+                        toast(`${med.name}: stopped. History and chart kept.`);
+                    }
+                    break;
+                }
+                case 'resume-med': {
+                    const med = S().state.meds.find(m => m.id === id);
+                    if (!med) break;
+                    S().resumeMed(id);
+                    toast(`${med.name}: taking it again`);
+                    break;
+                }
                 case 'trash-med': {
                     const med = S().state.meds.find(m => m.id === id);
                     if (!med) break;
-                    if (await confirmModal(`Move ${med.name} to trash? Its history is kept and it can be restored.`, { yesLabel: 'Move to trash' }))
-                        S().update(s => {
-                            s.meds = s.meds.filter(m => m.id !== id);
-                            s.trashedMeds.unshift(Object.assign({}, med, { trashedAt: Date.now() }));
-                            if (s.activeMedId === id) s.activeMedId = s.meds[0] ? s.meds[0].id : null;
-                        });
+                    // Offer the gentler option first. Trashing a med you merely stopped taking
+                    // is the mistake this whole task exists to prevent — it pulls the med out
+                    // of `meds`, and its decay tail off the chart with it.
+                    if (!med.stoppedAt) {
+                        const choice = await confirmModal(`Move ${med.name} to trash? Its history is kept and it can be restored — but it comes off your charts.\n\nIf you have simply stopped taking it, "Stop taking" keeps it charted, tail and all.`,
+                            { yesLabel: 'Move to trash', danger: true, altLabel: 'Stop taking instead' });
+                        if (choice === 'alt') {
+                            S().stopMed(id);
+                            toast(`${med.name}: stopped. History and chart kept.`);
+                            break;
+                        }
+                        if (!choice) break;
+                    } else if (!(await confirmModal(`Move ${med.name} to trash? Its history is kept and it can be restored.`, { yesLabel: 'Move to trash' }))) {
+                        break;
+                    }
+                    S().trashMed(id);
                     break;
                 }
                 case 'restore-med':
-                    S().update(s => {
-                        const i = s.trashedMeds.findIndex(m => m.id === id);
-                        if (i >= 0) {
-                            const med = s.trashedMeds.splice(i, 1)[0];
-                            delete med.trashedAt;
-                            s.meds.push(med);
-                            if (!s.activeMedId) s.activeMedId = med.id;
-                        }
-                    });
+                    S().restoreMed(id);
                     break;
                 case 'delete-med-forever': {
                     const med = S().state.trashedMeds.find(m => m.id === id);
                     if (!med) break;
                     const n = S().state.shots.filter(x => x.medId === id).length;
                     if (await confirmModal(`Permanently delete ${med.name} and its ${n} logged dose${n === 1 ? '' : 's'}? This cannot be undone.`, { danger: true, yesLabel: 'Delete forever' }))
-                        S().update(s => {
-                            s.trashedMeds = s.trashedMeds.filter(m => m.id !== id);
-                            s.shots = s.shots.filter(x => x.medId !== id);
-                            s.pens = s.pens.filter(p => p.medId !== id);
-                        });
+                        S().deleteMedForever(id);
                     break;
                 }
             }
@@ -342,7 +415,8 @@
 
         // exact y-axis step box on the med-level chart
         document.body.addEventListener('change', e => {
-            const inp = e.target.closest('[data-ystep]');
+            const inp = /** @type {HTMLInputElement} */ (
+                /** @type {HTMLElement} */ (e.target).closest('[data-ystep]'));
             if (!inp) return;
             const v = parseFloat(inp.value);
             S().update(s => {
@@ -352,7 +426,7 @@
         });
 
         // page nav
-        document.querySelectorAll('[data-page]').forEach(b =>
+        $$('[data-page]').forEach(b =>
             b.addEventListener('click', () => App.setPage(b.dataset.page)));
 
         // topbar buttons
@@ -388,7 +462,8 @@
 
     window.addEventListener('auth:login', () => { handleAuthed(); });
     window.addEventListener('auth:logout', e => {
-        if (e.detail && e.detail.message) toast(e.detail.message);
+        const detail = /** @type {CustomEvent} */ (e).detail;
+        if (detail && detail.message) toast(detail.message);
         window.Store.syncStatus = 'local';
         App.render();
     });
@@ -408,7 +483,9 @@
         App.applyTheme();
         bindActions();
         // every repo link in static HTML follows the one URL in data.js
-        document.querySelectorAll('[data-repo-link]').forEach(a => { a.href = D.REPO_URL; });
+        $$('[data-repo-link]').forEach(a => {
+            /** @type {HTMLAnchorElement} */ (a).href = D.REPO_URL;
+        });
         App.render();
 
         if (window.Store.auth.isLoggedIn()) {
@@ -437,11 +514,10 @@
     }
 
     // flush pending server writes when leaving the page
-    // A beforeunload flush used to live here. It was already dead — it guarded on `S._serverDirty`,
-    // which no longer exists — and reviving it as written would have been worse than leaving it out:
-    // it POSTed the whole state straight to the data endpoint, bypassing the operation log entirely.
+    // There is deliberately no beforeunload flush here: one that POSTed the whole state straight to
+    // the data endpoint would bypass the operation log entirely.
     // That is the wholesale overwrite the op log exists to prevent, and on a shared account it would
-    // have resurrected another device's deleted rows. If unload-time flushing is ever wanted, it has
+    // resurrect another device's deleted rows. If unload-time flushing is ever wanted, it has
     // to go through the sync client so it ships operations, not a snapshot.
 
     window.App = App;

@@ -1731,6 +1731,11 @@
       return 'conflict';
     }
 
+    // Nothing on either side: the account was read and there is simply nothing to
+    // sync yet. That is "synced", not "local" — someone who has just signed in on a
+    // new device would otherwise read it as sync not working. No base is written,
+    // because there is no state to base the next change on.
+    this._setStatus('synced');
     return 'none';
   };
 

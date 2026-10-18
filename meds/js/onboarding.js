@@ -31,6 +31,7 @@
             customLater: false,
             historyMode: null,       // 'new' | 'estimate' | 'skip'
             trackWeight: true,
+            trackPain: false,
             currentW: '', startW: '', startWDate: '', goalW: '', maintain: false,
             unit: S.state.settings.weightUnit || 'kg',
         };
@@ -62,8 +63,8 @@
                         <label>What should we call you? (optional)</label>
                         <input id="obName" value="${escapeHtml(ctx.name)}" placeholder="Your name or nickname" autocomplete="nickname">
                     </div>
-                    ${!window.Store.isLoggedIn() ? `<div class="pen-hint">Already have an account? <button class="link" id="obLogin">Log in</button> and your data syncs straight onto this device — no setup needed. New here but want sync? <button class="link" id="obRegister">Register</button></div>` : ''}
-                    ${v1Local ? `<div class="pen-hint">${Icons.refresh} We found <strong>${v1Local.shotHistory.length} doses</strong> and <strong>${v1Local.weightHistory.length} weights</strong> from the old meds page on this device — you can import them in the next step.</div>` : ''}`;
+                    ${!window.Store.isLoggedIn() ? `<div class="container-hint">Already have an account? <button class="link" id="obLogin">Log in</button> and your data syncs straight onto this device — no setup needed. New here but want sync? <button class="link" id="obRegister">Register</button></div>` : ''}
+                    ${v1Local ? `<div class="container-hint">${Icons.refresh} We found <strong>${v1Local.shotHistory.length} doses</strong> and <strong>${v1Local.weightHistory.length} weights</strong> from the old meds page on this device — you can import them in the next step.</div>` : ''}`;
             }
 
             if (step === 'import') {
@@ -156,7 +157,7 @@
                 }
                 const u = ctx.unit;
                 body = `
-                    ${ctx.prefill ? `<div class="pen-hint" style="margin-bottom:14px">${Icons.check} Pre-filled from your imported data — tweak anything that looks off.</div>` : ''}
+                    ${ctx.prefill ? `<div class="container-hint" style="margin-bottom:14px">${Icons.check} Pre-filled from your imported data — tweak anything that looks off.</div>` : ''}
                     <div class="chip-grp" style="margin-bottom:14px" id="obTrackW">
                         <button class="chip ${ctx.trackWeight ? 'active' : ''}" data-tw="yes">Yes, track weight</button>
                         <button class="chip ${!ctx.trackWeight ? 'active' : ''}" data-tw="no">Not for me</button>
@@ -176,6 +177,13 @@
                         <div class="field"><label>Goal weight (optional)</label>
                             <input type="number" step="0.1" id="obGoalW" value="${ctx.goalW}" ${ctx.maintain ? 'disabled' : ''} inputmode="decimal"></div>
                         <button class="link no-ml" id="obMaintain">${ctx.maintain ? '✓ ' : ''}No goal — maintaining my weight</button>
+                    </div>
+                    <div class="field" style="margin-top:18px"><label>Track pain too?</label>
+                        <div class="chip-grp" id="obTrackP">
+                            <button class="chip ${ctx.trackPain ? 'active' : ''}" data-tp="yes">Yes, track pain</button>
+                            <button class="chip ${!ctx.trackPain ? 'active' : ''}" data-tp="no">Not now</button>
+                        </div>
+                        <div class="dim-sm">Where it hurts and how much, and whether a pain medicine helped. You can switch it on later in Settings.</div>
                     </div>`;
                 nextLabel = 'Get started';
             }
@@ -236,11 +244,11 @@
                             const c = ctx.importedFile.kind === 'v2'
                                 ? { s: ctx.importedFile.state.shots.length, w: ctx.importedFile.state.weights.length }
                                 : { s: ctx.importedFile.payload.shotHistory.length, w: ctx.importedFile.payload.weightHistory.length };
-                            overlay.querySelector('#obFileInfo').innerHTML = `<div class="pen-hint">${Icons.check} ${c.s} doses · ${c.w} weights ready to import</div>`;
+                            overlay.querySelector('#obFileInfo').innerHTML = `<div class="container-hint">${Icons.check} ${c.s} doses · ${c.w} weights ready to import</div>`;
                             overlay.querySelector('#obNext').disabled = false;
                         } catch (err) {
                             ctx.importedFile = null;
-                            overlay.querySelector('#obFileInfo').innerHTML = `<div class="pen-hint warn">${Icons.alert} ${escapeHtml(err.message)}</div>`;
+                            overlay.querySelector('#obFileInfo').innerHTML = `<div class="container-hint warn">${Icons.alert} ${escapeHtml(err.message)}</div>`;
                         }
                     };
                     r.readAsText(f);
@@ -275,6 +283,13 @@
                     if (g('#obStartWDate')) ctx.startWDate = g('#obStartWDate').value;
                     if (g('#obGoalW')) ctx.goalW = g('#obGoalW').value;
                 };
+                overlay.querySelector('#obTrackP').addEventListener('click', e => {
+                    const b = e.target.closest('[data-tp]');
+                    if (!b) return;
+                    captureTyped();
+                    ctx.trackPain = b.dataset.tp === 'yes';
+                    render();
+                });
                 overlay.querySelector('#obTrackW').addEventListener('click', e => {
                     const b = e.target.closest('[data-tw]');
                     if (!b) return;
@@ -317,8 +332,8 @@
             }
             if (payload) {
                 const ws = (payload.weightHistory || []).slice()
-                    .filter(x => !isNaN(new Date(x.dateTime)) && !isNaN(parseFloat(x.weightKg)))
-                    .sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+                    .filter(x => !isNaN(new Date(x.dateTime).getTime()) && !isNaN(parseFloat(x.weightKg)))
+                    .sort((a, b) => +new Date(a.dateTime) - +new Date(b.dateTime));
                 const us = payload.userSettings || {};
                 return {
                     unit: us.weightUnit === 'lb' ? 'lbs' : (us.weightUnit || null),
@@ -372,6 +387,7 @@
                 if (ctx.name) s.user.name = ctx.name;
                 s.settings.onboardedAt = Date.now();
                 s.settings.weightTrackingEnabled = ctx.trackWeight;
+                s.settings.painTrackingEnabled = !!ctx.trackPain;
                 if (ctx.trackWeight) {
                     s.settings.weightUnit = ctx.unit;
                     const curKg = toKg(ctx.currentW);

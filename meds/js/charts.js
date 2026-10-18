@@ -6,6 +6,8 @@
 (function () {
     'use strict';
     const D = window.MedData;
+    // SVG <text> carries user-authored strings (a med name, a formatted clock);
+    // ui.js owns the escaping so there is exactly one implementation of it.
     const escapeHtml = s => window.UI.escapeHtml(s);
     // A med's name, unit and colour are the user's own text — and an imported backup can
     // carry anything at all — so none of them reaches markup unescaped. A colour goes
@@ -61,23 +63,66 @@
     // default days projected past "now", scaled to the chosen range
     const AUTO_PROJ = { w: 2, '14': 4, m: 7, '3m': 21, '6m': 45, y: 90, all: 30 };
 
-    // opts: { series: [{ med, shots }], range, projection, graphStep, settings }
-    // (or legacy single { med, shots }). One line per med; round axis steps.
+    /**
+     * One plottable line, whatever it came from.
+     *
+     * A MED series is `{med, doseLog}` and is normalised here. A GENERIC series already
+     * carries `level(ts)` and is passed straight through — that is how one
+     * substance fed by two different products is drawn, without this file ever learning what a
+     * substance is.
+     */
+    function normSeries(sr) {
+        if (!sr) return null;
+        if (typeof sr.level === 'function') {
+            return Object.assign({ doses: [], critTimes: [], modelled: true, unit: '' }, sr);
+        }
+        const med = sr.med, doseLog = sr.doseLog || [];
+        if (!med || !doseLog.length) return null;
+        // The peak is a SOLVED quantity under the Bateman model, not the med's stored
+        // timeToPeak — they agree for a preset-derived med and do not for one that
+        // inherited its numbers from a substance.
+        const ttpMs = D.peakOffsetDays(med) * 86400000;
+        const critTimes = [];
+        for (const s of doseLog) {
+            if (ttpMs > 0) critTimes.push(s.timestamp, s.timestamp + ttpMs);
+            else critTimes.push(s.timestamp - 1000, s.timestamp);
+        }
+        return {
+            key: med.id, name: med.name, unit: med.unit, baseColor: med.color,
+            modelled: D.hasPharmacokinetics(med),
+            doses: doseLog, critTimes,
+            level: ts => D.medLevelAt(doseLog, med, ts),
+            // The threshold fields are attached by the caller, which knows about substances.
+            // They are copied across explicitly because this builds a NEW object —
+            // the same trap getScheduleSlots had, where an anchor set on the
+            // input silently vanished downstream while still looking right upstream.
+            threshold: sr.threshold, crossingTs: sr.crossingTs, thresholdNote: sr.thresholdNote,
+            med,
+        };
+    }
+
+    // opts: { series: [{ med, doseLog } | { name, unit, level(ts), doses, critTimes }],
+    //         range, projection, graphStep, settings }
+    // (or legacy single { med, doseLog }). One line per med; round axis steps.
     function medLevel(wrap, opts) {
         const render = () => {
             clearChart(wrap);
             const settings = opts.settings;
-            const candidates = (opts.series || (opts.med ? [{ med: opts.med, shots: opts.shots || [] }] : []))
-                .filter(sr => sr.med && sr.shots && sr.shots.length);
+            // A series is either a MED (the common case, normalised below) or something
+            // that already knows how to answer "how much at time t" — which is how a
+            // substance fed by several products is plotted. Everything past this point
+            // deals only in the normalised shape, so the chart has no idea which it is.
+            const candidates = (opts.series || (opts.med ? [{ med: opts.med, doseLog: opts.doseLog || [] }] : []))
+                .map(normSeries).filter(sr => sr && sr.doses.length);
             // A med with no half-life cannot be modelled, so it is left off the chart entirely
             // rather than drawn from a guessed constant. Say how many, so the gap is explained.
-            const series = candidates.filter(sr => D.hasPharmacokinetics(sr.med));
-            const unmodelled = candidates.filter(sr => !D.hasPharmacokinetics(sr.med));
+            const series = candidates.filter(sr => sr.modelled);
+            const unmodelled = candidates.filter(sr => !sr.modelled);
             if (!series.length) {
                 if (unmodelled.length) {
                     emptyState(wrap, 'No half-life recorded',
                         unmodelled.length === 1
-                            ? `Add a half-life for ${unmodelled[0].med.name} to estimate its level`
+                            ? `Add a half-life for ${unmodelled[0].name} to estimate its level`
                             : 'These meds have no half-life recorded, so their levels cannot be estimated');
                 } else {
                     emptyState(wrap, 'No doses yet', 'Log a dose to see your estimated level');
@@ -85,7 +130,7 @@
                 watchResize(wrap, render);
                 return;
             }
-            const allShots = series.reduce((a, sr) => a.concat(sr.shots), []);
+            const allShots = series.reduce((a, sr) => a.concat(sr.doses), []);
 
             // range key ('w','14','m','3m','6m','y','all') or a number of days
             let range = opts.range || 'm';
@@ -122,18 +167,16 @@
                 const samples = [];
                 for (let i = 0; i <= sampleCount; i++) {
                     const ts = startTs + (i / sampleCount) * totalMs;
-                    samples.push({ ts, level: D.medLevelAt(sr.shots, sr.med, ts) });
+                    samples.push({ ts, level: sr.level(ts) });
                 }
-                const ttpMs = (sr.med.timeToPeak || 0) * 86400000;
-                for (const s of sr.shots) {
-                    const crit = ttpMs > 0 ? [s.timestamp, s.timestamp + ttpMs] : [s.timestamp - 1000, s.timestamp];
-                    for (const ts of crit) {
-                        if (ts >= startTs && ts <= endTs) samples.push({ ts, level: D.medLevelAt(sr.shots, sr.med, ts) });
-                    }
+                // Extra exact samples where the curve turns, so a peak that falls
+                // between two evenly-spaced samples is not simply stepped over.
+                for (const ts of sr.critTimes) {
+                    if (ts >= startTs && ts <= endTs) samples.push({ ts, level: sr.level(ts) });
                 }
                 samples.sort((a, b) => a.ts - b.ts);
                 sr.samples = samples;
-                sr.color = series.length === 1 ? 'var(--accent)' : safeColor(sr.med.color);
+                sr.color = series.length === 1 ? 'var(--accent)' : safeColor(sr.baseColor);
             });
 
             // y axis: round steps (1/2/2.5/5×10ⁿ). Density chips pick how many
@@ -173,28 +216,79 @@
             }
 
             let seriesHtml = '', defsHtml = '', markerHtml = '';
+            // `threshold` is the level below which the curve is estimated to be
+            // detectable but no longer doing anything. Only a single scoped series can
+            // carry one — two meds in different units share no horizontal line.
+            const threshold = (series.length === 1 && series[0].threshold > 0
+                && series[0].threshold < yTop) ? series[0].threshold : null;
             series.forEach((sr, si) => {
                 const pathD = sr.samples.map((s, i) => `${i === 0 ? 'M' : 'L'} ${x(s.ts).toFixed(1)} ${y(s.level).toFixed(2)}`).join(' ');
                 if (series.length === 1) {
-                    defsHtml += `<linearGradient id="ml-grad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="${sr.color}" stop-opacity="0.32"/>
-                        <stop offset="100%" stop-color="${sr.color}" stop-opacity="0"/>
-                    </linearGradient>`;
-                    seriesHtml += `<path d="${pathD} L ${x(endTs).toFixed(1)} ${(PAD.t + innerH).toFixed(1)} L ${x(startTs).toFixed(1)} ${(PAD.t + innerH).toFixed(1)} Z" fill="url(#ml-grad)"/>`;
+                    const areaD = `${pathD} L ${x(endTs).toFixed(1)} ${(PAD.t + innerH).toFixed(1)} L ${x(startTs).toFixed(1)} ${(PAD.t + innerH).toFixed(1)} Z`;
+                    if (threshold == null) {
+                        defsHtml += `<linearGradient id="ml-grad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="${sr.color}" stop-opacity="0.32"/>
+                            <stop offset="100%" stop-color="${sr.color}" stop-opacity="0"/>
+                        </linearGradient>`;
+                        seriesHtml += `<path d="${areaD}" fill="url(#ml-grad)"/>`;
+                    } else {
+                        // One area path, drawn twice through two clips: solid above the
+                        // line (estimated to be working), hatched below it (estimated
+                        // detectable, not necessarily effective). Never hue alone —
+                        // the fill PATTERN is the distinction, so it survives both
+                        // colour-blindness and a greyscale print.
+                        const yT = y(threshold);
+                        defsHtml += `<linearGradient id="ml-grad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="${sr.color}" stop-opacity="0.34"/>
+                                <stop offset="100%" stop-color="${sr.color}" stop-opacity="0.18"/>
+                            </linearGradient>
+                            <pattern id="ml-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                                <line x1="0" y1="0" x2="0" y2="6" stroke="${sr.color}" stroke-width="1.4" stroke-opacity="0.45"/>
+                            </pattern>
+                            <clipPath id="ml-clip-hi"><rect x="${PAD.l}" y="${PAD.t}" width="${innerW}" height="${Math.max(0, yT - PAD.t)}"/></clipPath>
+                            <clipPath id="ml-clip-lo"><rect x="${PAD.l}" y="${yT}" width="${innerW}" height="${Math.max(0, PAD.t + innerH - yT)}"/></clipPath>`;
+                        seriesHtml += `<path d="${areaD}" fill="url(#ml-hatch)" clip-path="url(#ml-clip-lo)"/>
+                            <path d="${areaD}" fill="url(#ml-grad)" clip-path="url(#ml-clip-hi)"/>
+                            <line x1="${PAD.l}" x2="${w - PAD.r}" y1="${yT}" y2="${yT}"
+                                stroke="${sr.color}" stroke-width="1" stroke-dasharray="5 4" opacity="0.85"/>`;
+                    }
                 }
                 seriesHtml += `<path d="${pathD}" fill="none" stroke="${sr.color}" stroke-width="2" stroke-linejoin="round"/>`;
                 if (opts.showDots !== false) {
-                    sr.shots.filter(s => s.timestamp >= startTs && s.timestamp <= now).forEach(s => {
-                        const lvl = D.medLevelAt(sr.shots, sr.med, s.timestamp);
+                    sr.doses.filter(s => s.timestamp >= startTs && s.timestamp <= now).forEach(s => {
+                        const lvl = sr.level(s.timestamp);
                         markerHtml += `<line x1="${x(s.timestamp)}" x2="${x(s.timestamp)}" y1="${PAD.t + innerH}" y2="${y(lvl)}" stroke="${sr.color}" stroke-width="1" stroke-dasharray="1 2" opacity="0.5"/>
                             <circle cx="${x(s.timestamp)}" cy="${PAD.t + innerH - 2}" r="3" fill="${s.estimated ? 'var(--surface)' : sr.color}" stroke="${sr.color}" stroke-width="1.5"/>`;
                     });
                 }
             });
 
+            // "…wears off around 4:10 PM". The one number on this chart a person can
+            // act on, so it is drawn at the crossing rather than left to be read off.
+            if (threshold != null && series[0].crossingTs
+                && series[0].crossingTs >= startTs && series[0].crossingTs <= endTs) {
+                const cx = x(series[0].crossingTs), cy = y(threshold);
+                const label = D.fmtTime(series[0].crossingTs, settings);
+                const anchorEnd = cx > w - PAD.r - 70;
+                markerHtml += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.5"
+                        fill="var(--bg)" stroke="${series[0].color}" stroke-width="2"/>
+                    <text x="${(anchorEnd ? cx - 8 : cx + 8).toFixed(1)}" y="${(cy - 8).toFixed(1)}"
+                        text-anchor="${anchorEnd ? 'end' : 'start'}" font-size="${tickFont}"
+                        fill="var(--text-2)" font-family="var(--font-mono)">${escapeHtml(label)}</text>`;
+            }
+
             // legend only when comparing meds
             const legendHtml = series.length > 1
-                ? `<div class="ml-legend">${series.map(sr => `<span><span class="ml-dot" style="background:${sr.color}"></span>${escapeHtml(sr.med.name)}</span>`).join('')}</div>`
+                ? `<div class="ml-legend">${series.map(sr => `<span><span class="ml-dot" style="background:${sr.color}"></span>${escapeHtml(sr.name)}</span>`).join('')}</div>`
+                : threshold != null
+                // In words, not by swatch alone. "Shaded" and "hatched" mean nothing
+                // to someone who cannot tell the two fills apart at a glance, and the
+                // difference between them is the whole claim the chart is making.
+                ? `<div class="ml-legend ml-legend-band">
+                        <span><span class="ml-swatch solid"></span>estimated to be working</span>
+                        <span><span class="ml-swatch hatch"></span>estimated detectable, not necessarily effective</span>
+                        ${series[0].thresholdNote ? `<span class="dim-sm">${escapeHtml(series[0].thresholdNote)}</span>` : ''}
+                    </div>`
                 : '';
 
             wrap.innerHTML = `
@@ -229,9 +323,14 @@
                     const s = sr.samples[best];
                     hvDots[si].setAttribute('cx', x(s.ts)); hvDots[si].setAttribute('cy', y(s.level));
                     if (s.level > topLevel) topLevel = s.level;
+                    // Three decimals would read as a measurement. These are estimates
+                    // from a model, and several of the half-lives behind them carry no
+                    // citation at all.
+                    const amt = D.fmtAmount(s.level) + ' ' + escapeHtml(sr.unit);
+                    const extra = sr.breakdown ? sr.breakdown(s.ts) : '';
                     return series.length === 1
-                        ? `<div class="t-val">${s.level.toFixed(3)} ${escapeHtml(sr.med.unit)}</div>`
-                        : `<div class="t-val"><span class="ml-dot" style="background:${sr.color}"></span>${escapeHtml(sr.med.name)}: ${s.level.toFixed(3)} ${escapeHtml(sr.med.unit)}</div>`;
+                        ? `<div class="t-val">${amt}</div>${extra}`
+                        : `<div class="t-val"><span class="ml-dot" style="background:${sr.color}"></span>${escapeHtml(sr.name)}: ${amt}</div>`;
                 });
                 tip.style.display = '';
                 tip.innerHTML = `<div class="t-label">${D.fmtDate(ts, settings)} · ${D.fmtTime(ts, settings)}</div>${rows.join('')}`;
