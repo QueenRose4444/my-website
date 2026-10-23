@@ -13,7 +13,7 @@
 
     <title>MumblePop Privacy Policy - Voice to Text for Android</title>
     <meta name="description"
-        content="MumblePop has no accounts, no servers and no analytics. Your audio goes to Google using your own API key; everything else stays on your phone." />
+        content="MumblePop has no accounts and no analytics. Your speech goes to Google using your own API key; the developer only receives a bug report or feature request if you choose to send one." />
     <meta name="theme-color" content="#08090b" />
     <link rel="canonical" href="https://rosestuffs.org/apps/mumblepop/privacy-policy/" />
 
@@ -115,7 +115,7 @@
 <body>
     <main class="wrap">
         <h1>MumblePop Privacy Policy</h1>
-        <p class="updated">Last updated: 2 September 2026</p>
+        <p class="updated">Last updated: 23 October 2026</p>
 
         <p class="lede">
             MumblePop is a dictation app. You speak, and it types what you said into
@@ -124,30 +124,128 @@
 
         <div class="callout">
             <p style="margin:0">
-                MumblePop has no accounts, no servers of its own, and no analytics.
-                There is nothing to sign up for. The developer cannot see your
-                recordings, your transcripts, or how you use the app, because none of
-                it is ever sent to the developer.
+                MumblePop has no accounts and no analytics, and it never sends the
+                developer anything on its own. Your speech goes to Google, using
+                your own API key. The only thing that can reach the developer is a
+                bug report or feature request that <strong>you</strong> choose to
+                send &mdash; see below.
             </p>
         </div>
 
         <h2>What leaves your phone</h2>
         <p>
-            <strong>Your audio recordings, and only when you ask.</strong> When you
-            finish a recording, that audio is sent to Google's Gemini API to be turned
-            into text, using an API key that you supply. It goes to Google, not to us.
-            Google's handling of it is covered by their terms:
+            <strong>1. Your speech, and the text made from it, go to Google.</strong>
+            When you dictate, MumblePop sends your audio to Google's Gemini API to be
+            turned into text, using an API key that you supply. It goes to Google, not
+            to the developer. Depending on the setting, the audio is streamed while
+            you are still speaking, or sent as a short clip when you stop. In more
+            detail:
+        </p>
+        <ul>
+            <li>
+                <strong>The audio</strong> of each dictation.
+            </li>
+            <li>
+                <strong>Your custom vocabulary</strong> (the list of names and words
+                you have added), sent along with the audio so the recogniser spells
+                them correctly.
+            </li>
+            <li>
+                <strong>The text of what you said</strong>, sent a second time when a
+                style or filter needs tidying (for example Email or List). That text
+                goes to a smaller Gemini model, as text only, to be cleaned up.
+            </li>
+            <li>
+                <strong>Your name, if you have entered one</strong>, included in the
+                instructions for the Email style so the message can be signed off. It
+                is not sent for other styles.
+            </li>
+        </ul>
+        <p>
+            Your <strong>fixed spellings</strong> (the &ldquo;always write X as Y&rdquo;
+            list) are applied on your phone after the text comes back. They are never
+            sent anywhere.
+        </p>
+        <p>
+            Google's handling of what you send is covered by their terms:
         </p>
         <ul>
             <li><a href="https://ai.google.dev/gemini-api/terms" rel="noopener">Gemini API Additional Terms of Service</a></li>
             <li><a href="https://policies.google.com/privacy" rel="noopener">Google Privacy Policy</a></li>
         </ul>
+        <div class="callout">
+            <p style="margin:0">
+                <strong>Free keys and human reviewers.</strong> If your API key is on
+                Google's free tier, Google's terms say they may use what you send to
+                improve their products, and that <em>human reviewers may read your
+                input and output</em>. Google's own instruction for the free tier is
+                not to submit sensitive, confidential or personal information. In
+                practice: <strong>on a free key, do not dictate anything you would not
+                want a stranger to read</strong> &mdash; passwords, bank or medical
+                details, other people's private information. Keys on a paid tier are
+                excluded from this by Google's terms. That distinction is Google's, not
+                the developer's, and it applies to every app that uses your key.
+            </p>
+        </div>
+
         <p>
-            If you use a free-tier Google API key, note that Google's terms allow them
-            to use free-tier content to improve their products. If that matters to you,
-            use a paid-tier key, where Google states that content is not used for
-            improvement. This is Google's distinction, not ours, and it applies to any
-            app that uses your key.
+            <strong>2. Bug reports and feature requests, only if you send one.</strong>
+            MumblePop has a Report screen where you can describe a problem or suggest
+            something. Nothing is sent unless you tap Send, and every extra is a
+            separate tick box that starts <strong>off</strong>. A report always
+            contains what you typed (the description, plus a title if you add one),
+            the report type, and the app version. Each of these is added only if you
+            choose it:
+        </p>
+        <ul>
+            <li>A <strong>contact</strong> (a Discord name or an email address) if you want a reply, and whether replies are okay.</li>
+            <li><strong>Device details</strong>: manufacturer, model, Android version, language and screen size.</li>
+            <li><strong>Permission and setup status</strong>: which of the permissions below are on (yes or no), and whether the bubble is turned on.</li>
+            <li><strong>Your settings</strong>, never including your API key.</li>
+            <li><strong>The app you were typing in</strong> (its package name, such as com.discord).</li>
+            <li>
+                <strong>The app's recent log</strong>, a few minutes of MumblePop's own
+                log with keys removed, and <strong>recent errors</strong> (time, model
+                and error message).
+            </li>
+            <li>
+                <strong>Up to ten dictations you pick from your history</strong>: the
+                text that was typed, the text the model first heard, your note about
+                it, and the model and style used. For each one you can also choose to
+                attach its <strong>audio recording</strong>. These are your own words,
+                so only attach ones you are happy for the developer to read and hear.
+            </li>
+            <li>One <strong>screenshot</strong> that you pick yourself.</li>
+        </ul>
+        <p>
+            Every report also carries a random number that the app made when it was
+            installed. It is not linked to your name, your Google account or your
+            phone, and it exists so the developer can limit how many reports one
+            install can send in a day. Like any website request, the server
+            necessarily sees the IP address the report came from; it is used only for
+            that same daily limit.
+        </p>
+        <p>
+            <strong>Where it goes:</strong> a server run by the developer
+            (mumblepop-reports.rosestuffs.org), over an encrypted connection. It is not
+            Google and it is not a third-party service. <strong>Who reads it:</strong>
+            only the developer. Reports are never shared, sold, or used for
+            advertising, and are not used to train anything. <strong>How long:</strong>
+            each report is deleted automatically after 90 days, sooner if the
+            developer finishes with it. The developer is told when a report arrives by
+            a private message on Discord that includes the title, type and version but not the full
+            report.
+        </p>
+        <p>
+            <strong>If you would rather not send it to the server,</strong> the Report
+            screen can instead save the report as a zip file on your phone. You can
+            read what is in it, and then send it however you like, or not at all.
+        </p>
+        <p>
+            <strong>To have a report deleted</strong> before the 90 days are up, email
+            the address under Contact with the report number the app showed you after
+            sending (it looks like MP-0042). If you have lost the number, say roughly
+            when you sent it and what it was about.
         </p>
         <p>
             Nothing else is transmitted anywhere. There is no telemetry, no crash
@@ -157,14 +255,19 @@
         <h2>What stays on your phone</h2>
         <ul>
             <li><strong>Your API key</strong>, in the app's private storage.</li>
-            <li><strong>Your transcripts</strong>, in a private database on the device.</li>
+            <li><strong>Your history</strong> &mdash; transcripts, with the model and style used &mdash; in a private database on the device.</li>
             <li>
                 <strong>Your audio recordings</strong>, in the app's own media folder so
                 that you can find and play them yourself. You control how long they are
                 kept and how much space they may use, and you can turn off keeping them
                 entirely.
             </li>
-            <li><strong>Your settings</strong>, including any custom vocabulary you add.</li>
+            <li>
+                <strong>Your settings</strong>, including your name, your fixed
+                spellings and your custom vocabulary. (The vocabulary and, for Email,
+                your name are also sent to Google, as described above; the fixed
+                spellings are not.)
+            </li>
             <li>
                 <strong>Usage counts</strong>, so the app can show how much of your daily
                 allowance is left. These are counted locally because Google provides no
@@ -174,9 +277,10 @@
         <p>You can delete any of it from inside the app, and all of it by uninstalling.</p>
         <div class="callout">
             <p style="margin:0">
-                <strong>Except what you export.</strong> When you tap Export, the app
+                <strong>Except what you export or save.</strong> When you tap Export, the app
                 writes your transcripts as plain readable text and JSON into its own
-                media folder <em>and</em> into your Downloads folder. That copy is
+                media folder <em>and</em> into your Downloads folder. A report saved as
+                a file is also an ordinary file you can see and share. That copy is
                 deliberate &mdash; it is what lets you move to a new phone, and unlike
                 everything else it survives uninstalling the app &mdash; but it is a
                 normal file any app with storage access can read. Delete it when you
@@ -235,6 +339,10 @@
                 </thead>
                 <tbody>
                     <tr>
+                        <td>Internet</td>
+                        <td>To reach Google's Gemini API, and, only when you send one, the report server described above.</td>
+                    </tr>
+                    <tr>
                         <td>Microphone</td>
                         <td>To record what you say. Nothing is recorded until you start a recording.</td>
                     </tr>
@@ -245,6 +353,14 @@
                     <tr>
                         <td>Notifications</td>
                         <td>Android requires a visible notification while an app records in the background.</td>
+                    </tr>
+                    <tr>
+                        <td>Run while recording</td>
+                        <td>A microphone foreground service, so a recording is not cut off when you switch apps. It shows the notification above while it runs.</td>
+                    </tr>
+                    <tr>
+                        <td>Start at boot</td>
+                        <td>Only so the bubble comes back after you restart the phone. It does nothing if you have turned the bubble off.</td>
                     </tr>
                     <tr>
                         <td>Usage access <em>(optional)</em></td>
@@ -262,7 +378,9 @@
         <h2>Children</h2>
         <p>
             MumblePop is not directed at children. It requires a Google AI Studio API
-            key, which Google does not issue to children.
+            key, which Google does not issue to children, and the Gemini API terms
+            require users to be 18 or over. Please do not send a report if you are
+            under 18.
         </p>
 
         <h2>Changes</h2>
