@@ -13,7 +13,7 @@
 
     <title>MumblePop Privacy Policy - Voice to Text for Android</title>
     <meta name="description"
-        content="MumblePop has no accounts and no analytics. Your speech goes to Google using your own API key; the developer only receives a bug report or feature request if you choose to send one." />
+        content="MumblePop has no accounts and no analytics. Your speech goes to Google using your own API key; the developer only receives a bug report, feature request or debug data if you choose to send it." />
     <meta name="theme-color" content="#08090b" />
     <link rel="canonical" href="https://rosestuffs.org/apps/mumblepop/privacy-policy/" />
 
@@ -115,7 +115,7 @@
 <body>
     <main class="wrap">
         <h1>MumblePop Privacy Policy</h1>
-        <p class="updated">Last updated: 23 October 2026</p>
+        <p class="updated">Last updated: 1 November 2026</p>
 
         <p class="lede">
             MumblePop is a dictation app. You speak, and it types what you said into
@@ -126,9 +126,9 @@
             <p style="margin:0">
                 MumblePop has no accounts and no analytics, and it never sends the
                 developer anything on its own. Your speech goes to Google, using
-                your own API key. The only thing that can reach the developer is a
-                bug report or feature request that <strong>you</strong> choose to
-                send &mdash; see below.
+                your own API key. The only things that can reach the developer are a
+                bug report, a feature request, or a copy of your debug data, and
+                only when <strong>you</strong> choose to send one &mdash; see below.
             </p>
         </div>
 
@@ -209,11 +209,16 @@
                 and error message).
             </li>
             <li>
-                <strong>Up to ten dictations you pick from your history</strong>: the
-                text that was typed, the text the model first heard, your note about
-                it, and the model and style used. For each one you can also choose to
-                attach its <strong>audio recording</strong>. These are your own words,
-                so only attach ones you are happy for the developer to read and hear.
+                <strong>The end of the debug log</strong> (the most recent part, up to
+                500 KB), described under &ldquo;What stays on your phone&rdquo;.
+            </li>
+            <li>
+                <strong>Dictations you pick from your history</strong>, a day or a week
+                at a time: the text that was typed, the text the model first heard,
+                your note about it, and the model and style used. You can also choose
+                to attach their <strong>audio recordings</strong>, up to 30 per report.
+                These are your own words, so only attach ones you are happy for the
+                developer to read and hear.
             </li>
             <li>One <strong>screenshot</strong> that you pick yourself.</li>
         </ul>
@@ -248,8 +253,38 @@
             when you sent it and what it was about.
         </p>
         <p>
-            Nothing else is transmitted anywhere. There is no telemetry, no crash
-            reporting, no advertising, and no third-party SDK that phones home.
+            <strong>3. &ldquo;Max debug data&rdquo;, only if you send it.</strong>
+            A report is about one problem. Max debug data is for when you want to help
+            the developer improve the app with <em>everything</em>: it sends all of
+            your MumblePop data from the period you pick (all of it, the last 30 days,
+            or the last 7 days). Nothing is sent until you tap Send on that screen,
+            which lists all of this first:
+        </p>
+        <ul>
+            <li><strong>Your history</strong>: every transcript, the text the model first heard, and the model, style, filters and timings used.</li>
+            <li><strong>Your audio recordings</strong>, including ones that failed to transcribe. You can switch recordings off before sending.</li>
+            <li><strong>Recent errors</strong> (time, model and error message).</li>
+            <li><strong>Your settings</strong> (never your API key), <strong>device details</strong> and <strong>permission status</strong>, as in a report.</li>
+            <li><strong>The whole debug log</strong> and the app's recent log, with keys removed.</li>
+            <li>A note, if you write one.</li>
+        </ul>
+        <p>
+            It goes to the same developer-run server as reports, over an encrypted
+            connection, with the same install number and the same use of your IP
+            address (daily limits only). <strong>Who reads it:</strong> only the
+            developer, to find and fix problems and to test changes against real
+            dictations. It is never shared, sold, used for advertising, or given to
+            anyone to train a model. <strong>How long:</strong> unlike reports, it
+            is kept until the developer deletes it, because comparing a fix against
+            the same recordings is the point. <strong>To have it deleted</strong>
+            at any time, email the address under Contact with the number the app
+            showed you after sending (it looks like DUMP-0007).
+        </p>
+        <p>
+            Nothing else is transmitted anywhere. There is no telemetry, no automatic
+            crash reporting (a crash is written to the on-phone debug log and goes
+            nowhere unless you send it), no advertising, and no third-party SDK that
+            phones home.
         </p>
 
         <h2>What stays on your phone</h2>
@@ -272,6 +307,18 @@
                 <strong>Usage counts</strong>, so the app can show how much of your daily
                 allowance is left. These are counted locally because Google provides no
                 way to read them back.
+            </li>
+            <li>
+                <strong>A debug log</strong>, in the app's private storage, so a problem
+                can be traced after it happens. It records events, not words: when
+                the accessibility service connects or drops, whether the bubble
+                appeared in a text box and if not why, the name of the app you were
+                typing in (such as com.discord), how long each step of a dictation
+                took, which model answered, errors, and the app version. It never
+                contains what you said, what you typed, or your API key. It keeps 30
+                days by default (you can choose 14 to 90 days and a size limit), and
+                you can view it, clear it or turn it off in Settings. It only leaves
+                your phone inside a report or Max debug data that you send.
             </li>
         </ul>
         <p>You can delete any of it from inside the app, and all of it by uninstalling.</p>
@@ -317,8 +364,11 @@
             It does see the name of the app you are currently typing in &mdash; the
             package name of the focused field, in every app, not only some. It has to:
             that is how it knows whether you have told it to stay away from this app,
-            and which style or filters you have set for it. The name is used on the
-            spot and, like the field's contents, is never stored or transmitted.
+            and which style or filters you have set for it. Unlike the field's
+            contents, the app's name is written to the on-phone debug log described
+            above (unless you turn the log off), so a problem in one app can be
+            traced. It only leaves your phone if you send a report with the debug log
+            or Max debug data.
         </p>
         <p>
             In apps you have told it to ignore, the bubble never appears and nothing is
