@@ -115,7 +115,7 @@
 <body>
     <main class="wrap">
         <h1>MumblePop Privacy Policy</h1>
-        <p class="updated">Last updated: 1 November 2026</p>
+        <p class="updated">Last updated: 7 November 2026</p>
 
         <p class="lede">
             MumblePop is a dictation app. You speak, and it types what you said into
@@ -143,17 +143,33 @@
         </p>
         <ul>
             <li>
-                <strong>The audio</strong> of each dictation.
+                <strong>The audio</strong> of each dictation. In the &ldquo;Tidy + filler
+                words&rdquo; mode the same audio is sent twice at once, once to be tidied
+                and once word for word, so your filler words can be put back on the phone.
+                If a transcript comes back with part of what you said missing, the app may
+                send that same recording again to repair it.
             </li>
             <li>
-                <strong>Your custom vocabulary</strong> (the list of names and words
-                you have added), sent along with the audio so the recogniser spells
-                them correctly.
+                <strong>The sound of files you choose to transcribe.</strong> When you
+                pick an audio or video file, or share one to MumblePop, its sound is
+                sent to Google in parts. A video's picture is never sent: the sound is
+                taken out on your phone first, and converted there if needed.
+            </li>
+            <li>
+                <strong>A saved recording, or a few seconds of it,</strong> when you
+                ask for a transcript again, for missing words in one spot, or for
+                timecodes and speakers.
+            </li>
+            <li>
+                <strong>Your custom vocabulary</strong> (the words from your word lists
+                that are switched on for the app you are typing in), sent along with
+                the audio so the recogniser spells them correctly.
             </li>
             <li>
                 <strong>The text of what you said</strong>, sent a second time when a
-                style or filter needs tidying (for example Email or List). That text
-                goes to a smaller Gemini model, as text only, to be cleaned up.
+                style or your own filter needs tidying (for example Email or List), or
+                when you ask for a transcript that combines the reading text with
+                timecodes. That text goes to a smaller Gemini model, as text only.
             </li>
             <li>
                 <strong>Your name, if you have entered one</strong>, included in the
@@ -162,9 +178,9 @@
             </li>
         </ul>
         <p>
-            Your <strong>fixed spellings</strong> (the &ldquo;always write X as Y&rdquo;
-            list) are applied on your phone after the text comes back. They are never
-            sent anywhere.
+            Your <strong>spelling lists</strong> (the &ldquo;always write X as Y&rdquo;
+            lists, including British spelling) are applied on your phone after the
+            text comes back. They are never sent anywhere.
         </p>
         <p>
             Google's handling of what you send is covered by their terms:
@@ -290,7 +306,7 @@
         <h2>What stays on your phone</h2>
         <ul>
             <li><strong>Your API key</strong>, in the app's private storage.</li>
-            <li><strong>Your history</strong> &mdash; transcripts, with the model and style used &mdash; in a private database on the device.</li>
+            <li><strong>Your history</strong> &mdash; transcripts, with the model and style used, and the live preview that was shown while you spoke &mdash; in a private database on the device. The preview is kept so a transcript with missing words can be checked and repaired; it is deleted with its transcript, and it travels in a history export, a report or Max debug data like the rest of the transcript.</li>
             <li>
                 <strong>Your audio recordings</strong>, in the app's own media folder so
                 that you can find and play them yourself. You control how long they are
@@ -331,7 +347,10 @@
                 deliberate &mdash; it is what lets you move to a new phone, and unlike
                 everything else it survives uninstalling the app &mdash; but it is a
                 normal file any app with storage access can read. Delete it when you
-                are done with it.
+                are done with it. The same goes for <strong>Export settings</strong>,
+                which writes your styles, lists and other choices to a file the same
+                way. Your API key is only in that file if you tick &ldquo;Include API
+                key&rdquo;; anyone holding a file with the key in it can use your key.
             </p>
         </div>
 
@@ -341,21 +360,46 @@
             Android to type into another app's text box without replacing your keyboard,
             and it is what makes the app work at all.
         </p>
-        <p>It is used for exactly two things:</p>
+        <p>It is used for exactly these things:</p>
         <ul>
             <li>
                 To know which text box currently has focus, so the bubble can appear
                 beside it and knows where to type.
             </li>
             <li>
-                To insert your transcript into that box, adding to what is already there
-                rather than overwriting it.
+                To insert your transcript into that box at your cursor, or over the
+                words you have selected, without overwriting the rest.
+            </li>
+            <li>
+                To see whether a keyboard is on screen. Only the <em>kind</em> of each
+                window is checked, never what is in it. Some apps hide their text box;
+                a keyboard on screen is the only sign that you are typing there, so the
+                bubble can still appear and put your words on the clipboard.
+            </li>
+            <li>
+                To offer a fix for a recent dictation, described below.
             </li>
         </ul>
         <p>
-            The service reads the contents of the focused field only so that it can
-            append rather than replace. That text is never stored, never included in
-            your transcript, and never transmitted anywhere.
+            The service reads the contents of the focused field, and where your cursor
+            is, only to place your words and to recognise a recent dictation. That text
+            is never stored, never included in your transcript, never written to the
+            debug log, and never transmitted anywhere.
+        </p>
+        <p>
+            <strong>Fixes in other apps.</strong> When &ldquo;Offer fixes in other
+            apps&rdquo; is on (it is on by default) and you have a dictation from the
+            last 24 hours (you can change this) whose recording is still on the phone,
+            the service reads the text and cursor position of the box you are typing in
+            when you move the cursor or select text there. It never does this in
+            password boxes, in apps you have told it to ignore, or in MumblePop itself.
+            It compares that text, on the phone, with your recent transcripts to tell
+            whether one of your dictations is there. The text is held in memory only
+            while the fix button is showing or a fix you asked for is being made. If
+            you tap a fix, MumblePop sends Google only the audio of your own recording
+            (a few seconds around that spot, or the whole recording to redo it), using
+            your own API key, and types the words that come back into the box, or puts
+            them on your clipboard if the app does not allow it.
         </p>
         <p>
             It does not read your screen generally and does not log what you type.
@@ -402,11 +446,15 @@
                     </tr>
                     <tr>
                         <td>Notifications</td>
-                        <td>Android requires a visible notification while an app records in the background.</td>
+                        <td>Android requires a visible notification while an app records in the background. Also used to tell you when a file you chose has finished converting or transcribing.</td>
                     </tr>
                     <tr>
                         <td>Run while recording</td>
                         <td>A microphone foreground service, so a recording is not cut off when you switch apps. It shows the notification above while it runs.</td>
+                    </tr>
+                    <tr>
+                        <td>Process a file in the background</td>
+                        <td>A data-sync (and, on Android 15 and later, media-processing) foreground service, so a file you chose keeps converting and transcribing when you leave the app. It runs only for a file you started, and shows a notification with a Stop button while it runs.</td>
                     </tr>
                     <tr>
                         <td>Start at boot</td>
