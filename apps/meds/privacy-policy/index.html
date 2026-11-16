@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <link rel="icon" type="image/png" href="/images/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/images/favicon.svg" />
+    <link rel="shortcut icon" href="/images/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="RoseStuffs" />
+    <link rel="manifest" href="/images/site.webmanifest" />
+
+    <title>Medication &amp; Weight Tracker Privacy Policy - RoseStuffs</title>
+    <meta name="description"
+        content="Without an account, the Medication &amp; Weight Tracker keeps everything in your browser. With one, your entries are stored on our server so your devices can share them. No advertising, no analytics." />
+    <meta name="theme-color" content="#08090b" />
+    <link rel="canonical" href="https://rosestuffs.org/apps/meds/privacy-policy/" />
+
+    <!--
+      Deliberately indexable. Every other one-off page on this site carries a
+      noindex, but a privacy policy is a public document by definition: a policy
+      nobody can find is not serving the purpose it exists for.
+    -->
+    <link rel="stylesheet" href="/shared/tokens.css" />
+    <style>
+        body {
+            margin: 0;
+            background: var(--bg, #08090b);
+            color: var(--text, #e7e9ee);
+            font-family: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+            line-height: 1.65;
+            -webkit-text-size-adjust: 100%;
+        }
+
+        .wrap {
+            /* ~68 characters of running text; anything wider is tiring to read. */
+            max-width: 46rem;
+            margin: 0 auto;
+            padding: 3rem 1.25rem 6rem;
+        }
+
+        a { color: var(--accent, #ff4f9a); }
+
+        h1 {
+            font-size: clamp(1.9rem, 5vw, 2.6rem);
+            line-height: 1.15;
+            margin: 0 0 .35rem;
+            text-wrap: balance;
+        }
+
+        h2 {
+            font-size: 1.2rem;
+            margin: 2.75rem 0 .5rem;
+            text-wrap: balance;
+        }
+
+        .updated {
+            color: var(--text-3, #8b909b);
+            font-size: .875rem;
+            margin: 0 0 2rem;
+        }
+
+        .lede {
+            font-size: 1.075rem;
+            color: var(--text-2, #aeb2bd);
+        }
+
+        .callout {
+            border-left: 3px solid var(--accent, #ff4f9a);
+            background: color-mix(in srgb, var(--accent, #ff4f9a) 8%, transparent);
+            padding: .85rem 1.1rem;
+            border-radius: 0 10px 10px 0;
+            margin: 1.5rem 0;
+        }
+
+        /* Wide content scrolls inside itself; the page body never does. */
+        .table-scroll { overflow-x: auto; }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            min-width: 30rem;
+            margin: .75rem 0;
+            font-size: .95rem;
+        }
+
+        th, td {
+            text-align: left;
+            padding: .6rem .75rem;
+            border-bottom: 1px solid var(--border, #2a2d35);
+            vertical-align: top;
+        }
+
+        th { color: var(--text-2, #aeb2bd); font-weight: 600; }
+
+        ul { padding-left: 1.15rem; }
+        li { margin: .3rem 0; }
+
+        footer {
+            margin-top: 3.5rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid var(--border, #2a2d35);
+            color: var(--text-3, #8b909b);
+            font-size: .875rem;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * { animation: none !important; transition: none !important; }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="wrap">
+        <h1>Medication &amp; Weight Tracker Privacy Policy</h1>
+        <p class="updated">Last updated: 16 November 2026</p>
+
+        <p class="lede">
+            The Medication &amp; Weight Tracker at
+            <a href="/meds/">rosestuffs.org/meds/</a> is a web app for recording the
+            medication you take, your weight and, if you switch it on, pain. It runs in
+            your browser. It is a personal project run by one developer, not a health
+            service.
+        </p>
+
+        <div class="callout">
+            <p style="margin:0">
+                Without an account, everything you enter stays in your browser and
+                none of it is sent to us. If you create an account, your entries are
+                stored on our server so that your devices can share them. They are
+                health information, and they are <strong>not</strong> end-to-end
+                encrypted: the developer is technically able to read them. There is
+                no advertising and no analytics script, and nothing you enter is sold
+                or passed to anyone else.
+            </p>
+        </div>
+
+        <h2>What leaves your device</h2>
+        <p>
+            <strong>1. Loading the page.</strong>
+            The site is hosted by Cloudflare. Like any web host, it receives your IP
+            address and your browser's details when a page loads, and it adds a small
+            script of its own that checks whether a visitor is an automated program.
+            The page's typefaces are loaded from Google Fonts, so Google receives your
+            IP address and the address of the page you are on, as with any web font.
+            Google receives nothing that you enter.
+        </p>
+        <p>
+            <strong>2. An account, if you make one.</strong>
+            An account is optional and is only a username and a password. This app
+            does not ask for an email address. That also means there is no way to
+            recover a forgotten password.
+        </p>
+        <ul>
+            <li>
+                Your password is not sent. Your browser turns it into a different
+                secret and sends that, and the server keeps only a salted hash of what
+                it receives. The one exception is an account made before this scheme
+                existed: it sends its password a single time, on the sign-in that
+                moves it over.
+            </li>
+            <li>
+                Sign-in and registration attempts are counted per username and per IP
+                address, so that guessing can be blocked. The server keeps that IP
+                address beside its counter.
+            </li>
+        </ul>
+        <p>
+            <strong>3. Your entries, if you are signed in.</strong>
+            Everything you record is sent to the sync service and stored under your
+            account: your medications, each dose and its time, injection sites, supply,
+            weights, pain entries, notes and settings. It travels over HTTPS and is
+            stored on Cloudflare's infrastructure in a form the developer could read.
+            A random id for each browser goes with it, so that changes made on two
+            devices can be told apart.
+        </p>
+        <p>
+            The service also keeps a history of your changes, at present without a
+            time limit, so that a mistake or a bad sync can be undone.
+            <strong>An entry you delete in the app is removed from your current data
+            but stays in that history on the server.</strong> The same is true of
+            &ldquo;Reset all data&rdquo;. To have the history erased, see
+            <a href="#deleting">Deleting your data</a>.
+        </p>
+        <p>
+            <strong>4. Reminders, if you switch notifications on.</strong>
+            Reminders need an account. When you switch them on:
+        </p>
+        <ul>
+            <li>
+                Your browser creates a push subscription, which is an address at the
+                push service run by your browser's maker (Google, Mozilla or Apple)
+                together with encryption keys. It is stored by our notifications
+                service until you switch notifications off.
+            </li>
+            <li>
+                The app uploads about the next week of reminders: the time of each one
+                and its text. The text includes the medication's name and the dose, and
+                the injection site if you track that. Reminders are replaced whenever
+                your schedule changes and are deleted a week after their time.
+            </li>
+            <li>
+                Each reminder is delivered through that push service, encrypted so
+                that the push service cannot read its text.
+            </li>
+            <li>
+                If you answer a reminder from the notification itself, for example by
+                asking to be reminded again, that answer is sent to the notifications
+                service so it can act on it.
+            </li>
+        </ul>
+        <p>
+            A reminder shows a medication's name on your screen. Depending on your
+            phone's settings that can include the lock screen, where someone else
+            may see it.
+        </p>
+        <p>
+            <strong>5. Links you open.</strong>
+            Medication information in the app links to public sources such as
+            official product information. Nothing is sent to those sites unless you
+            open a link.
+        </p>
+
+        <h2>What stays on your device</h2>
+        <ul>
+            <li>
+                <strong>Your entries and settings</strong>, in this site's browser
+                storage, along with your sign-in session if you have one. Without an
+                account this is the only copy.
+            </li>
+            <li>
+                <strong>Files you download.</strong> A backup file holds everything
+                you have recorded, and a spreadsheet holds the dates you chose. They
+                stay wherever you saved them, and the app cannot delete them.
+            </li>
+        </ul>
+        <p>
+            The app has no lock of its own. Anyone who can use your browser on your
+            device can open the page and read what is there.
+        </p>
+
+        <h2>Permissions</h2>
+        <ul>
+            <li>
+                <strong>Notifications</strong>, asked for only when you switch
+                reminders on.
+            </li>
+        </ul>
+        <p>
+            The app does not ask for your location, camera, microphone or contacts.
+        </p>
+
+        <h2>Third parties</h2>
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr><th>Who</th><th>What for</th><th>What they receive</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><a href="https://www.cloudflare.com/privacypolicy/" rel="noopener">Cloudflare</a></td>
+                        <td>Hosts the site, the sign-in, sync and notifications services and their databases</td>
+                        <td>Your IP address and browser details, and, if you have an account, the data described above, as our infrastructure provider</td>
+                    </tr>
+                    <tr>
+                        <td><a href="https://developers.google.com/fonts/faq/privacy" rel="noopener">Google Fonts</a></td>
+                        <td>Serves the typefaces</td>
+                        <td>Your IP address and the page address. Nothing you enter</td>
+                    </tr>
+                    <tr>
+                        <td>Your browser's push service (Google, Mozilla or Apple)</td>
+                        <td>Delivers reminders, only if you switch them on</td>
+                        <td>Encrypted reminders it cannot read, and when they are sent</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <p>
+            There are no advertisers and no analytics providers, and your data is not
+            sold or shared with anyone else.
+        </p>
+
+        <h2 id="deleting">Deleting your data</h2>
+        <ul>
+            <li>
+                <strong>On your device:</strong> Settings, then &ldquo;Reset all
+                data&rdquo;, or clear this site's data in your browser. Downloaded
+                files are yours to delete.
+            </li>
+            <li>
+                <strong>Reminders:</strong> switching notifications off removes this
+                browser's push subscription from our notifications service.
+            </li>
+            <li>
+                <strong>On our server:</strong> there is no delete-account button yet.
+                Write to the address below and give the username, and the account will
+                be deleted together with its entries, their history and any reminders.
+                You may be asked to show that the account is yours, for example by
+                changing something in it on request.
+            </li>
+        </ul>
+        <p>
+            Backup copies of the database that the developer keeps against data loss
+            can still hold deleted data until they are replaced by newer ones.
+        </p>
+
+        <h2>Children</h2>
+        <p>
+            The app is not directed at children, and it does not knowingly hold
+            information about them.
+        </p>
+
+        <h2>Changes</h2>
+        <p>
+            If this policy changes, the date at the top changes with it.
+        </p>
+
+        <h2>Contact</h2>
+        <p><a href="mailto:rosestuffs-support@pm.me">rosestuffs-support@pm.me</a></p>
+
+        <footer>
+            <a href="/meds/">Medication &amp; Weight Tracker</a> &middot;
+            <a href="/home/">rosestuffs.org</a>
+        </footer>
+    </main>
+</body>
+
+</html>
