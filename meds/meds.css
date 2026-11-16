@@ -310,6 +310,7 @@ button.link.no-ml { margin-left: 0; }
 .tabular-mono { font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
 .dim { color: var(--text-3); }
 .dim-sm { color: var(--text-3); font-size: 11.5px; font-family: var(--font-mono); }
+.dim-sm a { color: var(--accent); }
 .txt-accent { color: var(--accent); }
 .txt-success { color: var(--success); }
 .txt-danger { color: var(--danger); }
@@ -506,10 +507,38 @@ button.link.no-ml { margin-left: 0; }
 .range-tabs button { padding: 4px 9px; font-size: 11.5px; border-radius: 6px; color: var(--text-3); font-family: var(--font-mono); }
 .range-tabs button.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 0 var(--border); }
 
-.chart-wrap { width: 100%; height: 230px; position: relative; touch-action: pan-y; }
+/* --pan-h: height of the arrows that move a chart in time. charts.js reads it and
+   keeps that much room above the plot, so the two cannot drift apart. */
+.chart-wrap { width: 100%; height: 230px; position: relative; touch-action: pan-y; --pan-h: 26px; }
 .chart-wrap.tall { height: 260px; }
-@media (max-width: 640px) { .chart-wrap { height: 200px; } .chart-wrap.tall { height: 220px; } }
+@media (max-width: 640px) { .chart-wrap { height: 200px; --pan-h: 36px; } .chart-wrap.tall { height: 220px; } }
 .chart-wrap svg { width: 100%; height: 100%; display: block; }
+/* A chart that can be moved in time: drag it sideways (touch-action above leaves the
+   vertical swipe to the page), or use the arrows in its top right corner. */
+.chart-wrap.pannable { cursor: grab; user-select: none; -webkit-user-select: none; }
+.chart-wrap.panning { cursor: grabbing; }
+.chart-pan {
+    position: absolute; top: 0; right: 0; z-index: 5;
+    display: flex; align-items: center; gap: 2px;
+    padding: 2px; border-radius: 8px;
+    background: color-mix(in srgb, var(--surface-2) 88%, transparent);
+    border: 1px solid var(--border);
+}
+.chart-pan button {
+    display: flex; align-items: center; justify-content: center;
+    min-width: 24px; height: calc(var(--pan-h) - 6px); padding: 0 3px;
+    border-radius: 6px; color: var(--text-2); cursor: pointer;
+    font-family: var(--font-mono); font-size: 10.5px;
+}
+.chart-pan button svg { width: 14px; height: 14px; }
+.chart-pan button:hover:not(:disabled) { background: var(--surface); color: var(--text); }
+.chart-pan button:disabled { opacity: 0.35; cursor: default; }
+.chart-pan .pan-now { padding: 0 6px; color: var(--accent); }
+@media (max-width: 640px) {
+    .chart-pan button { min-width: 34px; }
+    .chart-pan button svg { width: 17px; height: 17px; }
+    .chart-pan .pan-now { font-size: 12px; }
+}
 
 .chart-tooltip {
     position: absolute;
@@ -639,7 +668,10 @@ button.link.no-ml { margin-left: 0; }
     flex-wrap: wrap;
 }
 .table-note svg { width: 13px; height: 13px; vertical-align: -2px; }
-.tbl { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 480px; }
+/* No minimum width: the cells do not wrap, so a table with more in it than the
+   screen holds still scrolls sideways, and one that fits is not stretched under
+   the pinned action column (a 480px minimum hid the dose on a phone). */
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .tbl th {
     text-align: left; font-weight: 500;
     font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
@@ -889,6 +921,7 @@ button.link.no-ml { margin-left: 0; }
     font-size: 12px; color: var(--text-3); text-decoration: none;
 }
 .drawer-foot a:hover { color: var(--text); }
+.drawer-foot a + a { margin-left: 16px; }
 .tbl .med-cell { white-space: nowrap; }
 .tbl .med-cell .ml-dot { margin-right: 6px; }
 .pen-group-head {
@@ -1246,12 +1279,13 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
     border-radius: var(--radius-lg);
     max-width: 480px;
     width: 100%;
+    --onb-pad-b: 28px;      /* the bottom padding; the button row below needs it too */
     padding: 28px;
     margin: auto;
     max-height: 90svh;
     overflow-y: auto;
 }
-@media (max-width: 640px) { .onb { padding: 22px 18px; } }
+@media (max-width: 640px) { .onb { --onb-pad-b: 22px; padding: 22px 18px; } }
 .onb-step { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; }
 .onb h1 { font-size: 23px; font-weight: 500; letter-spacing: -0.02em; margin-bottom: 8px; }
 .onb p { color: var(--text-2); margin-bottom: 20px; font-size: 13.5px; }
@@ -1261,6 +1295,13 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 .onb-foot {
     display: flex; justify-content: space-between; align-items: center;
     margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border);
+    /* Back and Continue stay in view while a step taller than the screen scrolls
+       behind them. A sticky row stops at the card's padding, where the step would
+       show through underneath: so the row reaches down over that padding (negative
+       bottom and margin) and carries the same padding itself. */
+    position: sticky; bottom: calc(-1 * var(--onb-pad-b)); z-index: 1;
+    background: var(--surface);
+    padding-bottom: var(--onb-pad-b); margin-bottom: calc(-1 * var(--onb-pad-b));
 }
 
 /* ================================================
@@ -1546,6 +1587,15 @@ input[type="date"], input[type="time"] { color-scheme: dark; }
 }
 .cu-row:last-child { border-bottom: none; }
 .cu-row:hover { background: var(--surface-2); }
+/* "Mark the unticked as skipped": the same row shape, set apart from the list. */
+.cu-skip-rest { margin-top: 12px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 10px; }
+.cu-skip-rest span { flex: 1; font-size: 13px; color: var(--text-2); }
+/* Skip on the next-dose card, and a skipped slot in History. */
+.next-dose .skip-row { margin: -6px 0 16px; font-size: 13px; }
+.tbl tr.skipped-row td { color: var(--text-3); }
+/* On a phone the pinned action column covers the right of the table: the word
+   has to fit beside it, so the amount that was due shows from 480px up. */
+@media (max-width: 479px) { .tbl tr.skipped-row .dim-sm { display: none; } }
 .cu-row input[type="checkbox"] {
     width: 16px; height: 16px; margin: 0; accent-color: var(--accent);
     cursor: pointer; flex: none;

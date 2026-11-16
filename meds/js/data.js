@@ -16,6 +16,9 @@
     // SINGLE source of truth for the project repo — every link in the app
     // (settings footer, site top bar via [data-repo-link]) reads this.
     const REPO_URL = 'https://github.com/QueenRose4444/my-website';
+    // The published privacy policy. A full address, because the page exists on the
+    // live site only: a relative link would miss on any other copy of the app.
+    const PRIVACY_URL = 'https://rosestuffs.org/apps/meds/privacy-policy/';
 
     const MED_PRESETS = [
         {
@@ -528,6 +531,54 @@
     // a preset and forgetting this line is a silent failure, so do both in one change.
     const CATEGORY_ORDER = ['GLP-1 & weight', 'Diabetes', 'ADHD', 'Pain', 'HRT — feminising', 'HRT — masculinising', 'Other'];
     MED_PRESETS.forEach(p => { if (!p.category) p.category = PRESET_CATEGORY_MAP[p.presetId] || 'Other'; });
+
+    // What a person is mainly here for: asked at first run, changeable in Settings
+    // (settings.quickMode, '' = none). A mode does two things and nothing else:
+    //   first   the preset groups listed first wherever a preset is picked
+    //   tracks  which tracking parts it uses. First run starts with exactly these
+    //           on; picking a mode later only switches parts ON (see applyQuickMode).
+    // A new mode is one more row here: the first-run step and the Settings chips
+    // are both drawn from this list.
+    const QUICK_MODES = [
+        { id: 'glp1', label: 'Weight loss (GLP-1)', short: 'Weight loss',
+          sub: 'Mounjaro, Ozempic, Wegovy and the like, with your weight beside them',
+          first: ['GLP-1 & weight', 'Diabetes'], tracks: { meds: true, weight: true, pain: false } },
+        { id: 'adhd', label: 'ADHD', short: 'ADHD',
+          sub: 'Vyvanse, Ritalin, Concerta and the like',
+          first: ['ADHD'], tracks: { meds: true, weight: false, pain: false } },
+        { id: 'pain', label: 'Pain management', short: 'Pain',
+          sub: 'Pain medicines, where it hurts, and whether a dose helped',
+          first: ['Pain'], tracks: { meds: true, weight: false, pain: true } },
+        { id: 'hrt', label: 'HRT', short: 'HRT',
+          sub: 'Estradiol, testosterone, blockers and the like',
+          first: ['HRT — feminising', 'HRT — masculinising'], tracks: { meds: true, weight: false, pain: false } },
+        { id: 'general', label: 'General meds', short: 'General',
+          sub: 'Paracetamol, ibuprofen and anything else you take',
+          // everyday medicines are in the Pain group; unlike the mode above, pain tracking stays off
+          first: ['Pain'], tracks: { meds: true, weight: false, pain: false } },
+    ];
+    /** The mode with this id, or null (also for '' and for an id a newer version wrote). */
+    const quickMode = id => QUICK_MODES.find(m => m.id === id) || null;
+    /** CATEGORY_ORDER with the mode's own groups moved to the front. Never drops one:
+     *  a group missing from the result would hide its presets (see the note above). */
+    function categoryOrderFor(modeId) {
+        const mode = quickMode(modeId);
+        if (!mode) return CATEGORY_ORDER.slice();
+        const first = mode.first.filter(c => CATEGORY_ORDER.includes(c));
+        return first.concat(CATEGORY_ORDER.filter(c => !first.includes(c)));
+    }
+    /** Choosing a mode for an account that may already hold data: remember it and
+     *  switch ON the parts it uses. Nothing is switched off, because a part that is
+     *  on may have a person's entries behind it. */
+    function applyQuickMode(settings, modeId) {
+        const mode = quickMode(modeId);
+        settings.quickMode = mode ? mode.id : '';
+        if (!mode) return settings;
+        if (mode.tracks.meds) settings.medsTrackingEnabled = true;
+        if (mode.tracks.weight) settings.weightTrackingEnabled = true;
+        if (mode.tracks.pain) settings.painTrackingEnabled = true;
+        return settings;
+    }
 
     // Mounjaro / Zepbound KwikPen click reference (60 clicks = full container-strength dose)
     // clicks needed for dose D from a container of strength S = 60 * D / S
@@ -1974,6 +2025,44 @@
      * @returns {Array<{date:string, time:string, anchor:string|null, dose:number|null, ts:number}>}
      *   oldest first. Empty for PRN, stopped, slotless or dose-less meds.
      */
+    /**
+     * A med's doses with its SKIPPED slots added as placeholders, for scheduling
+     * only: "when is the next dose" and "which slots were missed" must treat a
+     * skipped slot as answered, or the app keeps asking about a dose the person
+     * decided not to take. Nothing that measures what was actually taken (levels,
+     * supply, history, charts) may be given this list.
+     *
+     * A placeholder copies the dose and injection site of the real dose before it,
+     * so the next amount and the site rotation carry on from the last REAL dose. It
+     * is flagged `estimated` so schedule detection ignores it.
+     *
+     * @param {Dose[]} medDoses   this med's real doses (any order)
+     * @param {Skip[]} skips      every skip, any med
+     * @param {string} medId
+     * @returns {Dose[]} newest first; the same array when there is nothing to add
+     */
+    function withSkips(medDoses, skips, medId) {
+        const real = medDoses || [];
+        if (!real.length || !skips || !skips.length) return real;
+        const mine = skips.filter(k => k && k.medId === medId && Number(k.timestamp) > 0);
+        if (!mine.length) return real;
+        const asc = real.slice().sort((a, b) => a.timestamp - b.timestamp);
+        const out = real.slice();
+        for (const k of mine) {
+            const ts = Number(k.timestamp);
+            let prev = null;
+            for (const x of asc) { if (x.timestamp <= ts) prev = x; else break; }
+            if (!prev) continue; // before the first real dose there is no schedule yet
+            const dt = new Date(ts);
+            out.push({
+                id: 'skip:' + k.id, medId, timestamp: ts, date: ymd(dt), time: hm(dt),
+                dose: prev.dose, location: prev.location || null, penId: null,
+                skipped: true, estimated: true,
+            });
+        }
+        return out.sort((a, b) => b.timestamp - a.timestamp);
+    }
+
     function missedSlots(med, medDoses, opts) {
         opts = opts || {};
         const now = opts.now != null ? opts.now : Date.now();
@@ -2215,9 +2304,10 @@
      * @param {Dose[]} doseLog  every dose (any order)
      * @param {object} settings
      * @param {number} [now]
+     * @param {Skip[]} [skips]  skipped slots, so a skipped dose is not "due now"
      * @returns {Med[]} a new array
      */
-    function orderMedsForPicker(meds, doseLog, settings, now) {
+    function orderMedsForPicker(meds, doseLog, settings, now, skips) {
         const t = now || Date.now();
         const mode = (settings && settings.medPickerOrder) || 'smart';
         const list = (meds || []).slice();
@@ -2242,7 +2332,7 @@
         };
         // Due now = predicted within the next hour, or already late.
         const dueAt = (m) => {
-            const nd = predictNextDose(m, byMed.get(m.id), settings || {});
+            const nd = predictNextDose(m, withSkips(byMed.get(m.id), skips, m.id), settings || {});
             if (!nd) return null;
             const ts = new Date(nd.date).getTime();
             return ts <= t + 3600000 ? ts : null;
@@ -2290,7 +2380,7 @@
     }
 
     window.MedData = {
-        REPO_URL,
+        REPO_URL, PRIVACY_URL,
         MED_PRESETS, DEFAULT_LOCATIONS, MONTHS, DAYS,
         ymd, hm, addDays, daysBetween,
         fmtDate, fmtDateShort, fmtTime, fmtTimeStr, dayLabel,
@@ -2306,8 +2396,9 @@
         isPRN, freqOf, orderMedsForPicker, medPeakHours,
         inferContainersFromDoses, estimateBackfillDoses, predictNextDose,
         detectSchedule, lateDoseStatus, niceStep, DAY_NAMES,
-        SCHEDULE_ANCHORS, anchorLabel, slotLabel, missedSlots,
+        SCHEDULE_ANCHORS, anchorLabel, slotLabel, missedSlots, withSkips,
         fmtDur, fmtFreq, fmtAmount, fmtDoseUnit, isCountableUnit, CATEGORY_ORDER, getScheduleSlots,
+        QUICK_MODES, quickMode, categoryOrderFor, applyQuickMode,
         RECONCILABLE, presetDiff,
         containerName, containerPlural, levelExtremes, fmtDoseCount, doseBreakdown,
     };

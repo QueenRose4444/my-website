@@ -170,6 +170,8 @@
  * @property {boolean} [estimated]      created by the backfill estimator rather than
  *                                      logged by the user. clearEstimated() removes
  *                                      exactly these, and their containers
+ * @property {boolean} [skipped]       never stored: marks a placeholder for a skipped slot in a
+ *                                     list from MedData.withSkips (scheduling only)
  */
 
 /**
@@ -211,6 +213,22 @@
  */
 
 /**
+ * A scheduled dose the person chose not to take. Not a dose: nothing that adds up
+ * what was taken may read these (see MedData.withSkips).
+ *
+ * @typedef {Object} Skip
+ * @property {string} id
+ * @property {string} medId
+ * @property {number} timestamp   when the dose was DUE (the slot), ms since epoch
+ * @property {string} date        'YYYY-MM-DD' of `timestamp`
+ * @property {string} time        'HH:MM' of `timestamp`
+ * @property {number|null} [dose] what was due, when known
+ * @property {string|null} [notifKey]  the reminder that was answered with Skip
+ * @property {'reminder'|'app'} [source]
+ * @property {number} [recordedAt]  when Skip was pressed
+ */
+
+/**
  * User settings. Three tiers, and which tier a key is in changes its behaviour:
  *
  *   DEVICE_KEYS         never leave this device. No sync operation is generated and
@@ -223,6 +241,8 @@
  * @property {boolean} [weightTrackingEnabled]
  * @property {boolean} [medsTrackingEnabled]   false hides every medication page and reminder
  * @property {boolean} [painTrackingEnabled]
+ * @property {string} [quickMode]   '' | 'glp1' | 'adhd' | 'pain' | 'hrt' | 'general': what the
+ *                                  person is mainly here for (MedData.QUICK_MODES)
  * @property {'nrs'|'dvprs'} [painScale]
  * @property {string[]} [painQuickFields]  of 'kind' | 'context' | 'coping' | 'note'
  * @property {'smart'|'most'|'time'|'az'|'custom'} [medPickerOrder]
@@ -245,6 +265,13 @@
  * @property {string[]} [shotLocations] injection sites, in the rotation order the
  *                                      user arranged them in
  * @property {number} [onboardedAt]     syncs, but never raises a conflict
+ * @property {string} [reminderButtons]   the buttons on a dose reminder, in order:
+ *                                      'taken,snooze,skip' and its subsets, or 'none'
+ * @property {string} [reminderSnoozeMin] '5' | '10' | '15' | '30' minutes
+ * @property {'due'|'tap'} [reminderTakenAt]  when a reminder's Taken logs the dose
+ * @property {string} [reminderRepeatMin]   '0' (off) | '5' | '10' | '15' | '30': minutes
+ *                                      between repeats of an unanswered reminder
+ * @property {string} [reminderRepeatTimes] '1' | '2' | '3' | '5': how many repeats
  */
 
 /**
@@ -257,6 +284,7 @@
  * @property {Med[]} trashedMeds        kept whole, so restoring loses nothing
  * @property {Dose[]} doseLog
  * @property {Weight[]} weights
+ * @property {Skip[]} [skips]           scheduled doses skipped on purpose
  * @property {Container[]} containers
  * @property {Settings} settings
  * @property {Object} user

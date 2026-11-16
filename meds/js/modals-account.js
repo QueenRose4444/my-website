@@ -20,7 +20,8 @@
                 <div class="field"><label>Username</label><input id="authUser" autocomplete="username"></div>
                 <div class="field"><label>Password</label><input id="authPass" type="password" autocomplete="${isLogin ? 'current-password' : 'new-password'}" minlength="4"></div>
                 ${isLogin ? '' : '<div class="field"><label>Confirm password</label><input id="authPass2" type="password" minlength="4"></div>'}
-                <div class="error-text" id="authErr"></div>`,
+                <div class="error-text" id="authErr"></div>
+                <div class="dim-sm" id="authPrivacy">What an account stores, and who can read it: <a href="${escapeHtml(D.PRIVACY_URL)}" target="_blank" rel="noopener">privacy policy</a></div>`,
             footHtml: `
                 <button class="btn ghost" data-act="cancel">Cancel</button>
                 <button class="btn primary" data-act="go">${Icons.check} ${isLogin ? 'Log in' : 'Register'}</button>`,

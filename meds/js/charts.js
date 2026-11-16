@@ -2,6 +2,8 @@
 // charts.js — SVG charts (med level decay + weight trend)
 // Vanilla port of the design prototype charts, with
 // pointer events so tooltips work on touch screens.
+// Both can be moved back in time: drag sideways, or
+// the arrows in the top right corner.
 // ================================================
 (function () {
     'use strict';
@@ -16,6 +18,11 @@
     const safeColor = c => (typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c)) ? c : 'var(--accent)';
 
     function clearChart(wrap) {
+        // A chart is redrawn in place (a resize, every frame of a drag), and each draw
+        // binds its tooltip listeners to `wrap`. They are bound through this signal
+        // and dropped here, so a redraw replaces them instead of stacking them.
+        if (wrap._ac) wrap._ac.abort();
+        wrap._ac = new AbortController();
         if (wrap._ro) { wrap._ro.disconnect(); wrap._ro = null; }
         if (wrap._offTap) { document.removeEventListener('pointerdown', wrap._offTap, true); wrap._offTap = null; }
         wrap.innerHTML = '';
@@ -36,6 +43,10 @@
         if (wrap._ro) wrap._ro.disconnect();
         let lastW = wrap.clientWidth;
         wrap._ro = new ResizeObserver(() => {
+            // Taken out of the page (the dashboard rebuilt itself): its width drops to 0,
+            // which is not a resize. Redrawing it would also overwrite where the chart
+            // that replaced it has been moved to, since both share one element id.
+            if (!wrap.isConnected) { wrap._ro.disconnect(); wrap._ro = null; return; }
             if (Math.abs(wrap.clientWidth - lastW) > 4) {
                 lastW = wrap.clientWidth;
                 render();
@@ -55,6 +66,122 @@
         wrap.appendChild(t);
         return t;
     }
+
+    // ------------------------------------------------
+    // Moving a chart in time: drag it sideways, or use the arrows in its top right
+    // corner. Both charts share everything here; each only says how far it may go.
+    // ------------------------------------------------
+    const DAY_MS = 86400000;
+    const DRAG_START_PX = 6;      // sideways movement before a press counts as a drag
+    const ARROW_STEP = 0.5;       // one arrow press moves half of what is on screen
+
+    // How far back from "now" each chart has been moved, in ms. Kept by the chart's
+    // element id for this visit only: the dashboard rebuilds its chart elements on
+    // every change, and a moved chart must not jump back because a dose was logged.
+    // Asking for a different range starts again from now.
+    const panState = {};
+    function panFor(wrap, rangeKey) {
+        if (!wrap.id) return { range: rangeKey, offset: 0, fixed: true };
+        let st = panState[wrap.id];
+        if (!st || st.range !== rangeKey) st = panState[wrap.id] = { range: rangeKey, offset: 0 };
+        return st;
+    }
+
+    /** Top padding of the plot. A chart that can be moved keeps a band above the plot
+     *  for its arrows, so they never sit on a line. The band is there whether or not
+     *  the arrows are showing (on "All" they are not), so the plot does not jump
+     *  between ranges. Its height is the CSS variable --pan-h: one size, set in meds.css. */
+    function plotTop(wrap, pan, base) {
+        if (pan.fixed) return base;
+        const h = parseFloat(getComputedStyle(wrap).getPropertyValue('--pan-h')) || 0;
+        return Math.max(base, h + 4);
+    }
+
+    /** The arrows. Nothing when there is nowhere to go and nowhere to come back from. */
+    function panControlHtml(pan) {
+        if (!pan || pan.state.fixed || (pan.max <= 0 && pan.state.offset <= 0)) return '';
+        const I = window.UI.Icons;
+        // "now" moves on between two draws, and the furthest point with it: within a
+        // thousandth of the window counts as there.
+        const atOldest = pan.max - pan.state.offset <= Math.max(1, pan.windowMs * 0.001);
+        const atNow = pan.state.offset <= 0;
+        return `<div class="chart-pan" role="group" aria-label="Move the chart in time">
+                <button type="button" data-pan="back" aria-label="Earlier" title="Earlier" ${atOldest ? 'disabled' : ''}>${I.chevL}</button>
+                ${atNow ? '' : '<button type="button" class="pan-now" data-pan="now" title="Back to now">Now</button>'}
+                <button type="button" data-pan="fwd" aria-label="Later" title="Later" ${atNow ? 'disabled' : ''}>${I.chevR}</button>
+            </div>`;
+    }
+
+    /**
+     * Called by every draw with what that draw knows:
+     *   state     the chart's entry in panState (its offset is what gets changed)
+     *   max       the furthest offset that still shows data (0 = cannot move)
+     *   msPerPx   time per CSS pixel, so a drag moves the chart exactly with the finger
+     *   windowMs  the time on screen, for the arrow step
+     *   render    redraw
+     * The listeners are bound once per element and read the latest of these.
+     */
+    function setPan(wrap, pan) {
+        pan.state.offset = Math.min(Math.max(0, pan.state.offset), Math.max(0, pan.max));
+        wrap._pan = pan;
+        wrap.classList.toggle('pannable', pan.max > 0 && !pan.state.fixed);
+        if (wrap._panBound) return;
+        wrap._panBound = true;
+
+        let drag = null, frame = 0;
+        const moveTo = offset => {
+            const p = wrap._pan;
+            const next = Math.min(Math.max(0, offset), Math.max(0, p.max));
+            if (next === p.state.offset) return false;
+            p.state.offset = next;
+            return true;
+        };
+        wrap.addEventListener('pointerdown', e => {
+            const p = wrap._pan;
+            if (!p || p.max <= 0 || p.state.fixed || e.button > 0 || e.target.closest('.chart-pan')) return;
+            drag = { id: e.pointerId, x: e.clientX, from: p.state.offset, on: false };
+        });
+        wrap.addEventListener('pointermove', e => {
+            if (!drag || e.pointerId !== drag.id) return;
+            const dx = e.clientX - drag.x;
+            if (!drag.on) {
+                if (Math.abs(dx) < DRAG_START_PX) return;
+                drag.on = true;
+                wrap.classList.add('panning');
+                try { wrap.setPointerCapture(e.pointerId); } catch (err) { /* the pointer is already gone */ }
+            }
+            // dragging right pulls earlier time into view. One redraw per frame at most.
+            if (moveTo(drag.from + dx * wrap._pan.msPerPx) && !frame) {
+                frame = requestAnimationFrame(() => { frame = 0; wrap._pan.render(); });
+            }
+        });
+        const endDrag = e => {
+            if (!drag || e.pointerId !== drag.id) return;
+            drag = null;
+            wrap.classList.remove('panning');
+        };
+        wrap.addEventListener('pointerup', endDrag);
+        wrap.addEventListener('pointercancel', endDrag);   // a vertical swipe became a page scroll
+
+        wrap.addEventListener('click', e => {
+            const btn = e.target.closest('[data-pan]');
+            if (!btn || !wrap.contains(btn)) return;
+            const p = wrap._pan, which = btn.dataset.pan;
+            const step = p.windowMs * ARROW_STEP;
+            const moved = which === 'now' ? moveTo(0)
+                : moveTo(p.state.offset + (which === 'back' ? step : -step));
+            if (!moved) return;
+            const hadFocus = document.activeElement === btn;
+            p.render();
+            // the draw replaced the button: someone using the keyboard stays on the arrows
+            if (hadFocus) {
+                const again = wrap.querySelector(`[data-pan="${which}"]:not(:disabled)`) || wrap.querySelector('[data-pan]:not(:disabled)');
+                if (again) again.focus({ preventScroll: true });
+            }
+        });
+    }
+    /** A press on the arrows, or a drag in progress, is not a request for the tooltip. */
+    const tooltipBusy = (wrap, e) => wrap.classList.contains('panning') || !!(e.target.closest && e.target.closest('.chart-pan'));
 
     // ------------------------------------------------
     // Estimated medication level (past range + 14d projection)
@@ -149,14 +276,24 @@
             }
             proj = Math.max(0, Number(proj) || 0);
 
+            // Where the chart has been moved to (see "Moving a chart in time" above).
+            const pan = panFor(wrap, rangeKey || String(range));
             const w = Math.max(280, wrap.clientWidth || 600);
             const h = wrap.clientHeight || 240;
-            const PAD = { t: 22, r: 14, b: 26, l: 46 };
+            const PAD = { t: plotTop(wrap, pan, 22), r: 14, b: 26, l: 46 };
             const innerW = w - PAD.l - PAD.r, innerH = h - PAD.t - PAD.b;
 
             const now = Date.now();
-            const startTs = now - range * 86400000;
-            const endTs = now + proj * 86400000;
+            // Moved back in time by a drag or the arrows: the same window, earlier. It can
+            // go back until the first dose sits just inside the left edge. "All" already
+            // shows everything, so it does not move.
+            const windowMs = Math.max(1, (range + proj) * DAY_MS);
+            const oldestDose = Math.min.apply(null, allShots.map(s => s.timestamp));
+            const panMax = rangeKey === 'all' ? 0
+                : Math.max(0, (now - range * DAY_MS) - (oldestDose - windowMs * 0.05));
+            pan.offset = Math.min(Math.max(0, pan.offset), panMax);
+            const startTs = now - range * 86400000 - pan.offset;
+            const endTs = now + proj * 86400000 - pan.offset;
             const totalMs = Math.max(1, endTs - startTs);
             const sampleCount = Math.min(500, Math.max(200, Math.floor(w / 2.5)));
             const tickFont = w < 520 ? 12 : 10;
@@ -255,7 +392,7 @@
                 }
                 seriesHtml += `<path d="${pathD}" fill="none" stroke="${sr.color}" stroke-width="2" stroke-linejoin="round"/>`;
                 if (opts.showDots !== false) {
-                    sr.doses.filter(s => s.timestamp >= startTs && s.timestamp <= now).forEach(s => {
+                    sr.doses.filter(s => s.timestamp >= startTs && s.timestamp <= Math.min(now, endTs)).forEach(s => {
                         const lvl = sr.level(s.timestamp);
                         markerHtml += `<line x1="${x(s.timestamp)}" x2="${x(s.timestamp)}" y1="${PAD.t + innerH}" y2="${y(lvl)}" stroke="${sr.color}" stroke-width="1" stroke-dasharray="1 2" opacity="0.5"/>
                             <circle cx="${x(s.timestamp)}" cy="${PAD.t + innerH - 2}" r="3" fill="${s.estimated ? 'var(--surface)' : sr.color}" stroke="${sr.color}" stroke-width="1.5"/>`;
@@ -295,8 +432,8 @@
                 <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
                     <defs>${defsHtml}</defs>
                     ${gridHtml}${xTickHtml}
-                    <line x1="${x(now)}" x2="${x(now)}" y1="${PAD.t}" y2="${PAD.t + innerH}" stroke="var(--text-3)" stroke-dasharray="3 4" stroke-width="1"/>
-                    <text x="${x(now)}" y="${PAD.t - 8}" text-anchor="middle" font-size="${tickFont}" fill="var(--text-3)" font-family="var(--font-mono)">now</text>
+                    ${now >= startTs && now <= endTs ? `<line class="now-line" x1="${x(now)}" x2="${x(now)}" y1="${PAD.t}" y2="${PAD.t + innerH}" stroke="var(--text-3)" stroke-dasharray="3 4" stroke-width="1"/>
+                    <text x="${x(now)}" y="${PAD.t - 8}" text-anchor="middle" font-size="${tickFont}" fill="var(--text-3)" font-family="var(--font-mono)">now</text>` : ''}
                     ${seriesHtml}
                     ${markerHtml}
                     <g class="hover-g" style="display:none">
@@ -304,6 +441,12 @@
                         ${series.map((sr, si) => `<circle class="hv-dot" data-si="${si}" r="4" fill="var(--bg)" stroke="${sr.color}" stroke-width="2"/>`).join('')}
                     </g>
                 </svg>${legendHtml}`;
+            const panInfo = { state: pan, max: panMax, windowMs, msPerPx: totalMs / Math.max(1, innerW * ((wrap.getBoundingClientRect().width || w) / w)), render };
+            wrap.insertAdjacentHTML('beforeend', panControlHtml(panInfo));
+            setPan(wrap, panInfo);
+            // what is on screen, for anything that wants to say so (and for the tests)
+            wrap.dataset.from = String(Math.round(startTs));
+            wrap.dataset.to = String(Math.round(endTs));
 
             const tip = tooltipEl(wrap);
             const hoverG = wrap.querySelector('.hover-g');
@@ -340,12 +483,13 @@
             // touch: tap shows the tooltip and it STAYS until the next tap;
             // tapping outside the chart closes it. Mouse keeps hover behaviour.
             const hideTip = () => { hoverG.style.display = 'none'; tip.style.display = 'none'; };
-            wrap.addEventListener('pointermove', e => { if (e.pointerType !== 'touch') showAt(e.clientX); });
-            wrap.addEventListener('pointerdown', e => showAt(e.clientX));
+            const sig = { signal: wrap._ac.signal };
+            wrap.addEventListener('pointermove', e => { if (e.pointerType !== 'touch' && !tooltipBusy(wrap, e)) showAt(e.clientX); }, sig);
+            wrap.addEventListener('pointerdown', e => { if (!tooltipBusy(wrap, e)) showAt(e.clientX); }, sig);
             wrap.addEventListener('pointerleave', e => {
                 if (e.pointerType === 'touch') return;
                 hideTip();
-            });
+            }, sig);
             bindOffTapHide(wrap, hideTip);
             watchResize(wrap, render);
         };
@@ -364,10 +508,20 @@
             const range = opts.range || 'm';
             const now = Date.now();
             const days = RANGE_DAYS[range] != null ? RANGE_DAYS[range] : 30;
-            const cutoff = days === Infinity ? 0 : now - days * 86400000;
 
             const sorted = (weights || []).slice().sort((a, b) => a.timestamp - b.timestamp);
-            let data = sorted.filter(x => x.timestamp >= cutoff);
+            // Moved back in time by a drag or the arrows: the same number of days, ending
+            // earlier. It can go back until the first weight is at the left edge. "All"
+            // already shows everything, so it does not move.
+            const pan = panFor(wrap, range);
+            const windowMs = days === Infinity ? 0 : days * DAY_MS;
+            const panMax = days === Infinity || !sorted.length ? 0 : Math.max(0, (now - windowMs) - sorted[0].timestamp);
+            pan.offset = Math.min(Math.max(0, pan.offset), panMax);
+            const winEnd = now - pan.offset;
+            const cutoff = days === Infinity ? 0 : winEnd - windowMs;
+            const panInfo = { state: pan, max: panMax, windowMs, msPerPx: 0, render };
+
+            let data = sorted.filter(x => x.timestamp >= cutoff && x.timestamp <= winEnd);
             // anchor the line at the range start using the last point before the window
             const before = sorted.filter(x => x.timestamp < cutoff);
             if (before.length && data.length) {
@@ -376,16 +530,30 @@
                 const frac = (cutoff - prev.timestamp) / Math.max(1, next.timestamp - prev.timestamp);
                 data = [{ timestamp: cutoff, kg: prev.kg + (next.kg - prev.kg) * frac, estimated: true }].concat(data);
             }
+            // and, once moved back, close the line at the right edge the same way
+            const after = sorted.filter(x => x.timestamp > winEnd);
+            if (after.length && data.length) {
+                const prev = data[data.length - 1];
+                const next = after[0];
+                const frac = (winEnd - prev.timestamp) / Math.max(1, next.timestamp - prev.timestamp);
+                data = data.concat([{ timestamp: winEnd, kg: prev.kg + (next.kg - prev.kg) * frac, estimated: true }]);
+            }
+            wrap.dataset.from = String(Math.round(cutoff));
+            wrap.dataset.to = String(Math.round(winEnd));
 
             if (data.length < 2) {
                 emptyState(wrap, 'Not enough data', 'Log at least two weights for this range');
+                // the arrows stay: an empty stretch must not be a dead end
+                wrap.insertAdjacentHTML('beforeend', panControlHtml(panInfo));
+                panInfo.msPerPx = windowMs / Math.max(1, wrap.clientWidth || 600);
+                setPan(wrap, panInfo);
                 watchResize(wrap, render);
                 return;
             }
 
             const w = Math.max(280, wrap.clientWidth || 600);
             const h = wrap.clientHeight || 260;
-            const PAD = { t: 16, r: 14, b: 26, l: 46 };
+            const PAD = { t: plotTop(wrap, pan, 16), r: 14, b: 26, l: 46 };
             const innerW = w - PAD.l - PAD.r, innerH = h - PAD.t - PAD.b;
 
             const tickFont = w < 520 ? 12 : 10;
@@ -446,6 +614,10 @@
                     ${dotHtml}
                     <line class="hv-line" y1="${PAD.t}" y2="${PAD.t + innerH}" stroke="var(--border-strong)" stroke-dasharray="2 2" style="display:none"/>
                 </svg>`;
+            // the line spans from its first point to its last, which once moved is the window
+            panInfo.msPerPx = Math.max(1, xMax - xMin) / Math.max(1, innerW * ((wrap.getBoundingClientRect().width || w) / w));
+            wrap.insertAdjacentHTML('beforeend', panControlHtml(panInfo));
+            setPan(wrap, panInfo);
 
             const tip = tooltipEl(wrap);
             const hvLine = wrap.querySelector('.hv-line');
@@ -468,12 +640,13 @@
                 tip.style.top = (y(val(d.kg)) / h * 100) + '%';
             };
             const hideTip = () => { hvLine.style.display = 'none'; tip.style.display = 'none'; };
-            wrap.addEventListener('pointermove', e => { if (e.pointerType !== 'touch') showAt(e.clientX); });
-            wrap.addEventListener('pointerdown', e => showAt(e.clientX));
+            const sig = { signal: wrap._ac.signal };
+            wrap.addEventListener('pointermove', e => { if (e.pointerType !== 'touch' && !tooltipBusy(wrap, e)) showAt(e.clientX); }, sig);
+            wrap.addEventListener('pointerdown', e => { if (!tooltipBusy(wrap, e)) showAt(e.clientX); }, sig);
             wrap.addEventListener('pointerleave', e => {
                 if (e.pointerType === 'touch') return;
                 hideTip();
-            });
+            }, sig);
             bindOffTapHide(wrap, hideTip);
             watchResize(wrap, render);
         };

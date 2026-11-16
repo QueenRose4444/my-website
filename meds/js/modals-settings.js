@@ -327,6 +327,14 @@
                             .map(dn => chip('weekStart', dn, dn.slice(0, 3), set.weekStart)).join('')}</div></div>
                 </div>
 
+                <div class="setting-block" id="quickModeBlock">
+                    <div class="sr-label">What you use this for</div>
+                    <div class="chip-grp">${D.QUICK_MODES.map(m => chip('quickMode', m.id, m.short, set.quickMode || '')).join('')}${chip('quickMode', '', 'Not set', set.quickMode || '')}</div>
+                    <div class="dim-sm" id="quickModeInfo" style="margin-top:8px">${D.quickMode(set.quickMode)
+                        ? `${D.quickMode(set.quickMode).label}: ${D.quickMode(set.quickMode).first.join(' and ')} medications are listed first when you add one.`
+                        : 'Pick one to list its medications first when you add one.'} Picking one switches on what it uses and never switches anything off: the switches are below.</div>
+                </div>
+
                 <div class="setting-block">
                     <div class="sr-label">Weight</div>
                     <div class="setting-row"><span class="sr-sub">Track weight</span>
@@ -366,7 +374,7 @@
                     <div class="setting-row"><span class="sr-sub">When picking a med</span>
                         <div class="chip-grp">${chip('medPickerOrder', 'smart', 'Smart', set.medPickerOrder || 'smart')}${chip('medPickerOrder', 'most', 'Most taken', set.medPickerOrder)}${chip('medPickerOrder', 'time', 'Time of day', set.medPickerOrder)}${chip('medPickerOrder', 'az', 'A-Z', set.medPickerOrder)}${chip('medPickerOrder', 'custom', 'My order', set.medPickerOrder)}</div></div>
                     <div class="dim-sm">${(set.medPickerOrder || 'smart') === 'smart' ? 'Due now first, then what you usually take at this time of day, then what you take most.' : ''}</div>
-                    ${set.medPickerOrder === 'custom' ? `<div class="order-list">${D.orderMedsForPicker(S.state.meds, S.state.shots, set).map((m, i, all) => `
+                    ${set.medPickerOrder === 'custom' ? `<div class="order-list">${D.orderMedsForPicker(S.state.meds, S.state.shots, set, undefined, S.state.skips).map((m, i, all) => `
                         <div class="order-row"><span class="ml-dot" style="background:${escapeHtml(m.color || '#5fc8c8')}"></span><span class="order-name">${escapeHtml(m.name)}</span>
                             <button class="icon-btn" data-order-move="${escapeHtml(m.id)}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up">${Icons.arrowUp}</button>
                             <button class="icon-btn" data-order-move="${escapeHtml(m.id)}" data-dir="1" ${i === all.length - 1 ? 'disabled' : ''} aria-label="Move down">${Icons.arrowDn}</button></div>`).join('')}</div>` : ''}
@@ -425,6 +433,49 @@
                         <div class="setting-row"><span class="sr-sub">Supply alert when ≤ this many days left</span>
                             <input class="setting-input" style="width:70px" type="number" min="0" step="0.5" data-num="supplyAlertDays" value="${set.supplyAlertDays != null ? set.supplyAlertDays : 1}"></div>
                         ${set.pushEnabled ? `<div class="chip-grp" style="margin-top:6px"><button class="chip" data-act="push-test">Send test notification</button></div>` : ''}`}
+                    ${loggedIn && window.Push ? (() => {
+                            // What a dose reminder offers. Saved with the account, so every
+                            // device of this person gets the same buttons; shown even on a
+                            // browser that cannot do push, since the phone may be the one
+                            // that does.
+                            const rc = window.Push.reminderConfig(set);
+                            const cur = rc.buttons.length ? rc.buttons.join(',') : 'none';
+                            return `
+                        <div class="setting-row" id="reminderButtonsRow"><span class="sr-sub">Buttons on a dose reminder, in order</span>
+                            <div class="chip-grp">${window.Push.BUTTON_PRESETS.map(x =>
+                                chip('reminderButtons', x.value, x.label, cur)).join('')}</div></div>
+                        <div class="setting-row" id="reminderSnoozeRow"><span class="sr-sub">"Remind" brings it back after</span>
+                            <div class="chip-grp">${window.Push.SNOOZE_CHOICES.map(n =>
+                                chip('reminderSnoozeMin', String(n), n + ' min', String(rc.snoozeMin))).join('')}</div></div>
+                        <div class="setting-row" id="reminderTakenRow"><span class="sr-sub">"Taken" logs the dose at</span>
+                            <div class="chip-grp">${chip('reminderTakenAt', 'due', 'the time it was due', rc.takenAt)}${
+                                chip('reminderTakenAt', 'tap', 'the time I tap', rc.takenAt)}</div></div>
+                        <div class="setting-row" id="reminderRepeatRow"><span class="sr-sub">If a reminder is not answered, send it again</span>
+                            <div class="chip-grp">${window.Push.REPEAT_CHOICES.map(n =>
+                                chip('reminderRepeatMin', String(n), n ? `every ${n} min` : 'Off', String(rc.repeatMin))).join('')}</div></div>
+                        ${rc.repeatMin ? `
+                        <div class="setting-row" id="reminderRepeatTimesRow"><span class="sr-sub">up to</span>
+                            <div class="chip-grp">${window.Push.REPEAT_TIMES.map(n =>
+                                chip('reminderRepeatTimes', String(n), n === 1 ? 'once' : `${n} times`, String(rc.repeatTimes))).join('')}</div></div>
+                        <div class="sr-sub" id="reminderRepeatInfo" style="margin-top:6px">${
+                            window.Push.repeatUnsupported()
+                                ? 'The reminder server has not been updated for repeats yet: reminders arrive once for now.'
+                                : 'It stops when you answer it (Taken or Skip, on the reminder or in the app). "Remind" starts the count again.'}</div>` : ''}`;
+                        })() : ''}
+                    ${window.Push && window.Push.supported() ? `
+                        <div class="sr-sub" id="pushButtonsInfo" style="margin-top:6px">${(() => {
+                            const n = window.Push.maxActions();
+                            const where = window.Push.installed() ? 'installed app' : 'browser';
+                            if (n == null) return `This ${where} does not say how many buttons it shows on a reminder.`;
+                            // Say which of the chosen buttons that leaves, by name.
+                            const names = { taken: 'Taken', snooze: 'Remind', skip: 'Skip' };
+                            const chosen = window.Push.reminderConfig(set).buttons;
+                            const cut = chosen.length > n
+                                ? ` With your order that is ${chosen.slice(0, n).map(k => names[k]).join(' and ') || 'none'}; ${
+                                    chosen.slice(n).map(k => names[k]).join(' and ')} will not show here.` : '';
+                            return `This ${where} shows up to ${n} button${n === 1 ? '' : 's'} on a reminder.${cut}`;
+                        })()}</div>
+                        <div class="chip-grp" style="margin-top:6px"><button class="chip" data-act="push-button-test">Show a 3-button test</button></div>` : ''}
                 </div>
 
                 <div class="setting-block">
@@ -441,6 +492,7 @@
                         <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.55v-2.15c-3.2.7-3.87-1.37-3.87-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.75 2.69 1.25 3.34.95.1-.74.4-1.25.72-1.53-2.55-.29-5.23-1.28-5.23-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 5.78 0c2.21-1.49 3.18-1.18 3.18-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.25 5.66.41.35.77 1.05.77 2.12v3.14c0 .3.21.66.8.55A10.52 10.52 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/></svg>
                         View source on GitHub
                     </a>
+                    <a href="${escapeHtml(D.PRIVACY_URL)}" target="_blank" rel="noopener" id="privacyLink">Privacy policy</a>
                 </div>`;
 
             // bindings
@@ -450,7 +502,9 @@
                 let val = b.dataset.val;
                 S.update(s => {
                     if (key === 'goalKg' || key === 'startKg') val = parseFloat(val);
-                    s.settings[key] = val;
+                    // a mode also switches on the parts it uses: one rule, in MedData
+                    if (key === 'quickMode') D.applyQuickMode(s.settings, val);
+                    else s.settings[key] = val;
                 });
                 if (key === 'theme' || key === 'accent' || key === 'textScale') window.App.applyTheme();
                 render();
@@ -466,7 +520,7 @@
             $$('[data-order-move]', drawer).forEach(b => b.addEventListener('click', () => {
                 // The current order is what is on screen; moving one writes the whole list,
                 // so a med added later simply joins the end.
-                const ids = D.orderMedsForPicker(S.state.meds, S.state.shots, S.state.settings).map(m => m.id);
+                const ids = D.orderMedsForPicker(S.state.meds, S.state.shots, S.state.settings, undefined, S.state.skips).map(m => m.id);
                 const i = ids.indexOf(b.dataset.orderMove), j = i + Number(b.dataset.dir);
                 if (i < 0 || j < 0 || j >= ids.length) return;
                 [ids[i], ids[j]] = [ids[j], ids[i]];
@@ -542,6 +596,14 @@
                     toast(e.message || 'Could not change notifications');
                 }
                 render();
+            });
+            act('[data-act="push-button-test"]', async () => {
+                try {
+                    await window.Push.buttonTest();
+                    toast('Test shown: count the buttons on it');
+                } catch (e) {
+                    toast(e.message || 'Test failed');
+                }
             });
             act('[data-act="push-test"]', async () => {
                 try {

@@ -1,7 +1,8 @@
 // ================================================
 // onboarding.js — first-run wizard
-// welcome → import old data → pick med → backfill
-// history estimate → weight setup → done
+// welcome → what you are here for → import old data →
+// pick med → backfill history estimate → weight and
+// pain setup → done
 // ================================================
 (function () {
     'use strict';
@@ -23,15 +24,18 @@
         const S = window.Store;
         const v1Local = S.detectV1Local();
 
+        const set0 = S.state.settings;
         const ctx = {
             name: S.state.user.name || '',
+            // '' = not chosen. A replay starts from what the account already has.
+            quickMode: isReplay && D.quickMode(set0.quickMode) ? set0.quickMode : '',
             importChoice: null,      // 'v1-local' | 'file' | 'fresh'
             importedFile: null,      // parsed backup
             preset: null,
             customLater: false,
             historyMode: null,       // 'new' | 'estimate' | 'skip'
-            trackWeight: true,
-            trackPain: false,
+            trackWeight: isReplay ? set0.weightTrackingEnabled !== false : true,
+            trackPain: isReplay ? !!set0.painTrackingEnabled : false,
             currentW: '', startW: '', startWDate: '', goalW: '', maintain: false,
             unit: S.state.settings.weightUnit || 'kg',
         };
@@ -39,7 +43,7 @@
         let stepIndex = 0;
 
         const steps = () => {
-            const list = ['welcome'];
+            const list = ['welcome', 'mode'];
             list.push('import');
             if (ctx.importChoice !== 'v1-local' && ctx.importChoice !== 'file') list.push('med');
             if (ctx.importChoice === 'fresh' && ctx.preset) list.push('history');
@@ -65,6 +69,20 @@
                     </div>
                     ${!window.Store.isLoggedIn() ? `<div class="container-hint">Already have an account? <button class="link" id="obLogin">Log in</button> and your data syncs straight onto this device — no setup needed. New here but want sync? <button class="link" id="obRegister">Register</button></div>` : ''}
                     ${v1Local ? `<div class="container-hint">${Icons.refresh} We found <strong>${v1Local.shotHistory.length} doses</strong> and <strong>${v1Local.weightHistory.length} weights</strong> from the old meds page on this device — you can import them in the next step.</div>` : ''}`;
+            }
+
+            if (step === 'mode') {
+                title = 'What are you here for?';
+                sub = 'It sets what is switched on to begin with and which medications are listed first. You can change it later in Settings.';
+                body = `
+                    <div class="preset-grid one-col" id="obModes">
+                        ${D.QUICK_MODES.map(m => `
+                            <button class="preset ${ctx.quickMode === m.id ? 'active' : ''}" data-mode="${m.id}" aria-pressed="${ctx.quickMode === m.id}">
+                                <div class="p-name">${m.label}</div>
+                                <div class="p-meta">${m.sub}</div>
+                            </button>`).join('')}
+                    </div>
+                    <div class="dim-sm" style="margin-top:10px">More than one, or something else? Leave it unpicked: everything is still there.</div>`;
             }
 
             if (step === 'import') {
@@ -109,7 +127,7 @@
                     </button>`;
                 body = `
                     <div class="preset-grid">
-                        ${D.CATEGORY_ORDER.map(cat => {
+                        ${D.categoryOrderFor(ctx.quickMode).map(cat => {
                             const group = D.MED_PRESETS.filter(p => p.category === cat);
                             if (!group.length) return '';
                             return `<div class="preset-cat">${cat}</div>` + group.map(presetCard).join('');
@@ -138,8 +156,11 @@
             }
 
             if (step === 'weight') {
-                title = 'Track weight too?';
-                sub = 'Optional — adds the weight chart, goal progress and stats.';
+                const picked = D.quickMode(ctx.quickMode);
+                title = picked ? 'Anything else to track?' : 'Track weight too?';
+                sub = picked
+                    ? `Set up for ${picked.label}. Change anything here, now or later in Settings.`
+                    : 'Optional — adds the weight chart, goal progress and stats.';
                 // pre-fill from imported data so the wizard matches what the
                 // page will show afterwards
                 if (!ctx.prefillDone) {
@@ -152,6 +173,8 @@
                         if (!ctx.startWDate) ctx.startWDate = info.startDate || '';
                         if (!ctx.goalW) ctx.goalW = disp(info.goalKg);
                         ctx.prefill = info;
+                        // imported weights are not hidden behind a mode that does not use weight
+                        if (info.currentKg != null && !isNaN(info.currentKg)) ctx.trackWeight = true;
                     }
                     ctx.prefillDone = true;
                 }
@@ -226,6 +249,25 @@
                 };
                 wire('#obLogin', 'login');
                 wire('#obRegister', 'register');
+            }
+
+            if (step === 'mode') {
+                overlay.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => {
+                    // a second tap on the chosen one un-picks it
+                    ctx.quickMode = ctx.quickMode === b.dataset.mode ? '' : b.dataset.mode;
+                    const mode = D.quickMode(ctx.quickMode);
+                    // The mode fills in the last step's answers; they stay editable there.
+                    // On a replay the account may hold entries, so a mode only switches
+                    // parts on (the same rule as MedData.applyQuickMode).
+                    if (isReplay) {
+                        if (mode && mode.tracks.weight) ctx.trackWeight = true;
+                        if (mode && mode.tracks.pain) ctx.trackPain = true;
+                    } else {
+                        ctx.trackWeight = mode ? mode.tracks.weight : true;
+                        ctx.trackPain = mode ? mode.tracks.pain : false;
+                    }
+                    render();
+                }));
             }
 
             if (step === 'import') {
@@ -386,6 +428,7 @@
             S.update(s => {
                 if (ctx.name) s.user.name = ctx.name;
                 s.settings.onboardedAt = Date.now();
+                s.settings.quickMode = D.quickMode(ctx.quickMode) ? ctx.quickMode : '';
                 s.settings.weightTrackingEnabled = ctx.trackWeight;
                 s.settings.painTrackingEnabled = !!ctx.trackPain;
                 if (ctx.trackWeight) {

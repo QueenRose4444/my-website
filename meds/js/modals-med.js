@@ -500,7 +500,7 @@
                             <div class="p-meta">${p.generic} · ${p.doses.length} doses · ${D.fmtFreq(p.frequency)}${existing.has(p.presetId) ? ' · added' : ''}</div>
                             ${(p.aka || []).length ? `<div class="p-aka dim-sm">also sold as ${escapeHtml(p.aka[0])}</div>` : ''}
                         </button>`;
-                    grid.innerHTML = D.CATEGORY_ORDER
+                    grid.innerHTML = D.categoryOrderFor(Store().state.settings.quickMode)
                         .map(cat => {
                             const group = matches.filter(p => p.category === cat);
                             if (!group.length) return '';

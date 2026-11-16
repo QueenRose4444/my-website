@@ -44,7 +44,7 @@
         })();
 
         // slot-aware default: logging near the 23:00 slot pre-picks that slot's dose
-        const ndForDefault = !initial ? D.predictNextDose(med, doseLog, set) : null;
+        const ndForDefault = !initial ? D.predictNextDose(med, D.withSkips(doseLog, S.state.skips, med.id), set) : null;
         let dose = initial ? initial.dose
             : (ndForDefault && ndForDefault.dose != null ? ndForDefault.dose
                 : (med.preferredNextDose != null ? med.preferredNextDose : (lastEntry ? lastEntry.dose : med.doses[0])));
@@ -316,14 +316,14 @@
         const set = S.state.settings;
         // In the order the person picks from (Settings > Medication order; Smart by default).
         const medsOn = set.medsTrackingEnabled !== false;
-        const meds = medsOn ? D.orderMedsForPicker(S.state.meds, S.state.shots, set) : [];
+        const meds = medsOn ? D.orderMedsForPicker(S.state.meds, S.state.shots, set, undefined, S.state.skips) : [];
         const pain = !!set.painTrackingEnabled;
         if (!medsOn && set.weightTrackingEnabled === false && !pain) { toast('Turn on something to track in Settings'); return; }
         if (!meds.length && set.weightTrackingEnabled === false && !pain) { M().addMed(); return; }
         const checkinDue = pain && set.painScale === 'dvprs' && window.Pain
             && !window.Pain.checkinDoneOn(S.state.pains, todayYmd());
         const rows = meds.map(m => {
-            const nd = D.predictNextDose(m, S.medDoses(m.id), set);
+            const nd = D.predictNextDose(m, S.scheduleDoses(m.id), set);
             const late = nd ? D.lateDoseStatus(m, nd) : null;
             const sub = !nd ? 'no doses yet'
                 : late ? 'overdue'
@@ -721,7 +721,7 @@
     function catchUp(med, onDone) {
         const S = Store();
         const set = S.state.settings;
-        const missed = D.missedSlots(med, S.medDoses(med.id), { days: 7 });
+        const missed = D.missedSlots(med, S.scheduleDoses(med.id), { days: 7 });
 
         if (!missed.length) {
             toast(`${med.name}: nothing missed in the last 7 days`);
@@ -752,8 +752,8 @@
                 <p class="confirm-text">${missed.length} scheduled dose${missed.length === 1 ? '' : 's'}
                 in the last 7 days ${missed.length === 1 ? 'has' : 'have'} nothing logged against
                 ${missed.length === 1 ? 'it' : 'them'}. Tick the ones you actually took.</p>
-                <p class="dim-sm">Anything left unticked stays missed — it is not logged, and not
-                marked as skipped either.</p>
+                <p class="dim-sm">Anything left unticked stays missed, unless you mark it as
+                skipped below.</p>
                 <div class="cu-list">
                     ${byDay.map(g => `
                         <div class="cu-day">
@@ -764,19 +764,29 @@
                             </div>
                             ${g.slots.map(rowHtml).join('')}
                         </div>`).join('')}
-                </div>`,
+                </div>
+                <label class="cu-row cu-skip-rest">
+                    <input type="checkbox" data-cu-skip>
+                    <span>Mark the ones I leave unticked as skipped, so they stop being asked about</span>
+                </label>`,
             footHtml: `
                 <button class="btn ghost" data-act="no">Cancel</button>
                 <button class="btn primary" data-act="yes" disabled>Log 0 doses</button>`,
             onMount(modal, close) {
                 const boxes = () => Array.from(modal.querySelectorAll('[data-cu]'));
                 const saveBtn = modal.querySelector('[data-act="yes"]');
+                const skipBox = modal.querySelector('[data-cu-skip]');
+                const doses = k => `${k} dose${k === 1 ? '' : 's'}`;
                 const sync = () => {
                     const n = boxes().filter(b => b.checked).length;
-                    saveBtn.disabled = n === 0;
-                    saveBtn.textContent = `Log ${n} dose${n === 1 ? '' : 's'}`;
+                    const rest = skipBox.checked ? boxes().length - n : 0;
+                    saveBtn.disabled = n + rest === 0;
+                    saveBtn.textContent = !rest ? `Log ${doses(n)}`
+                        : (n ? `Log ${n}, skip ${rest}` : `Skip ${doses(rest)}`);
                 };
-                modal.addEventListener('change', e => { if (e.target.dataset.cu != null) sync(); });
+                modal.addEventListener('change', e => {
+                    if (e.target.dataset.cu != null || e.target.dataset.cuSkip != null) sync();
+                });
                 modal.addEventListener('click', e => {
                     const all = e.target.closest('[data-cu-all]');
                     if (!all) return;
@@ -790,7 +800,8 @@
                 modal.querySelector('[data-act="no"]').addEventListener('click', close);
                 saveBtn.addEventListener('click', () => {
                     const chosen = boxes().filter(b => b.checked);
-                    if (!chosen.length) return;
+                    const toSkip = skipBox.checked ? boxes().filter(b => !b.checked) : [];
+                    if (!chosen.length && !toSkip.length) return;
                     const fallback = med.preferredNextDose != null ? med.preferredNextDose
                         : (S.medDoses(med.id)[0] || {}).dose;
                     Store().update(s => {
@@ -814,7 +825,14 @@
                             });
                         });
                     });
-                    toast(`${chosen.length} dose${chosen.length === 1 ? '' : 's'} logged`);
+                    // After the doses, so a slot that was just logged cannot also be skipped.
+                    let skipped = 0;
+                    toSkip.forEach(b => {
+                        const dose = b.dataset.cuDose !== '' ? Number(b.dataset.cuDose) : fallback;
+                        if (Store().skipDose({ medId: med.id, at: Number(b.dataset.cu), dose, source: 'app' })) skipped++;
+                    });
+                    toast([chosen.length ? `${doses(chosen.length)} logged` : '', skipped ? `${doses(skipped)} skipped` : '']
+                        .filter(Boolean).join(', ') || 'Nothing changed');
                     close();
                     if (onDone) onDone();
                 });

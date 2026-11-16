@@ -41,7 +41,8 @@
     // a dose's `timestamp` is its date and time again, `notifKey` is which reminder
     // it answered. (DEVICE_KEYS are hidden already — they are the settings
     // collection's `ignore` list.)
-    const CONFLICT_HIDDEN = ['shots.timestamp', 'shots.notifKey', 'weights.timestamp', 'pains.timestamp']
+    const CONFLICT_HIDDEN = ['shots.timestamp', 'shots.notifKey', 'weights.timestamp', 'pains.timestamp',
+        'skips.timestamp', 'skips.notifKey', 'skips.recordedAt', 'skips.source']
         .concat(VIEW_ONLY_SETTINGS.map(k => 'settings.' + k));
 
     // What the sync engine treats as items. /sync-wip.js knows nothing about doses —
@@ -74,6 +75,10 @@
         // Pain entries and DVPRS daily check-ins, told apart by `kind`. One
         // collection for both, so pain tracking costs one registration, not two.
         { name: 'pains', identity: x => x.id, timestamp: x => x.timestamp },
+        // Scheduled doses the person chose NOT to take ("Skip" on a reminder or in
+        // the app). Its own collection, not a kind of dose: everything that adds up
+        // what was taken reads `shots` and must never see these.
+        { name: 'skips', identity: x => x.id, timestamp: x => x.timestamp },
         { name: 'pens', identity: p => p.id },
         // The ONLY user-owned substance data — the curated table is code and is
         // deliberately not synced. All six registration edits below are done;
@@ -94,6 +99,7 @@
         shots: 'doses',
         weights: 'weights',
         pains: 'pain entries',
+        skips: 'skipped doses',
         meds: 'medications',
         trashedMeds: 'archived medications',
         pens: 'supply',
@@ -117,6 +123,8 @@
         // Off for someone tracking only weight or pain: the meds parts of every page go,
         // the data stays exactly as it is.
         medsTrackingEnabled: true,
+        // What the person is mainly here for (MedData.QUICK_MODES), '' = not chosen.
+        quickMode: '',
         // Pain tracking is opt-in: off means no Log row, no history tab, no prompts.
         painTrackingEnabled: false,
         painScale: 'nrs',             // 'nrs' | 'dvprs'
@@ -151,6 +159,13 @@
         historyPageSize: 20,  // rows per page on the History tables
         pushEnabled: false,   // dose/supply push reminders on THIS device
         supplyAlertDays: 1,   // supply-low push when ≤ this many days of doses left
+        // The buttons on a dose reminder, in order: a phone that draws fewer shows the
+        // first ones. Kept as text so the settings chips can write them directly.
+        reminderButtons: 'taken,snooze,skip',
+        reminderSnoozeMin: '5',     // how long "Remind again" waits: 5 | 10 | 15 | 30
+        reminderTakenAt: 'due',     // "Taken" logs the dose when it was DUE, or at the 'tap'
+        reminderRepeatMin: '0',     // send an unanswered reminder again every N min: 0 (off) | 5 | 10 | 15 | 30
+        reminderRepeatTimes: '3',   // and how many times: 1 | 2 | 3 | 5
         textScale: 'md',   // mobile text zoom: md | lg | xl
         dashAll: false,     // dashboard shows the all-meds overview when multiple meds
         onboardedAt: null,
@@ -254,6 +269,7 @@
             shots: [],
             weights: [],
             pains: [],
+            skips: [],
             pens: [],
             substances: [],
             substanceLimits: {},
@@ -435,6 +451,8 @@
             out.pains = (Array.isArray(out.pains) ? out.pains : []).filter(x => x && x.id && x.timestamp
                 && (x.kind === 'checkin' || (Number(x.score) >= 0 && Number(x.score) <= 10
                     && (x.scale === 'nrs' || x.scale === 'dvprs'))));
+            // A skip is only "this med, this slot": anything without both is dropped.
+            out.skips = (Array.isArray(out.skips) ? out.skips : []).filter(x => x && x.id && x.medId && x.timestamp);
             out.pens = out.pens || [];
 
             // TYPES, checked once here, because every renderer trusts them. Whatever
@@ -465,6 +483,12 @@
                 dose: num(p.dose), capacity: num(p.capacity) || 0, used: num(p.used) || 0,
             }));
             out.pains = out.pains.map(x => Object.assign({}, x)).filter(x => when(x));
+            out.skips = out.skips.map(x => Object.assign({}, x)).filter(x => {
+                if (!when(x)) return false;
+                x.id = String(x.id); x.medId = String(x.medId);
+                x.dose = num(x.dose);
+                return true;
+            });
             const cleanMed = (m) => {
                 const c = Object.assign({}, m);
                 c.name = String(c.name == null ? '' : c.name);
@@ -728,7 +752,7 @@
             // Stopped meds are skipped outright — they have no next dose by definition.
             let best = null, bestTs = Infinity;
             for (const med of this.activeMeds()) {
-                const nd = D.predictNextDose(med, this.medDoses(med.id), this.state.settings);
+                const nd = D.predictNextDose(med, this.scheduleDoses(med.id), this.state.settings);
                 const ts = nd ? new Date(nd.date).getTime() : Number.MAX_SAFE_INTEGER;
                 if (best === null || ts < bestTs) { best = med; bestTs = ts; }
             }
@@ -750,6 +774,64 @@
         },
         medDoses(medId) {
             return this.state.shots.filter(s => s.medId === medId).sort((a, b) => b.timestamp - a.timestamp);
+        },
+        /**
+         * A med's doses plus its skipped slots, for SCHEDULING questions only (next
+         * dose, missed slots). See D.withSkips for why nothing else may use it.
+         */
+        scheduleDoses(medId) {
+            return D.withSkips(this.medDoses(medId), this.state.skips, medId);
+        },
+
+        /**
+         * Record that a scheduled dose was skipped on purpose, so the next-dose card,
+         * catch-up and the reminders stop asking about it.
+         *
+         * Refused when a dose is already logged for that slot (they took it; a skip
+         * would contradict it) or the slot is already skipped. "For that slot" is the
+         * same rule a reminder's Taken uses: within half the dosing interval, at most
+         * 3 hours.
+         *
+         * @param {{medId:string, at:number, dose?:number|null, notifKey?:string|null, source?:string}} intent
+         *   `at` is when the dose was DUE, not when Skip was pressed.
+         * @returns {string|null} the new skip's id, or null when nothing was recorded.
+         */
+        skipDose(intent) {
+            if (!intent || !intent.medId) return null;
+            const med = this.state.meds.find(m => m.id === intent.medId);
+            if (!med) return null;
+            const at = Number(intent.at);
+            if (!Number.isFinite(at) || at <= 0) return null;
+            const key = intent.notifKey || null;
+            const skips = this.state.skips || [];
+            if (skips.some(k => k.medId === med.id && ((key && k.notifKey === key)
+                || Math.floor(k.timestamp / 60000) === Math.floor(at / 60000)))) return null;
+            if (key && this.state.shots.some(s => s.notifKey === key)) return null;
+            const freqDays = D.freqOf(med);
+            const nearMs = Number.isFinite(freqDays)
+                ? Math.min(freqDays * 86400000 / 2, 3 * 3600000) : 30 * 60000;
+            if (this.state.shots.some(s => s.medId === med.id && Math.abs(s.timestamp - at) < nearMs)) return null;
+
+            const dt = new Date(at);
+            const id = `skip_${at}_${Math.random().toString(36).slice(2, 8)}`;
+            const dose = Number(intent.dose);
+            this.update(s => {
+                s.skips = s.skips || [];
+                s.skips.push({
+                    id, medId: med.id, timestamp: at, date: D.ymd(dt), time: D.hm(dt),
+                    dose: dose > 0 ? dose : null,
+                    notifKey: key,
+                    source: intent.source === 'reminder' ? 'reminder' : 'app',
+                    recordedAt: Date.now(),
+                });
+            });
+            return id;
+        },
+        /** Undo a skip. @returns {boolean} false when there was no such skip. */
+        unskipDose(id) {
+            if (!(this.state.skips || []).some(x => x.id === id)) return false;
+            this.update(s => { s.skips = s.skips.filter(x => x.id !== id); });
+            return true;
         },
         medContainers(medId) {
             return D.recomputeContainerState(this.state.pens.filter(p => p.medId === medId), this.state.shots);
@@ -1062,6 +1144,7 @@
             this.update(s => {
                 s.trashedMeds = s.trashedMeds.filter(m => m.id !== medId);
                 s.shots = s.shots.filter(x => x.medId !== medId);
+                s.skips = (s.skips || []).filter(x => x.medId !== medId);
                 s.pens = s.pens.filter(p => p.medId !== medId);
             });
             return { doseLog, containers };
@@ -1079,6 +1162,7 @@
             const containers = this.state.pens.filter(p => p.medId === medId).length;
             this.update(s => {
                 s.shots = s.shots.filter(x => x.medId !== medId);
+                s.skips = (s.skips || []).filter(x => x.medId !== medId);
                 s.pens = s.pens.filter(p => p.medId !== medId);
                 const med = s.meds.find(x => x.id === medId);
                 if (med) med.preferredNextDose = null;
@@ -1209,6 +1293,11 @@
                 pains: { label: 'Pain entries', item: p => (p.kind === 'checkin' ? 'Daily pain check-in'
                     : 'Pain ' + p.score + '/10' + (p.areas && p.areas.length && window.Pain
                         ? ' · ' + p.areas.map(window.Pain.areaLabel).join(', ') : '')) + ' · ' + when(p.timestamp) },
+                skips: { label: 'Skipped doses', item: x => medName(x.medId) + ' · ' + when(x.timestamp) },
+                'skips.medId': { label: 'Medication', values: medName },
+                'skips.date': { label: 'Date', values: day },
+                'skips.time': { label: 'Time', values: clock },
+                'skips.dose': 'Dose',
                 'pains.score': 'Pain score',
                 'pains.areas': 'Where',
                 'pains.note': 'Note',
@@ -1426,6 +1515,14 @@
             (incoming.pains || []).forEach(x => {
                 if (!x || painIds.has(x.id) || painKeys.has(x.timestamp + '|' + x.kind + '|' + x.score)) return;
                 s.pains.push(x);
+            });
+            // Skips: same id, or the same med and slot, is the same skip arriving twice.
+            s.skips = s.skips || [];
+            const skipIds = new Set(s.skips.map(x => x.id));
+            const skipKeys = new Set(s.skips.map(x => x.medId + '|' + x.timestamp));
+            (incoming.skips || []).forEach(x => {
+                if (!x || skipIds.has(x.id) || skipKeys.has(x.medId + '|' + x.timestamp)) return;
+                s.skips.push(x);
             });
             const penIds = new Set(s.pens.map(p => p.id));
             incoming.pens.forEach(p => { if (!penIds.has(p.id)) s.pens.push(p); });

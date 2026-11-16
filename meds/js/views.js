@@ -37,7 +37,7 @@
         // dose, and therefore no overdue banner, no countdown and no "take it now"
         // advice. Everything downstream already handles a null prediction, because
         // that is also what a med with no history looks like.
-        const nextDose = (med && !med.stoppedAt) ? D.predictNextDose(med, doseLog, s.settings) : null;
+        const nextDose = (med && !med.stoppedAt) ? D.predictNextDose(med, Store.scheduleDoses(med.id), s.settings) : null;
         const targetDose = med ? (med.preferredNextDose != null ? med.preferredNextDose : (lastEntry ? lastEntry.dose : null)) : null;
 
         const inProgressCandidates = containers.filter(p => p.openedDate && p.used < p.capacity - 0.001 && !p.exhaustedDate);
@@ -131,7 +131,7 @@
         const rows = liveMeds.map(m => {
             const doseLog = Store.medDoses(m.id);
             const containers = Store.medContainers(m.id);
-            const nd = D.predictNextDose(m, doseLog, set);
+            const nd = D.predictNextDose(m, Store.scheduleDoses(m.id), set);
             const late = nd ? D.lateDoseStatus(m, nd) : null;
             const level = D.medLevelAt(doseLog, m, Date.now());
             const ext = doseLog.length ? D.levelExtremes(doseLog, m, nd ? new Date(nd.date).getTime() : null) : null;
@@ -276,7 +276,12 @@
                     ${small ? `<span class="when-time">${small}</span>` : ''}
                 </div>
                 <div class="when-sub">${late ? 'was due ' : ''}${D.fmtDate(nd.date, set)}${multiDaily && !late ? '' : ' · ' + D.fmtTimeStr(nd.time, set)} · ${escapeHtml(D.fmtDoseCount(d.med, nd.dose, d.containers))}${locOn && nd.location ? ' · ' + escapeHtml(nd.location) : ''}${usual}</div>
-                ${lateHtml}`;
+                ${lateHtml}
+                ${new Date(nd.date).getTime() <= Date.now() ? `<div class="skip-row">
+                    <button class="link" data-action="skip-dose" data-id="${escapeHtml(d.med.id)}"
+                        data-ts="${new Date(nd.date).getTime()}" data-dose="${nd.dose != null ? escapeHtml(String(nd.dose)) : ''}"
+                        title="Record that you are not taking this one, so the app moves on to the next">Skip this dose</button>
+                </div>` : ''}`;
             })() : `
                 <div class="when-line"><span class="when-day dim">—</span></div>
                 <div class="when-sub">Log your first ${d.isInjection ? 'entry' : 'dose'} to see predictions</div>`}
@@ -1003,6 +1008,12 @@
         });
         const weights = d.weights.slice().sort((a, b) => b.timestamp - a.timestamp);
         const hasEstimated = doseLog.some(x => x.estimated);
+        // Skipped slots are listed among the doses so the record of a day is complete,
+        // but only here: `doseLog` itself stays real doses for everything else.
+        const skipRows = (d.s.skips || []).filter(k => allMeds || (d.med && k.medId === d.med.id))
+            .map(k => Object.assign({}, k, { skipped: true }));
+        const doseRows = skipRows.length
+            ? doseLog.concat(skipRows).sort((a, b) => b.timestamp - a.timestamp) : doseLog;
 
         // pagination — page size lives in Settings; page resets on tab/med switch
         const pageSize = Math.max(5, Number(set.historyPageSize) || 20);
@@ -1025,7 +1036,7 @@
 
         let body = '';
         if (tab === 'shots') {
-            const pg = paginate(doseLog);
+            const pg = paginate(doseRows);
             body = `<div class="card table-card">
                 ${hasEstimated ? `<div class="table-note">
                     <span>${Icons.wand} Doses marked <span class="pill sm">est</span> were estimated during onboarding.</span>
@@ -1035,7 +1046,17 @@
                     <thead><tr><th>Date</th><th>Time</th>${allMeds ? '<th>Med</th>' : ''}<th>Dose</th>${set.shotLocationTrackingEnabled ? '<th>Location</th>' : ''}<th></th></tr></thead>
                     <tbody>
                     ${pg.total === 0 ? `<tr><td colspan="6"><div class="empty"><div class="em-title">No doses yet</div></div></td></tr>` : ''}
-                    ${pg.rows.map(x => `<tr>
+                    ${pg.rows.map(x => x.skipped ? `<tr class="skipped-row">
+                        <td>${D.fmtDate(x.timestamp, set)}</td>
+                        <td>${D.fmtTimeStr(x.time, set)}</td>
+                        ${allMeds ? medCell(x) : ''}
+                        <td><span class="pill sm">skipped</span>${x.dose > 0 && shotMed(x)
+                            ? ` <span class="dim-sm">${escapeHtml(D.fmtDoseCount(shotMed(x), x.dose, d.s.pens))}</span>` : ''}</td>
+                        ${set.shotLocationTrackingEnabled ? '<td>—</td>' : ''}
+                        <td><div class="tbl-actions">
+                            <button data-action="delete-skip" data-id="${escapeHtml(x.id)}" title="Undo this skip">${Icons.trash}</button>
+                        </div></td>
+                    </tr>` : `<tr>
                         <td>${D.fmtDate(x.timestamp, set)}</td>
                         <td>${D.fmtTimeStr(x.time, set)}</td>
                         ${allMeds ? medCell(x) : ''}
@@ -1293,7 +1314,7 @@
                         </button>` : ''}`;
                     }
 
-                    const nd2 = D.predictNextDose(m, medDoses, set2);
+                    const nd2 = D.predictNextDose(m, D.withSkips(medDoses, s.skips, m.id), set2);
                     const ext2 = medDoses.length ? D.levelExtremes(medDoses, m, nd2 ? new Date(nd2.date).getTime() : null) : null;
                     return `<div class="mc-facts mc-live">
                         <div><div class="k">In system now</div><div class="txt-accent">${lvlHtml}</div></div>
@@ -1427,7 +1448,7 @@
                         // Only offered when there is actually something to catch up on —
                         // a permanently-present button for a list that is usually empty
                         // is noise, and the count is the useful part anyway.
-                        const n = D.missedSlots(m, medDoses, { days: 7 }).length;
+                        const n = D.missedSlots(m, D.withSkips(medDoses, s.skips, m.id), { days: 7 }).length;
                         return n ? `<button class="btn small" data-action="catch-up" data-id="${escapeHtml(m.id)}" title="Scheduled doses with nothing logged against them">Catch up · ${n}</button>` : '';
                     })()}
                     ${window.MED_ENVIRONMENT === 'wip' ? `<button class="btn small ghost" data-action="dev-clear-med" data-id="${escapeHtml(m.id)}" title="WIP-only test helper — wipes this med's doses + supply">🧪 Clear data</button>` : ''}

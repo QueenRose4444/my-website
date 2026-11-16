@@ -240,6 +240,19 @@
                         S().deleteDose(id);
                     break;
                 }
+                case 'skip-dose': {
+                    const sid = S().skipDose({ medId: id, at: Number(el.dataset.ts),
+                        dose: Number(el.dataset.dose) || null, source: 'app' });
+                    if (sid) {
+                        window.UI.toast('Dose skipped', '', { actions: [{ label: 'Undo', act: () => S().unskipDose(sid) }] });
+                    } else {
+                        window.UI.toast('Nothing to skip: a dose is already logged for that time', 'error');
+                    }
+                    break;
+                }
+                case 'delete-skip':
+                    S().unskipDose(id);
+                    break;
                 case 'pain-followup': {
                     const f = window.Pain.followUps(S().state, Date.now(), window.MedData.medPeakHours, [])
                         .find(x => x.dose.id === id);
